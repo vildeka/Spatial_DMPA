@@ -1,0 +1,18 @@
+.DS_Store
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+## excluding data, results folder
+/data/*
+/results/*
+/manuscript/*
+bin/
+environment/
+
+*.html
+!README.txt
+
+## ignore renv/library
+/renv/library

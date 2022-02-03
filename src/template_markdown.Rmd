@@ -1,0 +1,102 @@
+---
+title: "please insert your project title"
+author: "please insert your name"
+date: '`r format(Sys.Date(), "%Y-%m-%d")`'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: pygments
+abstract: Short project description.
+knit: (function(inputFile, encoding) {
+          rmarkdown::render(inputFile,
+                            encoding = encoding, 
+                            output_file = paste0(
+                              xfun::sans_ext(inputFile), '_', Sys.Date(), '.html'),
+                                output_dir = "../results/lab_book/")})
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(echo = TRUE, root.dir = getwd(), fig.width = 6, fig.height = 5, warning = FALSE, message = FALSE)
+
+result.dir <- paste0("results/",Sys.Date(),"/")
+
+## creates result.dir with date in if not existent
+ifelse(isFALSE(dir.exists(paste0("../",result.dir))), dir.create(paste0("../",result.dir),recursive = TRUE),"Result directory for today exists already!")
+options(stringsAsFactors = FALSE) 
+```
+
+# R markdown usage 
+
+# Heading 1
+
+## Heading 2
+
+Some text
+
+```{r message = FALSE}
+#Here you can put R code
+```
+
+```{r, message = FALSE, Fig 1, fig.align='center', fig.cap='Figure 1: Caption', out.width=768, fig.pos='H'}
+#This block contains some useful options for inserting figures
+```
+
+# Example r markdown script structure
+
+## 1. Needed libraries
+```{r message=FALSE}
+library(tidyverse)
+library(readxl)
+```
+
+## 2. Data import
+
+### 2.1 Import your data into R
+```{r message=FALSE}
+## to import excel files
+my_data <- read_xlsx("path/to/your_excel_file.xlsx") 
+
+## to import csv files
+my_data <- read_csv("path/to/your_csv_file.csv")
+
+
+```
+
+### 2.2 Data wrangling
+```{r message=FALSE}
+#- Prepare your data as for further use (formatting, normalization, etc.)
+#- Save your data in an external .txt tab or .csv files
+```
+
+### 2.3 Re-loading the data
+```{r message=FALSE}
+#- Import your data into R as follow `read.csv()`
+```
+
+## 3. Data analysis
+```{r message=FALSE}
+
+```
+
+## 4. Result visualisation
+```{r message=FALSE}
+
+```
+
+## 5. Discussion & Comments
+```{r message=FALSE}
+
+```
+
+
+## 6. SessionInfo
+```{r}
+## Take environment snapshot 
+#renv::snapshot()
+
+sessionInfo()
+```
+
+
