@@ -1,21 +1,3 @@
-Pre Process Spatial data
-================
-07 April, 2022
-
--   [Spatial transcriptomics](#spatial-transcriptomics)
-    -   [Load packages](#load-packages)
-    -   [Load ST data](#load-st-data)
--   [Create one merged object](#create-one-merged-object)
--   [Quality control](#quality-control)
-    -   [Filter](#filter)
-    -   [Paulo section](#paulo-section)
-    -   [Top expressed genes](#top-expressed-genes)
-    -   [Filter genes](#filter-genes)
-    -   [Top expressed genes after
-        filtering](#top-expressed-genes-after-filtering)
--   [Analysis](#analysis)
-    -   [Session info](#session-info)
-
 # Spatial transcriptomics
 
 ------------------------------------------------------------------------
@@ -23,12 +5,17 @@ Pre Process Spatial data
 ``` r
 knitr::opts_chunk$set(
   fig.path="./Figures/",
+  fig.align="center",
   fig.process = function(filename){
     new_filename <- stringr::str_remove(string = filename, 
                                         pattern = "-1")
     fs::file_move(path = filename, new_path = new_filename)
     ifelse(fs::file_exists(new_filename), new_filename, filename)
 })
+
+# output: 
+#   github_document:
+#     toc: yes
 
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/")
 #.libPaths("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/lib/R/library")
@@ -162,7 +149,7 @@ VlnPlot(DMPA, features = c("nCount_Spatial", "nFeature_Spatial","percent_mito","
 
     ## Warning: Removed 2 rows containing missing values (geom_point).
 
-![](./Figures/unnamed-chunk-2.png)<!-- -->
+<img src="./Figures/unnamed-chunk-2.png" style="display: block; margin: auto;" />
 
 We can also plot the same data onto the tissue section.
 
@@ -203,7 +190,7 @@ SpatialFeaturePlot(DMPA, features = c("nCount_Spatial", "nFeature_Spatial","perc
     ## `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> = "none")` instead.
     ## `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> = "none")` instead.
 
-![](./Figures/unnamed-chunk-3.png)<!-- -->
+<img src="./Figures/unnamed-chunk-3.png" style="display: block; margin: auto;" />
 
 ``` r
 # nFeature is the number of uniqe genes in each spot
@@ -320,7 +307,7 @@ SpatialFeaturePlot(DMPA, features = c("nCount_Spatial", "nFeature_Spatial","perc
     ## `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> = "none")` instead.
     ## `guides(<scale> = FALSE)` is deprecated. Please use `guides(<scale> = "none")` instead.
 
-![](./Figures/unnamed-chunk-4.png)<!-- -->
+<img src="./Figures/unnamed-chunk-4.png" style="display: block; margin: auto;" />
 
 ### Paulo section
 
@@ -411,27 +398,28 @@ sessionInfo()
     ##  [43] xtable_1.8-4          reticulate_1.24       spatstat.core_2.3-2  
     ##  [46] bit_4.0.4             htmlwidgets_1.5.4     httr_1.4.2           
     ##  [49] RColorBrewer_1.1-2    ellipsis_0.3.2        ica_1.0-2            
-    ##  [52] pkgconfig_2.0.3       farver_2.1.0          uwot_0.1.11          
-    ##  [55] dbplyr_2.1.1          deldir_1.0-6          utf8_1.2.2           
-    ##  [58] tidyselect_1.1.2      labeling_0.4.2        rlang_1.0.2          
-    ##  [61] reshape2_1.4.4        later_1.3.0           munsell_0.5.0        
-    ##  [64] cellranger_1.1.0      tools_4.1.2           cli_3.2.0            
-    ##  [67] generics_0.1.2        broom_0.7.12          ggridges_0.5.3       
-    ##  [70] evaluate_0.14         fastmap_1.1.0         yaml_2.2.2           
-    ##  [73] goftest_1.2-3         knitr_1.37            bit64_4.0.5          
-    ##  [76] fs_1.5.2              fitdistrplus_1.1-6    RANN_2.6.1           
-    ##  [79] pbapply_1.5-0         future_1.23.0         nlme_3.1-155         
-    ##  [82] mime_0.12             xml2_1.3.3            compiler_4.1.2       
-    ##  [85] rstudioapi_0.13       plotly_4.10.0         png_0.1-7            
-    ##  [88] spatstat.utils_2.3-0  reprex_2.0.1          stringi_1.7.6        
-    ##  [91] highr_0.9             lattice_0.20-45       Matrix_1.4-1         
-    ##  [94] vctrs_0.3.8           pillar_1.7.0          lifecycle_1.0.1      
-    ##  [97] spatstat.geom_2.3-2   lmtest_0.9-39         RcppAnnoy_0.0.19     
-    ## [100] data.table_1.14.2     cowplot_1.1.1         irlba_2.3.5          
-    ## [103] httpuv_1.6.5          patchwork_1.1.1       R6_2.5.1             
-    ## [106] promises_1.2.0.1      KernSmooth_2.23-20    gridExtra_2.3        
-    ## [109] parallelly_1.30.0     codetools_0.2-18      MASS_7.3-56          
-    ## [112] assertthat_0.2.1      withr_2.5.0           sctransform_0.3.3    
-    ## [115] mgcv_1.8-39           parallel_4.1.2        hms_1.1.1            
-    ## [118] grid_4.1.2            rpart_4.1.16          rmarkdown_2.11       
-    ## [121] Rtsne_0.15            shiny_1.7.1           lubridate_1.8.0
+    ##  [52] farver_2.1.0          pkgconfig_2.0.3       sass_0.4.0           
+    ##  [55] uwot_0.1.11           dbplyr_2.1.1          deldir_1.0-6         
+    ##  [58] utf8_1.2.2            tidyselect_1.1.2      labeling_0.4.2       
+    ##  [61] rlang_1.0.2           reshape2_1.4.4        later_1.3.0          
+    ##  [64] munsell_0.5.0         cellranger_1.1.0      tools_4.1.2          
+    ##  [67] cli_3.2.0             generics_0.1.2        broom_0.7.12         
+    ##  [70] ggridges_0.5.3        evaluate_0.14         fastmap_1.1.0        
+    ##  [73] yaml_2.2.2            goftest_1.2-3         knitr_1.37           
+    ##  [76] bit64_4.0.5           fs_1.5.2              fitdistrplus_1.1-6   
+    ##  [79] RANN_2.6.1            pbapply_1.5-0         future_1.23.0        
+    ##  [82] nlme_3.1-155          mime_0.12             xml2_1.3.3           
+    ##  [85] compiler_4.1.2        rstudioapi_0.13       plotly_4.10.0        
+    ##  [88] png_0.1-7             spatstat.utils_2.3-0  reprex_2.0.1         
+    ##  [91] bslib_0.3.1           stringi_1.7.6         highr_0.9            
+    ##  [94] lattice_0.20-45       Matrix_1.4-1          vctrs_0.3.8          
+    ##  [97] pillar_1.7.0          lifecycle_1.0.1       spatstat.geom_2.3-2  
+    ## [100] lmtest_0.9-39         jquerylib_0.1.4       RcppAnnoy_0.0.19     
+    ## [103] data.table_1.14.2     cowplot_1.1.1         irlba_2.3.5          
+    ## [106] httpuv_1.6.5          patchwork_1.1.1       R6_2.5.1             
+    ## [109] promises_1.2.0.1      KernSmooth_2.23-20    gridExtra_2.3        
+    ## [112] parallelly_1.30.0     codetools_0.2-18      MASS_7.3-56          
+    ## [115] assertthat_0.2.1      withr_2.5.0           sctransform_0.3.3    
+    ## [118] mgcv_1.8-39           parallel_4.1.2        hms_1.1.1            
+    ## [121] grid_4.1.2            rpart_4.1.16          rmarkdown_2.11       
+    ## [124] Rtsne_0.15            shiny_1.7.1           lubridate_1.8.0

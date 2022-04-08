@@ -1,14 +1,13 @@
 ---
 title: "Pre Process Spatial data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
-output: 
-  github_document:
-    toc: yes
 editor_options: 
   chunk_output_type: console
-# knit: (function(inputFile, ...) {
-#     source("../code/custom_knit_functions.R");
-#     knit_script(inputFile, "01_pre_processing")
+
+knit: (function(inputFile, out_dir, ...) {
+    source("../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../lab_book/01_pre_processing/")
+    })
 ---
 
 # Spatial transcriptomics
@@ -17,12 +16,17 @@ editor_options:
 ```{r setup, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(
   fig.path="./Figures/",
+  fig.align="center",
   fig.process = function(filename){
     new_filename <- stringr::str_remove(string = filename, 
                                         pattern = "-1")
     fs::file_move(path = filename, new_path = new_filename)
     ifelse(fs::file_exists(new_filename), new_filename, filename)
 })
+
+# output: 
+#   github_document:
+#     toc: yes
 
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/")
 #.libPaths("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/lib/R/library")
