@@ -1,0 +1,340 @@
+---
+title: "Integrate Datasets"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, out_dir, ...) {
+    source("../../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../../lab_book/03_integrate_reference_data")
+    })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+                      fig.path="./Figures/",
+                      fig.align="center",
+                      message    = FALSE,
+                      warning    = FALSE)
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
+```
+
+## Load data and libraries
+```{r}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(tidyseurat)
+library(cowplot)
+library(harmony)
+
+#########
+# PATHS #
+#########
+input_dir <- "../../results/02_QC_reference_data/"
+result_dir <- "../../results/03_integrate_reference_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+seuratObj <- readRDS(paste0(input_dir,"seurat_object_filtered.RDS"))
+
+seuratObj <- seuratObj %>%
+  filter(p == "Peng")
+```
+
+```{r ggplot_theme}
+my_theme <-
+  list(
+    #scale_fill_manual(values = friendly_cols),
+    #scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(size = 0.2),
+        panel.grid.minor = element_line(size = 0.1),
+        text = element_text(size = 12),
+        legend.position = "bottom",
+        #aspect.ratio = 1,
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+      )
+  )
+```
+
+## Integration
+```{r Integration, eval=F, echo=T}
+################################
+# SPLIT INTO SEPERATE DATASETS #
+################################
+seuratObj_list <- seuratObj %>%
+  mutate(batch = sample_name) %>%
+  nest(data = -batch) #%>%
+  #filter(batch == "N1" | batch == "CX1") 
+
+######################
+# LOG NORMALIZATION #
+#####################
+seuratObj_int_log <- seuratObj_list %>%
+  mutate(data = map(
+    data, ~ .x %>%
+      NormalizeData(., normalization.method = "LogNormalize", 
+                    verbose = FALSE) %>%
+      FindVariableFeatures(selection.method = "vst", 
+                           nfeatures = 2000, 
+                           verbose = FALSE) ))  %>%
+  .$data %>%
+  FindIntegrationAnchors(normalization.method = "LogNormalize",
+                         dims = 1:30,
+                         reduction = "cca") %>%
+  IntegrateData(., dims = 1:30, new.assay.name = "CCA")
+saveRDS(seuratObj_int_log, paste0(result_dir,"seurat_object_int_log.RDS"))
+
+######################
+# SCT NORMALIZATION #
+#####################
+seuratObj_int_sct <- seuratObj_list %>%
+  mutate(data = map(data, ~ SCTransform(.x, verbose = FALSE))) %>%
+  .$data %>%
+  ( function(x){SelectIntegrationFeatures(x) ->> af; return(x)} ) %>%
+  PrepSCTIntegration(anchor.features = af) %>%
+  FindIntegrationAnchors(normalization.method = "SCT",
+                         anchor.features = af) %>%
+  IntegrateData(normalization.method = "SCT") 
+
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seuratObj_int_sct, paste0(result_dir,"seurat_object_int_sct.RDS"))
+# seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct.RDS"))
+# seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log.RDS"))
+
+```
+
+```{r}
+seuratObj.list <- SplitObject(seuratObj, split.by = "sample_name")
+
+for (i in 1:length(seuratObj.list)) {
+    seuratObj.list[[i]] <- NormalizeData(seuratObj.list[[i]], verbose = FALSE)
+    seuratObj.list[[i]] <- FindVariableFeatures(seuratObj.list[[i]], selection.method = "vst",
+        nfeatures = 2000, verbose = FALSE)
+}
+
+hvgs_per_dataset <- lapply(seuratObj.list, function(x) {
+    x@assays$RNA@var.features
+})
+# venn::venn(hvgs_per_dataset,opacity = .4,zcolor = scales::hue_pal()(3),cexsn
+# = 1,cexil = 1,lwd=1,col='white',frame=F,borders = NA)
+
+temp <- unique(unlist(hvgs_per_dataset))
+overlap <- sapply(hvgs_per_dataset, function(x) {
+    temp %in% x
+})
+rownames(overlap) <- temp
+pheatmap::pheatmap(t(overlap * 1), cluster_rows = F, color = c("grey90", "grey20"))
+```
+
+
+```{r harmony}
+hig_var <- rownames(overlap)[rowSums(overlap)>2]
+seuratObj <- seuratObj %>%
+  NormalizeData(verbose = FALSE) %>%
+  FindVariableFeatures(selection.method = "vst",
+                      nfeatures = 4000,
+                      verbose = FALSE) %>%
+  ScaleData(verbose = FALSE, features = hig_var ) %>%
+  RunPCA(verbose = FALSE, npcs = 50) %>%
+  RunUMAP(dims = 1:50, n.components = 2L) 
+
+seuratObj <- RunHarmony(seuratObj, group.by.vars = "sample_name", reduction = "pca",
+    dims.use = 1:50, assay.use = "RNA")
+
+seuratObj <- RunUMAP(seuratObj, dims = 1:30, reduction = "harmony", reduction.name = "umap_harmony")
+```
+
+## Plot before and after integration
+```{r Plot_dimreduction,  fig.width=10}
+# fig.height=10,
+seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
+#seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct_red.RDS"))
+seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log_red.RDS"))
+
+library(cowplot)
+plot_grid(ncol = 2,
+  DimPlot(seuratObj, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA raw_data"),
+  DimPlot(seuratObj, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP raw_data"),
+  
+  DimPlot(seuratObj, reduction = "harmony", group.by = "sample_name")+NoAxes()+ggtitle("harmony integrated"),
+  DimPlot(seuratObj, reduction = "umap_harmony", group.by = "sample_name")+NoAxes()+ggtitle("UMAP harmony integrated")
+  
+  # DimPlot(seuratObj_int_log, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA integrated"),
+  # DimPlot(seuratObj_int_log, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE integrated"),
+  # DimPlot(seuratObj_int_log, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP integrated")
+)
+```
+
+## Dimentionality reduction
+```{r Dimreduction, eval=F, echo=T}
+############################
+# DIMENTONALITY REDUCTION #
+###########################
+seuratObj_red <- seuratObj %>%
+  NormalizeData(., normalization.method = "LogNormalize", 
+                    verbose = FALSE) %>%
+  FindVariableFeatures(selection.method = "vst", 
+                       nfeatures = 2000, 
+                       verbose = FALSE) %>%
+  ScaleData(verbose = FALSE) %>%
+  RunPCA(verbose = FALSE, npcs = 30) %>%
+  RunUMAP(dims = 1:30, n.components = 3L) %>%
+  RunTSNE(dims = 1:30)
+
+seuratObj_int_log <- seuratObj_int_log %>%
+  ScaleData(verbose = FALSE) %>%
+  RunPCA(verbose = FALSE, npcs = 30) %>%
+  RunUMAP(dims = 1:30, n.components = 3L) %>%
+  RunTSNE(dims = 1:30)
+
+seuratObj_int_sct <- seuratObj_int_log %>%
+  ScaleData(verbose = FALSE) %>%
+  RunPCA(verbose = FALSE, npcs = 30) %>%
+  RunUMAP(dims = 1:30, n.components = 3L) %>%
+  RunTSNE(dims = 1:30)
+
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seuratObj_red, paste0(result_dir,"seurat_object_red.RDS"))
+saveRDS(seuratObj_int_sct, paste0(result_dir,"seurat_object_int_sct_red.RDS"))
+saveRDS(seuratObj_int_log, paste0(result_dir,"seurat_object_int_log_red.RDS"))
+# seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
+# seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct.RDS"))
+# seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log.RDS"))
+```
+
+## Plot before and after integration
+```{r Plot_dimreduction,  fig.width=10}
+# fig.height=10,
+seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
+#seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct_red.RDS"))
+seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log_red.RDS"))
+
+plot_grid(ncol = 3,
+  DimPlot(seuratObj_red, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA raw_data"),
+  DimPlot(seuratObj_red, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE raw_data"),
+  DimPlot(seuratObj_red, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP raw_data"),
+  
+  DimPlot(seuratObj_int_log, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA integrated"),
+  DimPlot(seuratObj_int_log, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE integrated"),
+  DimPlot(seuratObj_int_log, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP integrated")
+  
+  # DimPlot(seuratObj_int_sct, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA integrated"),
+  # DimPlot(seuratObj_int_sct, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE integrated"),
+  # DimPlot(seuratObj_int_sct, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP integrated")
+)
+```
+
+
+```{r visualize_marker_genes}
+################################
+# VISUALIZE EXPR. OF KEY GENES #
+################################
+library(viridis)
+genes <- c("CD8A", "SFRP2", "CD3E")
+seuratObj <- seuratObj %>%
+  #join_features(features = genes ) %>%
+  mutate(., FetchData(., vars = c("CD8A", "SFRP2", "CD3E")) )
+            
+plot_genes.fun <- function(obj, gene){
+  gene <- sym(gene)
+  p <- ggplot(obj, aes(umap_harmony_1, umap_harmony_2, color = !!(gene))) +
+  geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+  #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+  scale_color_viridis(option = "D", na.value="#EBECF0") +
+  my_theme
+  return(p)
+}
+
+p <- map(genes, ~plot_genes.fun(seuratObj, .x))
+plot_grid(ncol = 1, 
+          p[[1]] + p[[2]] + p[[3]])
+
+library(niceRplots)
+genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
+par(mfrow=c(2,2), mar=c(1,1,1,1))
+seuratObj$cell_id[is.na(seuratObj$cell_id)] <- ""
+#plot_meta(seuratObj, red = "umap_harmony", feat = "cell_id", cex = 0.5, label = T)
+#plot_meta(seuratObj, red = "umap_harmony", feat = "p", cex = 0.5, label = T)
+for(i in genes){
+  plot_feat(seuratObj, red = "umap_harmony", feat = i, cex = 0.5)
+}
+grep("MYO", rownames(seuratObj), value = T)
+```
+
+```{r}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+seuratObj <- FindNeighbors(seuratObj, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
+
+for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    seuratObj <- FindClusters(seuratObj, graph.name = "RNA_snn", resolution = res, algorithm = 1)
+}
+
+plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.0.25", cex = 0.5)
+plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, label = T)
+
+# plot_grid(ncol = 3, DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.0.5") +
+#     ggtitle("leiden_0.5"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.1") +
+#     ggtitle("leiden_1"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.2") +
+#     ggtitle("leiden_2"))
+```
+
+
+```{r eval=FALSE, include=FALSE}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+# Clustering with leiden (algorithm 4)
+for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    seuratObj_int_log <- FindClusters(CX1, resolution = res, algorithm = 4)
+}
+
+# each time you run clustering, the data is stored in meta data columns:
+# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
+# resolution you test.
+
+plot_grid(ncol = 3, DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.0.5") +
+    ggtitle("leiden_0.5"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.1") +
+    ggtitle("leiden_1"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.2") +
+    ggtitle("leiden_2"))
+
+
+CX1 %>%
+ggplot(aes(UMAP_1, UMAP_2, color = RNA_snn_res.0.5)) +
+ geom_point(alpha = 0.5, size=.5) + ggtitle("leiden_0.5") +
+ guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+ #scale_color_viridis(option = "D", na.value="#EBECF0") +
+ scale_color_manual(values = friendly_cols) +
+ my_theme
+
+
+
+###########
+# 3D UMAP #
+###########
+CX1 %>%
+  plot_ly(
+    x = ~`UMAP_1`,
+    y = ~`UMAP_2`,
+    z = ~`UMAP_3`,
+    color = ~RNA_snn_res.0.5,
+    colors = friendly_cols[1:4],
+    size = 2
+  )
+```
+
