@@ -1,0 +1,184 @@
+---
+title: "Load Reference data"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+editor_options: 
+  chunk_output_type: console
+  
+knit: (function(inputFile, out_dir, ...) {
+    source("../../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../../lab_book/00_load_reference_data")
+    })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width = 6.6929133858, 
+                      message    = FALSE,
+                      warning    = FALSE)
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
+```
+
+### Load data and libraries
+```{r}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(tidyseurat)
+library(readxl)
+
+#########
+# PATHS #
+#########
+cell_types <- "https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-020-20358-y/MediaObjects/41467_2020_20358_MOESM5_ESM.xlsx"
+ref_info <- "../../data/Reference_datasets.xlsx"
+data_dir <- "../../data/Reference_data"
+result_dir <- "../../results/00_load_reference_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+reference_info <- read_xlsx(ref_info, na = "NA", sheet = "selection")
+
+ref <- reference_info %>%
+  separate_rows(., Files, sep=", ") %>%
+  mutate(G = str_extract(.$Files, "^G\\w\\w\\d+"), .after="accesion_number") %>%
+  mutate(type = ifelse(grepl("^GSE", .$Files), "series", "samples"), .after="G") %>%
+  select(type, G, Files, accesion_number, dataset)
+
+```
+
+### Download data from GEO
+```{r Download_GEO_data, eval=F, echo=T}
+#########################
+# DOWNLOAD SUPPL. DATA #
+#########################
+download.file(cell_types, destfile=paste0(
+  data_dir, "/GSE151202/","Cell_types.xlsx"), method = "auto")
+
+##########################
+# DOWNLOAD DATA FROM GEO #
+##########################
+ftp <- "https://ftp.ncbi.nlm.nih.gov/geo"
+
+
+# Create folder for each accession
+map(reference_info$accesion_number, 
+    ~if( isFALSE(dir.exists(paste0(data_dir,"/",.x))) ) {
+      dir.create(paste0(data_dir,"/",.x),recursive = TRUE) })
+
+# download files from GEO
+pwalk(ref, 
+      ~download.file(paste(ftp, ..1, str_replace(..2, "\\d{3}$", "nnn"),
+                           ..2, "suppl", ..3, sep="/"), method="auto",
+                     destfile=paste0(data_dir,"/",..4,"/",..3)))
+
+# Untar and unzip files
+tar <- list.files(data_dir, 
+                  pattern = ".+\\.tar.gz$|.+\\.tar$", recursive = T, full.names = T)
+map(tar, ~untar(.x, exdir = dirname(.x)))
+zip <- list.files(data_dir, 
+                  pattern = ".+\\.gz$", recursive = T, full.names = T)
+#map(zip, ~unzip(.x, exdir = dirname(.x), list=T))
+system(paste0("gunzip ",data_dir,"/*/*.gz"))
+
+```
+
+```{r load_GEO_data}
+######################
+# LOAD SPARSE MATRIX #
+######################
+f <- c("matrix.mtx$", "genes.tsv$|features.tsv$", "barcodes.tsv$") %>% set_names()
+
+f_list <- map_df(f, ~list.files(path = data_dir, pattern = .x,
+                      full.names = T, recursive = T) ) %>%
+  mutate(accesion_number = str_match(.$"matrix.mtx$", paste0(data_dir,"\\/([^\\/]+)\\/"))[,2]) %>%
+  mutate(sample_name = str_match(.$"matrix.mtx$", ".*\\/([^\\/]+).matrix\\.mtx$")[,2]) %>%
+  mutate(sample_name = ifelse(.$accesion_number == "GSE173231", 
+                              str_extract(.$sample_name, "(?<=_).+(?=_)"), .$sample_name)) %>%
+  group_by(accesion_number) %>%
+  mutate(sample_id = paste0(accesion_number, "_", row_number())) %>%
+  ungroup()
+
+matrix_list <- pmap(f_list, ~ReadMtx(mtx = ..1, features = ..2, cells = ..3 ) ) %>%
+                     set_names(., f_list$sample_name)
+
+#### other formats: ####
+# rds <- readRDS("../data/Reference_data/GSE111976/GSE111976_ct_endo_10x.rds")
+# tbl <- read.table(file = "../data/Reference_data/GSE134355/GSM3980130_Adult-Cervix1_dge.txt",
+#                   header = TRUE, row.names = 1)
+# 
+# # matrix_list <- append(expression_matrix, list("GSE111976"=rds, atlas=tbl))
+# matrix_list <- append(expression_matrix, list("GSE134355_1"=tbl))
+```
+
+### Create seurat object
+```{r SeuratObject}
+###################
+# SAMPLE METADATA #
+###################
+meta_list <- f_list %>%
+  select(sample_name, accesion_number) %>%
+  #add_row(sample_name="atlas", accesion_number="GSE134355", name="GSE134355_1") %>%
+  left_join(., select(ref, dataset, accesion_number), by="accesion_number") %>% 
+  unique() %>%
+  mutate(p = str_replace(str_match(.$dataset, "(.+) (et\\.\\sal\\.)")[,2], "\\s", "_")) %>%
+  {. ->> meta } %>% 
+  split(., .$sample_name) #%>%
+  #set_names(., sort(unique(meta$sample_name)))
+
+#######################
+# CREATE SEURAT OJECT #
+#######################
+seurat_object_list <- map(matrix_list, ~CreateSeuratObject(counts = .x )) %>%
+  imap(., ~AddMetaData(object = .x, 
+                       metadata = cbind(.@meta.data, 
+                                        slice(meta_list[[.y]], rep(1:n(), each=nrow(.@meta.data))))) ) %>%
+  map(., ~SetIdent(., value = .@meta.data$sample_name)) %>%
+  imap(., ~RenameCells(.x, 
+                      new.names = paste0(str_extract(colnames(.x[["RNA"]]), "^[ATCG]+"),"_",.y)) )
+
+# Endometrium data:
+# meta <- read.csv("../data/Reference_data/GSE111976/GSE111976_summary_10x_day_donor_ctype.csv", row.names = 1)
+# seurat_object_list[["endo"]] <- AddMetaData(seurat_object_list[["endo"]], metadata = meta)
+# AddMetaData(seurat_object_list[["GSE134355_1"]], metadata = meta)
+
+```
+
+### Add cell annotation
+```{r Add_Cell_annotation}
+########################
+# ADD CELL ANNOTATION  #
+########################
+path <- paste0(data_dir, "/GSE151202/","Cell_types.xlsx")
+
+cell_types <- path %>% 
+  excel_sheets() %>% 
+  set_names() %>% 
+  map(read_xlsx, path = path) %>%
+  bind_rows() %>%
+  filter(grepl("^N.+", .$sample)) %>%
+  mutate(barcode = paste0(str_extract(.$barcode, "^[ATCG]+"),"_",.$sample)) %>%
+  select(.cell="barcode", cell_id="cell types")
+  
+
+seurat_object_list <- seurat_object_list %>%
+  map(., ~left_join(.x, cell_types, by = ".cell")) %>%
+  map(., ~tidyseurat::select(., .cell, cell_id, sample_name, everything(), -orig.ident))
+
+```
+
+### Save seurat object
+```{r save_SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seurat_object_list, paste0(result_dir,"seurat_object_list_not_modified.RDS"))
+# seurat_object_list <- readRDS(paste0(result_dir,"seurat_object_list_not_modified.RDS"))
+```
+
+### Session info
+```{r}
+sessionInfo()
+```
