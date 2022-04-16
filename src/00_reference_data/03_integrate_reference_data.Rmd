@@ -67,37 +67,83 @@ my_theme <-
 ```
 
 ## Integration
-```{r Integration, eval=F, echo=T}
+```{r Integration, eval=FALSE, include=FALSE}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
 ################################
-seuratObj_list <- seuratObj %>%
+seuratObj_nested <- seuratObj %>%
   mutate(batch = sample_name) %>%
-  nest(data = -batch) #%>%
-  #filter(batch == "N1" | batch == "CX1") 
-
-######################
-# LOG NORMALIZATION #
-#####################
-seuratObj_int_log <- seuratObj_list %>%
-  mutate(data = map(
+  nest(data = -batch) %>%
+  filter(batch == "CX3" | batch == "CX1") %>%
+  mutate(data = imap(
     data, ~ .x %>%
       NormalizeData(., normalization.method = "LogNormalize", 
                     verbose = FALSE) %>%
       FindVariableFeatures(selection.method = "vst", 
                            nfeatures = 2000, 
-                           verbose = FALSE) ))  %>%
+                           verbose = FALSE) )) %>%
+  mutate(data = setNames(.[["data"]], .$batch))
+
+#########################################
+# FIND HIGLY VARIABLE GENES PER DATASET #
+#########################################
+hvgs_heat <- seuratObj_nested %>%
+  .$data %>%
+  map(., ~ .x@assays$RNA@var.features) %>%
+  ( function(x){unique(unlist(x)) ->> hvgs_all; return(x)} ) %>%
+  # intersect across all samples:
+  ( function(x){Reduce(intersect, x) ->> hvgs; return(x)} ) %>% 
+  
+  imap_dfc(., ~hvgs_all %in% .x, .id=.y) %>%
+  mutate(rownames = hvgs_all) %>%
+  column_to_rownames(var = "rownames")
+
+pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
+
+# choose the hvg present in at least two samples:
+hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
+
+############################
+# CCA REDUCTION INTERATION #
+############################
+seuratObj_CCA <- seuratObj_split %>%
   .$data %>%
   FindIntegrationAnchors(normalization.method = "LogNormalize",
+                         anchor.features = hig_var,
                          dims = 1:30,
                          reduction = "cca") %>%
   IntegrateData(., dims = 1:30, new.assay.name = "CCA")
-saveRDS(seuratObj_int_log, paste0(result_dir,"seurat_object_int_log.RDS"))
+
+saveRDS(seuratObj_CCA, paste0(result_dir,"seuratObj_CCA.RDS"))
+
+############
+# HARMONY #
+###########
+seuratObj <- seuratObj %>%
+  filter(sample_name == "CX3" | sample_name == "CX1") %>%
+  NormalizeData(verbose = FALSE) %>%
+  FindVariableFeatures(selection.method = "vst",
+                      nfeatures = 4000,
+                      verbose = FALSE) %>%
+  ScaleData(verbose = FALSE, features = hig_var ) %>%
+  RunPCA(verbose = FALSE, npcs = 50) %>%
+  RunUMAP(dims = 1:50, n.components = 2L) 
+
+seuratObj <- seuratObj %>%
+  RunHarmony(group.by.vars = "sample_name", 
+             reduction = "pca", 
+             dims.use = 1:50, 
+             assay.use = "RNA") %>%
+  RunUMAP(dims = 1:30, 
+          reduction = "harmony",
+          reduction.name = "umap_harmony")
+
+saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
 
 ######################
 # SCT NORMALIZATION #
 #####################
-seuratObj_int_sct <- seuratObj_list %>%
+seuratObj_sct <- seuratObj_nested %>%
   mutate(data = map(data, ~ SCTransform(.x, verbose = FALSE))) %>%
   .$data %>%
   ( function(x){SelectIntegrationFeatures(x) ->> af; return(x)} ) %>%
@@ -106,12 +152,7 @@ seuratObj_int_sct <- seuratObj_list %>%
                          anchor.features = af) %>%
   IntegrateData(normalization.method = "SCT") 
 
-##################################
-# SAVE INTERMEDIATE SEURAT OJECT #
-##################################
-saveRDS(seuratObj_int_sct, paste0(result_dir,"seurat_object_int_sct.RDS"))
-# seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct.RDS"))
-# seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log.RDS"))
+seuratObj_sct <- readRDS(paste0(result_dir,"seuratObj_sct.RDS"))
 
 ```
 
@@ -159,9 +200,9 @@ seuratObj <- RunUMAP(seuratObj, dims = 1:30, reduction = "harmony", reduction.na
 ## Plot before and after integration
 ```{r Plot_dimreduction,  fig.width=10}
 # fig.height=10,
-seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
+# seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
 #seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct_red.RDS"))
-seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log_red.RDS"))
+# seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log_red.RDS"))
 
 library(cowplot)
 plot_grid(ncol = 2,
@@ -178,7 +219,7 @@ plot_grid(ncol = 2,
 ```
 
 ## Dimentionality reduction
-```{r Dimreduction, eval=F, echo=T}
+```{r Dimreduction, eval=FALSE, include=FALSE}
 ############################
 # DIMENTONALITY REDUCTION #
 ###########################
@@ -217,7 +258,7 @@ saveRDS(seuratObj_int_log, paste0(result_dir,"seurat_object_int_log_red.RDS"))
 ```
 
 ## Plot before and after integration
-```{r Plot_dimreduction,  fig.width=10}
+```{r, eval=FALSE, fig.width=10, include=FALSE}
 # fig.height=10,
 seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
 #seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct_red.RDS"))
@@ -239,30 +280,52 @@ plot_grid(ncol = 3,
 ```
 
 
-```{r visualize_marker_genes}
+```{r visualize_marker_genes, eval=FALSE, include=FALSE}
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
 ################################
 library(viridis)
+col=c("grey90","grey80","grey60","navy","black")
 genes <- c("CD8A", "SFRP2", "CD3E")
+genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
 seuratObj <- seuratObj %>%
   #join_features(features = genes ) %>%
   mutate(., FetchData(., vars = c("CD8A", "SFRP2", "CD3E")) )
-            
-plot_genes.fun <- function(obj, gene){
+
+# obj <- seuratObj       
+# gene <- sym("SFRP2")
+plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL){
   gene <- sym(gene)
-  p <- ggplot(obj, aes(umap_harmony_1, umap_harmony_2, color = !!(gene))) +
+  feat <- pull(obj, gene)
+  
+  # Colour pal:
+  if(is.null(mins)){mins <- min(c(feat,0),na.rm = T)}
+  if(is.null(maxs)){
+    maxs <- quantile(feat,0.99,na.rm = T)
+    if(maxs==0){maxs <- max(feat,na.rm = T)}
+  }
+  if(max(feat,na.rm = T) != 0){
+    feat <- (feat - mins) / ( maxs - mins)
+    feat[feat > 1] <- 1}
+  
+  myPalette <-  colorRampPalette(col[-1])
+  obj <- arrange(obj,nCount_RNA)
+  
+  p <- ggplot(obj, aes(umap_harmony_1, umap_harmony_2, color = !!(gene)) ) + 
   geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
-  #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
-  scale_color_viridis(option = "D", na.value="#EBECF0") +
+  #scale_color_viridis(option = "D", na.value="#EBECF0") +
+  scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
   my_theme
   return(p)
 }
 
-p <- map(genes, ~plot_genes.fun(seuratObj, .x))
+p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = 10))
 plot_grid(ncol = 1, 
-          p[[1]] + p[[2]] + p[[3]])
+         plotlist = p)
 
+```
+
+```{r}
 library(niceRplots)
 genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
 par(mfrow=c(2,2), mar=c(1,1,1,1))
@@ -275,7 +338,8 @@ for(i in genes){
 grep("MYO", rownames(seuratObj), value = T)
 ```
 
-```{r}
+
+```{r Clustering_resolution}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
@@ -285,6 +349,8 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
     seuratObj <- FindClusters(seuratObj, graph.name = "RNA_snn", resolution = res, algorithm = 1)
 }
 
+library(niceRplots)
+par(mfrow = c(1,2))
 plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.0.25", cex = 0.5)
 plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, label = T)
 
