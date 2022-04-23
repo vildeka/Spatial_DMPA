@@ -19,7 +19,7 @@ knitr::opts_chunk$set(#fig.width = 6.6929133858,
 ```
 
 ## Load data and libraries
-```{r}
+```{r Load_Library_and_data}
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -41,7 +41,8 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 seuratObj <- readRDS(paste0(input_dir,"seurat_object_filtered.RDS"))
 
-seuratObj <- seuratObj %>%
+seuratObj <- seuratObj %>% 
+  #filter(p == "Li_Y")
   filter(p == "Peng")
 ```
 
@@ -57,7 +58,8 @@ my_theme <-
         panel.grid.major = element_line(size = 0.2),
         panel.grid.minor = element_line(size = 0.1),
         text = element_text(size = 12),
-        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5),
+        #legend.position = "bottom",
         #aspect.ratio = 1,
         strip.background = element_blank(),
         axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
@@ -67,14 +69,14 @@ my_theme <-
 ```
 
 ## Integration
-```{r Integration, eval=FALSE, include=FALSE}
+```{r Find_HVG}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
 ################################
 seuratObj_nested <- seuratObj %>%
   mutate(batch = sample_name) %>%
   nest(data = -batch) %>%
-  filter(batch == "CX3" | batch == "CX1") %>%
+  #filter(batch == "CX3" | batch == "CX1") %>%
   mutate(data = imap(
     data, ~ .x %>%
       NormalizeData(., normalization.method = "LogNormalize", 
@@ -102,25 +104,27 @@ pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey
 
 # choose the hvg present in at least two samples:
 hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
+```
 
+```{r Integration}
 ############################
 # CCA REDUCTION INTERATION #
 ############################
-seuratObj_CCA <- seuratObj_split %>%
-  .$data %>%
-  FindIntegrationAnchors(normalization.method = "LogNormalize",
-                         anchor.features = hig_var,
-                         dims = 1:30,
-                         reduction = "cca") %>%
-  IntegrateData(., dims = 1:30, new.assay.name = "CCA")
-
-saveRDS(seuratObj_CCA, paste0(result_dir,"seuratObj_CCA.RDS"))
+# seuratObj_CCA <- seuratObj_split %>%
+#   .$data %>%
+#   FindIntegrationAnchors(normalization.method = "LogNormalize",
+#                          anchor.features = hig_var,
+#                          dims = 1:30,
+#                          reduction = "cca") %>%
+#   IntegrateData(., dims = 1:30, new.assay.name = "CCA")
+# 
+# saveRDS(seuratObj_CCA, paste0(result_dir,"seuratObj_CCA.RDS"))
 
 ############
 # HARMONY #
 ###########
 seuratObj <- seuratObj %>%
-  filter(sample_name == "CX3" | sample_name == "CX1") %>%
+  #filter(sample_name == "CX3" | sample_name == "CX1") %>%
   NormalizeData(verbose = FALSE) %>%
   FindVariableFeatures(selection.method = "vst",
                       nfeatures = 4000,
@@ -139,24 +143,123 @@ seuratObj <- seuratObj %>%
           reduction.name = "umap_harmony")
 
 saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
+#seuratObj <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
 
 ######################
 # SCT NORMALIZATION #
 #####################
-seuratObj_sct <- seuratObj_nested %>%
-  mutate(data = map(data, ~ SCTransform(.x, verbose = FALSE))) %>%
-  .$data %>%
-  ( function(x){SelectIntegrationFeatures(x) ->> af; return(x)} ) %>%
-  PrepSCTIntegration(anchor.features = af) %>%
-  FindIntegrationAnchors(normalization.method = "SCT",
-                         anchor.features = af) %>%
-  IntegrateData(normalization.method = "SCT") 
-
-seuratObj_sct <- readRDS(paste0(result_dir,"seuratObj_sct.RDS"))
+# seuratObj_sct <- seuratObj_nested %>%
+#   mutate(data = map(data, ~ SCTransform(.x, verbose = FALSE))) %>%
+#   .$data %>%
+#   ( function(x){SelectIntegrationFeatures(x) ->> af; return(x)} ) %>%
+#   PrepSCTIntegration(anchor.features = af) %>%
+#   FindIntegrationAnchors(normalization.method = "SCT",
+#                          anchor.features = af) %>%
+#   IntegrateData(normalization.method = "SCT") 
+# 
+# seuratObj_sct <- readRDS(paste0(result_dir,"seuratObj_sct.RDS"))
 
 ```
 
-```{r}
+## Plot before and after integration
+```{r Plot_dim_reduction}
+plot_clusters.fun <- function(obj, cluster="sample_name", red = "umap_harmony", color = "Brew_all", lable = TRUE, title = NULL){
+  if(color == "Brew_all"){
+    pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )}
+  
+  cluster <- sym(cluster)
+  feat <- obj %>%
+    select(.cell, !!(cluster), sample_name, nCount_RNA, nFeature_RNA) %>%
+    group_by(!!(cluster)) %>%
+    add_tally() %>%
+    arrange(nFeature_RNA) %>%
+    arrange(desc(n))
+    
+  lable_df <- feat %>%
+    select(!!(cluster), contains(red)) %>% 
+    summarize_all(mean)
+  
+  if(lable == TRUE){
+    text <- geom_text(data = lable_df, aes(label = !!cluster), col="black") +
+      NoLegend() + labs(color= "Clusters")}
+  else{text <- labs(color= "")}
+  
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
+                        color = !!cluster), label = lable) + 
+    geom_point(alpha = 0.5, size=.5) + ggtitle(title) + text +
+    #ggrepel::geom_label_repel(data = lable, aes(label = !!cluster)) +
+    scale_colour_manual(values = pal)  +
+    my_theme 
+  return(p)
+}
+
+res <- c("PC", "harmony", "UMAP", "umap_harmony")
+title <- c("PCA raw data", "PCA Harmony integrated", "UMAP raw data", "UMAP Harmony integrated")
+p <- map2(res, title, ~plot_clusters.fun(seuratObj, red=.x, lable=FALSE, title=.y))
+plot_grid(ncol = 2, 
+         plotlist = p)
+```
+
+
+```{r visualize_marker_genes}
+################################
+# VISUALIZE EXPR. OF KEY GENES #
+################################
+library(viridis)
+col=c("grey90","grey80","grey60","navy","black")
+genes <- c("CD8A", "SFRP2", "CD3E")
+# genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
+seuratObj <- seuratObj %>%
+  #join_features(features = genes ) %>%
+  mutate(., FetchData(., vars = c("CD8A", "SFRP2", "CD3E")) )
+
+# obj <- seuratObj       
+# gene <- sym("SFRP2")
+plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony"){
+  gene <- sym(gene)
+  feat <- pull(obj, gene)
+  
+  # Colour pal:
+  if(is.null(mins)){mins <- min(c(feat,0),na.rm = T)}
+  if(is.null(maxs)){
+    maxs <- quantile(feat,0.99,na.rm = T)
+    if(maxs==0){maxs <- max(feat,na.rm = T)}
+  }
+  if(max(feat,na.rm = T) != 0){
+    feat <- (feat - mins) / ( maxs - mins)
+    feat[feat > 1] <- 1}
+  
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  myPalette <-  colorRampPalette(col[-1])
+  obj <- arrange(obj,nCount_RNA)
+  
+  p <- ggplot(obj, aes(!!(red_1), !!(red_2), color = !!(gene)) ) + 
+  geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+  #scale_color_viridis(option = "D", na.value="#EBECF0") +
+  scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
+  my_theme + theme_void() + theme(legend.position = "bottom")
+  return(p)
+}
+
+p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = 10))
+plot_grid(ncol = 3, 
+         plotlist = p )
+
+```
+
+# Paulos base R code
+
+```{r Paulos_HVG, eval=FALSE, include=FALSE}
 seuratObj.list <- SplitObject(seuratObj, split.by = "sample_name")
 
 for (i in 1:length(seuratObj.list)) {
@@ -180,7 +283,7 @@ pheatmap::pheatmap(t(overlap * 1), cluster_rows = F, color = c("grey90", "grey20
 ```
 
 
-```{r harmony}
+```{r Paulos_harmony, eval=FALSE, include=FALSE}
 hig_var <- rownames(overlap)[rowSums(overlap)>2]
 seuratObj <- seuratObj %>%
   NormalizeData(verbose = FALSE) %>%
@@ -197,14 +300,8 @@ seuratObj <- RunHarmony(seuratObj, group.by.vars = "sample_name", reduction = "p
 seuratObj <- RunUMAP(seuratObj, dims = 1:30, reduction = "harmony", reduction.name = "umap_harmony")
 ```
 
-## Plot before and after integration
-```{r Plot_dimreduction,  fig.width=10}
-# fig.height=10,
-# seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
-#seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct_red.RDS"))
-# seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log_red.RDS"))
 
-library(cowplot)
+```{r Plot_dimreduction, eval=FALSE, fig.width=10, include=FALSE}
 plot_grid(ncol = 2,
   DimPlot(seuratObj, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA raw_data"),
   DimPlot(seuratObj, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP raw_data"),
@@ -218,114 +315,8 @@ plot_grid(ncol = 2,
 )
 ```
 
-## Dimentionality reduction
-```{r Dimreduction, eval=FALSE, include=FALSE}
-############################
-# DIMENTONALITY REDUCTION #
-###########################
-seuratObj_red <- seuratObj %>%
-  NormalizeData(., normalization.method = "LogNormalize", 
-                    verbose = FALSE) %>%
-  FindVariableFeatures(selection.method = "vst", 
-                       nfeatures = 2000, 
-                       verbose = FALSE) %>%
-  ScaleData(verbose = FALSE) %>%
-  RunPCA(verbose = FALSE, npcs = 30) %>%
-  RunUMAP(dims = 1:30, n.components = 3L) %>%
-  RunTSNE(dims = 1:30)
 
-seuratObj_int_log <- seuratObj_int_log %>%
-  ScaleData(verbose = FALSE) %>%
-  RunPCA(verbose = FALSE, npcs = 30) %>%
-  RunUMAP(dims = 1:30, n.components = 3L) %>%
-  RunTSNE(dims = 1:30)
-
-seuratObj_int_sct <- seuratObj_int_log %>%
-  ScaleData(verbose = FALSE) %>%
-  RunPCA(verbose = FALSE, npcs = 30) %>%
-  RunUMAP(dims = 1:30, n.components = 3L) %>%
-  RunTSNE(dims = 1:30)
-
-##################################
-# SAVE INTERMEDIATE SEURAT OJECT #
-##################################
-saveRDS(seuratObj_red, paste0(result_dir,"seurat_object_red.RDS"))
-saveRDS(seuratObj_int_sct, paste0(result_dir,"seurat_object_int_sct_red.RDS"))
-saveRDS(seuratObj_int_log, paste0(result_dir,"seurat_object_int_log_red.RDS"))
-# seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
-# seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct.RDS"))
-# seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log.RDS"))
-```
-
-## Plot before and after integration
-```{r, eval=FALSE, fig.width=10, include=FALSE}
-# fig.height=10,
-seuratObj_red <- readRDS(paste0(result_dir,"seurat_object_red.RDS"))
-#seuratObj_int_sct <- readRDS(paste0(result_dir,"seurat_object_int_sct_red.RDS"))
-seuratObj_int_log <- readRDS(paste0(result_dir,"seurat_object_int_log_red.RDS"))
-
-plot_grid(ncol = 3,
-  DimPlot(seuratObj_red, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA raw_data"),
-  DimPlot(seuratObj_red, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE raw_data"),
-  DimPlot(seuratObj_red, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP raw_data"),
-  
-  DimPlot(seuratObj_int_log, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA integrated"),
-  DimPlot(seuratObj_int_log, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE integrated"),
-  DimPlot(seuratObj_int_log, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP integrated")
-  
-  # DimPlot(seuratObj_int_sct, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA integrated"),
-  # DimPlot(seuratObj_int_sct, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE integrated"),
-  # DimPlot(seuratObj_int_sct, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP integrated")
-)
-```
-
-
-```{r visualize_marker_genes, eval=FALSE, include=FALSE}
-################################
-# VISUALIZE EXPR. OF KEY GENES #
-################################
-library(viridis)
-col=c("grey90","grey80","grey60","navy","black")
-genes <- c("CD8A", "SFRP2", "CD3E")
-genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
-seuratObj <- seuratObj %>%
-  #join_features(features = genes ) %>%
-  mutate(., FetchData(., vars = c("CD8A", "SFRP2", "CD3E")) )
-
-# obj <- seuratObj       
-# gene <- sym("SFRP2")
-plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL){
-  gene <- sym(gene)
-  feat <- pull(obj, gene)
-  
-  # Colour pal:
-  if(is.null(mins)){mins <- min(c(feat,0),na.rm = T)}
-  if(is.null(maxs)){
-    maxs <- quantile(feat,0.99,na.rm = T)
-    if(maxs==0){maxs <- max(feat,na.rm = T)}
-  }
-  if(max(feat,na.rm = T) != 0){
-    feat <- (feat - mins) / ( maxs - mins)
-    feat[feat > 1] <- 1}
-  
-  myPalette <-  colorRampPalette(col[-1])
-  obj <- arrange(obj,nCount_RNA)
-  
-  p <- ggplot(obj, aes(umap_harmony_1, umap_harmony_2, color = !!(gene)) ) + 
-  geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
-  #scale_color_viridis(option = "D", na.value="#EBECF0") +
-  scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
-  my_theme
-  return(p)
-}
-
-p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = 10))
-plot_grid(ncol = 1, 
-         plotlist = p)
-
-```
-
-```{r}
+```{r Paulos_plot, eval=FALSE, include=FALSE}
 library(niceRplots)
 genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
 par(mfrow=c(2,2), mar=c(1,1,1,1))
@@ -339,7 +330,7 @@ grep("MYO", rownames(seuratObj), value = T)
 ```
 
 
-```{r Clustering_resolution}
+```{r Paulos_code, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
@@ -358,10 +349,12 @@ plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, la
 #     ggtitle("leiden_0.5"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.1") +
 #     ggtitle("leiden_1"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.2") +
 #     ggtitle("leiden_2"))
+
 ```
 
+# Clustering
 
-```{r eval=FALSE, include=FALSE}
+```{r Clustering_resolution, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
@@ -374,33 +367,44 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 # seurat_clusters - lastest results only CCA_snn_res.XX - for each different
 # resolution you test.
 
-plot_grid(ncol = 3, DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.0.5") +
-    ggtitle("leiden_0.5"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.1") +
-    ggtitle("leiden_1"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.2") +
-    ggtitle("leiden_2"))
+# obj <- seuratObj
+# cluster <- sym("RNA_snn_res.0.1")
+plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all"){
+  if(color == "Brew_all"){
+    pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )}
+  
+  cluster <- sym(cluster)
+  feat <- obj %>%
+    select(.cell, !!(cluster), sample_name, nCount_RNA, nFeature_RNA) %>%
+    group_by(!!(cluster)) %>%
+    add_tally() %>%
+    arrange(nFeature_RNA) %>%
+    arrange(desc(n))
+    
+  lable <- feat %>%
+    select(!!(cluster), contains(red)) %>% 
+    summarize_all(mean)
+  
+  p <- ggplot(feat, aes(umap_harmony_1, umap_harmony_2, 
+                        color = !!cluster), label= TRUE) + 
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
+    labs(color= "Clusters") + 
+    geom_text(data = lable, aes(label = !!cluster), col="black") +
+    #ggrepel::geom_label_repel(data = lable, aes(label = !!cluster)) +
+    scale_colour_manual(values = pal)  +
+    my_theme + NoLegend()
+  return(p)
+}
 
+res <- c("RNA_snn_res.0.25", "RNA_snn_res.1")
+p <- map(res, ~plot_clusters.fun(seuratObj, .x,))
+plot_grid(ncol = 2, 
+         plotlist = p)
 
-CX1 %>%
-ggplot(aes(UMAP_1, UMAP_2, color = RNA_snn_res.0.5)) +
- geom_point(alpha = 0.5, size=.5) + ggtitle("leiden_0.5") +
- guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
- #scale_color_viridis(option = "D", na.value="#EBECF0") +
- scale_color_manual(values = friendly_cols) +
- my_theme
-
-
-
-###########
-# 3D UMAP #
-###########
-CX1 %>%
-  plot_ly(
-    x = ~`UMAP_1`,
-    y = ~`UMAP_2`,
-    z = ~`UMAP_3`,
-    color = ~RNA_snn_res.0.5,
-    colors = friendly_cols[1:4],
-    size = 2
-  )
 ```
 
