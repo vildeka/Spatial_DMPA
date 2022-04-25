@@ -11,10 +11,15 @@ knit: (function(inputFile, out_dir, ...) {
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(#fig.width = 6.6929133858,
-                      fig.path="./Figures/",
-                      fig.align="center",
-                      message    = FALSE,
-                      warning    = FALSE)
+    fig.path="./Figures/",
+    fig.align="center",
+    message    = FALSE,
+    warning    = FALSE,
+    fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)})
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
 ```
 
@@ -32,14 +37,14 @@ library(harmony)
 #########
 # PATHS #
 #########
-input_dir <- "../../results/02_QC_reference_data/"
-result_dir <- "../../results/03_integrate_reference_data/"
+input_dir <- "../../results/01_QC_ref_data/"
+result_dir <- "../../results/02_integrate_ref_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 
 #############
 # LODA DATA #
 #############
-seuratObj <- readRDS(paste0(input_dir,"seurat_object_filtered.RDS"))
+seuratObj <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
 
 seuratObj <- seuratObj %>% 
   #filter(p == "Li_Y")
@@ -52,6 +57,7 @@ my_theme <-
     #scale_fill_manual(values = friendly_cols),
     #scale_color_manual(values = friendly_cols),
     theme_bw() +
+      #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
       theme(
         panel.border = element_blank(),
         axis.line = element_line(),
@@ -69,7 +75,7 @@ my_theme <-
 ```
 
 ## Integration
-```{r Find_HVG}
+```{r 02a_Find_HVG}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
 ################################
@@ -162,7 +168,7 @@ saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
 ```
 
 ## Plot before and after integration
-```{r Plot_dim_reduction}
+```{r 02b_Plot_dim_reduction}
 plot_clusters.fun <- function(obj, cluster="sample_name", red = "umap_harmony", color = "Brew_all", lable = TRUE, title = NULL){
   if(color == "Brew_all"){
     pal <- c(scales::hue_pal()(8),
@@ -209,7 +215,7 @@ plot_grid(ncol = 2,
 ```
 
 
-```{r visualize_marker_genes}
+```{r 02c_plot_marker_genes}
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
 ################################
@@ -354,13 +360,15 @@ plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, la
 
 # Clustering
 
-```{r Clustering_resolution, eval=FALSE, include=FALSE}
+```{r 02d_Clustering_resolution, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
-# Clustering with leiden (algorithm 4)
+seuratObj <- FindNeighbors(seuratObj, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
+
+# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
 for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
-    seuratObj_int_log <- FindClusters(CX1, resolution = res, algorithm = 4)
+    seuratObj <- FindClusters(seuratObj, resolution = res, algorithm = 1)
 }
 
 # each time you run clustering, the data is stored in meta data columns:
@@ -369,7 +377,7 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 
 # obj <- seuratObj
 # cluster <- sym("RNA_snn_res.0.1")
-plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all"){
+plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
   if(color == "Brew_all"){
     pal <- c(scales::hue_pal()(8),
              RColorBrewer::brewer.pal(9,"Set1"),
@@ -379,32 +387,56 @@ plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_
              RColorBrewer::brewer.pal(8,"Pastel2") )}
   
   cluster <- sym(cluster)
+  
+  if(lable == TRUE){ lab <- cluster
+    text <- NoLegend() + labs(color= "Clusters")
+  }else{lab <- sym(lable)
+    text <- guides(color = "none")}
+  
   feat <- obj %>%
-    select(.cell, !!(cluster), sample_name, nCount_RNA, nFeature_RNA) %>%
+    select(.cell, !!(cluster), !!(lab), sample_name, nCount_RNA, nFeature_RNA) %>%
     group_by(!!(cluster)) %>%
     add_tally() %>%
     arrange(nFeature_RNA) %>%
     arrange(desc(n))
-    
-  lable <- feat %>%
-    select(!!(cluster), contains(red)) %>% 
+  
+  lable_df <- feat %>%
+    ungroup() %>%
+    group_by(!!(lab)) %>%
+    select(!!(lab), contains(red)) %>% 
     summarize_all(mean)
   
-  p <- ggplot(feat, aes(umap_harmony_1, umap_harmony_2, 
-                        color = !!cluster), label= TRUE) + 
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
+                        color = !!cluster), label=TRUE) + 
     geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
-    labs(color= "Clusters") + 
-    geom_text(data = lable, aes(label = !!cluster), col="black") +
+    #labs(color= "Clusters") + 
+    geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) + 
+    #geom_text(data = lable_df, aes(label = !!cluster), col="black") +
     #ggrepel::geom_label_repel(data = lable, aes(label = !!cluster)) +
-    scale_colour_manual(values = pal)  +
-    my_theme + NoLegend()
+    guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+    scale_color_manual(values = pal)  +
+    my_theme + text
   return(p)
 }
 
-res <- c("RNA_snn_res.0.25", "RNA_snn_res.1")
-p <- map(res, ~plot_clusters.fun(seuratObj, .x,))
+res <- c("RNA_snn_res.0.5", "RNA_snn_res.1")
+p <- map(res, ~plot_clusters.fun(seuratObj, cluster=.x, lable = "cell_id"))
 plot_grid(ncol = 2, 
          plotlist = p)
 
 ```
 
+```{r Convert_to_anndata, eval=FALSE, include=FALSE}
+library(SeuratDisk)
+# seuratObj <- readRDS(paste0(result_dir,"seuratObj_Li_Y_harmony.RDS"))
+SaveH5Seurat(seuratObj, filename = paste0(result_dir,"Li_Y_integrated.h5Seurat"))
+Convert(paste0(result_dir,"Li_Y_integrated.h5Seurat"), dest = "h5ad")
+```
+
+### Session info
+```{r}
+sessionInfo()
+```
