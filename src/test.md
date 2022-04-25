@@ -8,7 +8,7 @@ When you click the **Knit** button a document will be generated that
 includes both content as well as the output of any embedded R code
 chunks within the document. You can embed an R code chunk like this:
 
-``` {.r}
+``` r
 summary(cars)
 ```
 
@@ -20,7 +20,7 @@ summary(cars)
     ##  3rd Qu.:19.0   3rd Qu.: 56.00  
     ##  Max.   :25.0   Max.   :120.00
 
-``` {.r}
+``` r
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -52,7 +52,7 @@ head(mtcars)
     ## Hornet Sportabout 18.7 8cyl  360 175 3.15 3.440 17.02  0 Automatic 3gears    2
     ## Valiant           18.1 6cyl  225 105 2.76 3.460 20.22  1 Automatic 3gears    1
 
-``` {.r}
+``` r
 #################
 # COLOR PALETTS #
 #################
@@ -62,7 +62,7 @@ head(mtcars)
 
 You can also embed plots, for example:
 
-`<img src="./Figures/pressure.png" style="display: block; margin: auto;" />`{=html}
+<img src="./Figures/pressure.png" style="display: block; margin: auto;" />
 
 Note that the `echo = FALSE` parameter was added to the code chunk to
 prevent printing of the R code that generated the plot.
