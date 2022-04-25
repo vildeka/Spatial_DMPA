@@ -1,0 +1,159 @@
+---
+title: "Clustering reference data"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, out_dir, ...) {
+    source("../../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../../lab_book/03_cluster_reference_data")
+    })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+    fig.path="./Figures/",
+    fig.align="center",
+    message    = FALSE,
+    warning    = FALSE,
+    fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)})
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
+```
+
+## Load data and libraries
+```{r Load_Library_and_data}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(tidyseurat)
+library(cowplot)
+library(harmony)
+
+#########
+# PATHS #
+#########
+input_dir <- "../../results/02_integrate_ref_data/"
+result_dir <- "../../results/03_integrate_ref_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+seuratObj <- readRDS(paste0(input_dir,"seuratObj_harmony.RDS"))
+
+```
+
+```{r ggplot_theme}
+my_theme <-
+  list(
+    #scale_fill_manual(values = friendly_cols),
+    #scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(size = 0.2),
+        panel.grid.minor = element_line(size = 0.1),
+        text = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5),
+        #legend.position = "bottom",
+        #aspect.ratio = 1,
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+      )
+  )
+```
+
+# Clustering
+
+```{r Clustering_resolution}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+seuratObj <- FindNeighbors(seuratObj, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
+
+# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
+for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    seuratObj <- FindClusters(seuratObj, resolution = res, algorithm = 1)
+}
+
+# each time you run clustering, the data is stored in meta data columns:
+# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
+# resolution you test.
+
+seuratObj <- SetIdent(seuratObj, value = "RNA_snn_res.1.5")
+
+```
+
+```{r 03a_plot_resolution, fig.width=10}
+# obj <- seuratObj
+# cluster <- sym("RNA_snn_res.0.1")
+plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
+  if(color == "Brew_all"){
+    pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )}
+  
+  cluster <- sym(cluster)
+  
+  if(lable == TRUE){ lab <- cluster
+    text <- NoLegend() #+ labs(color= "Clusters")
+  }else{lab <- sym(lable)
+    text <- guides(color = "none")}
+  
+  feat <- obj %>%
+    select(.cell, !!(cluster), !!(lab), sample_name, nCount_RNA, nFeature_RNA) %>%
+    group_by(!!(cluster)) %>%
+    add_tally() %>%
+    arrange(nFeature_RNA) %>%
+    arrange(desc(n))
+  
+  lable_df <- feat %>%
+    ungroup() %>%
+    group_by(!!(lab)) %>%
+    select(!!(lab), contains(red)) %>% 
+    summarize_all(mean)
+  
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
+                        color = !!cluster), label=TRUE) + 
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
+    geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) +
+    #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+    scale_color_manual(values = pal)  +
+    my_theme + text
+  return(p)
+}
+
+res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
+p <- map(res, ~plot_clusters.fun(seuratObj, cluster=.x))
+plot_grid(ncol = 2, 
+         plotlist = p)
+
+```
+
+## Save seurat object
+```{r save_SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seuratObj, paste0(result_dir,"seuratObj_clustered.RDS"))
+# seuratObj<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
+```
+
+## Session info
+```{r}
+sessionInfo()
+```

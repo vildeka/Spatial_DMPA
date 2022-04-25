@@ -1,0 +1,241 @@
+---
+title: "Quality Control"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+editor_options: 
+  chunk_output_type: console
+
+knit: (function(inputFile, out_dir, ...) {
+    source("../../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../../lab_book/01_QC_reference_data")
+    })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+      fig.path="./Figures/",
+      fig.align="center",
+      dpi = 300,
+      message    = FALSE,
+      warning    = FALSE,
+      fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)})
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
+```
+
+## Load data and libraries
+```{r Load_data}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(tidyseurat)
+library(cowplot)
+
+#########
+# PATHS #
+#########
+input_dir <- "../../results/00_load_ref_data/"
+result_dir <- "../../results/01_QC_ref_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+seuratObj <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
+
+```
+
+```{r ggplot_theme}
+my_theme <-
+  list(
+    #scale_fill_manual(values = friendly_cols),
+    #scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(size = 0.2),
+        panel.grid.minor = element_line(size = 0.1),
+        text = element_text(size = 12),
+        legend.position = "bottom",
+        #aspect.ratio = 1,
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+      )
+  )
+```
+
+## Features and counts histogram QC plots
+```{r 01a_Feature_and_counts}
+###########################################
+# QUALITY CONTROLL FEATURE & COUNTS PLOTS #
+###########################################
+p1 <- ggplot() +
+  geom_histogram(data = seuratObj@meta.data, aes(nFeature_RNA), fill = "red", alpha = 0.7, bins = 50) +
+  ggtitle("Unique genes per cell") 
+
+p2 <- ggplot() +
+  geom_histogram(data = seuratObj@meta.data, aes(nCount_RNA), fill = "red", alpha = 0.7, bins = 50) +
+  ggtitle("Total counts per cell")
+
+gene_attr <- data.frame(nUMI = Matrix::rowSums(seuratObj@assays$RNA@counts), 
+                        nCells = Matrix::rowSums(seuratObj@assays$RNA@counts > 0))
+p3 <- ggplot() +
+  geom_histogram(data = gene_attr, aes(nUMI), fill = "red", alpha = 0.7, bins = 50) +
+  scale_x_log10() +
+  ggtitle("Total counts per gene (log10 scale)")
+
+p4 <- ggplot() +
+  geom_histogram(data = gene_attr, aes(nCells), fill = "red", alpha = 0.7,  bins = 50) +
+  ggtitle("Total cells per gene")
+
+plot_grid(ncol = 1, 
+          p1 + p2 + p3 + p4)
+```
+
+## QC violin plots
+```{r 01b_QC_plots, fig.height=15}
+################################
+# CALC. % MITO/RIBO/HEMO-GENES #
+################################
+seuratObj <- PercentageFeatureSet(seuratObj, "^MT-", col.name = "percent_mito")
+seuratObj <- PercentageFeatureSet(seuratObj, "^HB[^(P)]", col.name = "percent_hb")
+seuratObj <- PercentageFeatureSet(seuratObj, "^RP[SL]", col.name = "percent_ribo")
+
+
+################
+# SEURAT PLOT #
+################
+# VlnPlot(seuratObj, features = c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo"), 
+#         pt.size = 0.1, ncol = 1, y.max =100000) + NoLegend()
+# 
+# FeatureScatter(seuratObj, "nCount_RNA", "nFeature_RNA", group.by = "sample_name", pt.size = 0.5)
+
+################
+# GGPLOT PLOT #
+################
+friendly_cols <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#F8D0A4", "#E3E6AD", "#be6a7d", "#f1a6b1", "#A8EDFC", "#7fe2e9", "#c4ce96", "#9aacce", "#e7b993", "#ffc8d9")
+
+feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
+gg_violin_fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, n=2){
+  m <- max(obj[[feature]])/n
+obj %>%
+tidyseurat::ggplot(aes(sample_name, .data[[feature]], fill=.data[[fill]])) +
+  geom_violin() + ylim(c(0, m)) + ggtitle(feature) +
+  geom_jitter(width = 0.3, alpha = 0.3, size=.1) +
+  scale_fill_manual(values = col_pal) +
+  my_theme + NoLegend() +
+  theme(axis.text.x = element_text(angle = 30, hjust=1),
+        plot.title = element_text(hjust = 0.5),
+        axis.title.y = element_blank()) 
+}
+
+ p <-  map(feature, ~gg_violin_fun(seuratObj, .x, ))
+ plot_grid(plotlist=p, ncol = 1)
+
+```
+
+## Filtering
+```{r filtering}
+##########################
+# FILTER GENES AND CELLS #
+##########################
+# filter genes present in less than 3 cells:
+filt_low_genes <- function(x, n_cell = 3) x[rowSums(x) >= n_cell]
+# remove specified genes:
+remove_genes <- function(x, gene_name) x[!(grepl(gene_name, rownames(x[["RNA"]]))), ]
+# identify transcripts within the 0.005 percentile:
+percentile <- function(x, nF) between(nF,quantile(nF,probs = c(0.005)), quantile(nF,probs = c(0.995)))
+
+seuratObj_ <- seuratObj
+
+seuratObj <- seuratObj_ %>%
+  filter(., percentile(., .$nFeature_RNA)) %>%
+  # cells with less than 200 and more than 15% mt genes and less than 5% hb:
+  filter(., nFeature_RNA > 200 & percent_mito < 15 & percent_ribo > 0.05 & percent_hb < 5) %>% 
+  filt_low_genes(., n_cell = 3) %>%
+  remove_genes(., "^MT-|MALAT1") 
+
+table(seuratObj$sample_name)
+```
+
+## Replotting QC after filtering
+```{r 01c_plot_filtered, fig.height=15}
+############################
+# GGPLOT PLOT FILTERED OBJ #
+############################
+ p_ <-  map(feature, ~gg_violin_fun(seuratObj, .x, n=1))
+ plot_grid(plotlist=p_, ncol = 1)
+```
+
+## Plot top abundant genes
+```{r 01d_top_abundante_genes}
+# C = seuratObj@assays$RNA@counts
+# C@x = C@x/rep.int(colSums(C), diff(C@p))
+# most_expressed <- order(Matrix::rowSums(C), decreasing = T)[20:1]
+# top_genes <- rownames(C[most_expressed, ])
+# 
+# 
+# boxplot(as.matrix(t(C[most_expressed, ])), cex = 0.1, las = 1, xlab = "% total count per spot", 
+#     col = (scales::hue_pal())(20)[20:1], horizontal = TRUE)
+
+#############################
+# GET TOP 20 ABUNDANT GENES #
+#############################
+top_genes <- seuratObj@assays$RNA@counts %>%
+  Matrix::rowSums(.) %>%
+  sort(., decreasing = T) %>%
+  .[1:20]
+
+percent.fun <- function(df, sample_name, gene, count){
+  sample_name <- enquo(sample_name)
+  gene <- enquo(gene)
+  count <- enquo(count)
+
+  percent <- df %>%
+    select(!!sample_name, !!gene, !!count) %>%
+    group_by(!!sample_name) %>%
+    mutate(Percent = (!!count/sum(!!count)*100)) %>%
+    select(-!!count) %>%
+    ungroup() 
+  
+  return(percent$Percent)
+}
+col = (scales::hue_pal())(20)[20:1]
+
+##################
+# PLOT TOP GENES #
+##################
+(genes_plot <- seuratObj %>%
+   join_features(features = names(top_genes) ) %>%
+   mutate(.feature = factor(.feature, levels = rev(names(top_genes)))) %>%
+   mutate("% total count per cell" = percent.fun(., .cell, .feature, .abundance_RNA),
+          .after=.abundance_RNA) %>%
+   ggplot(aes(y=`% total count per cell`, x=.feature, fill=.feature)) +
+   stat_boxplot(geom = "errorbar", width = 0.2) +
+   geom_boxplot(outlier.alpha = 0.1, outlier.size = .5) +
+   scale_fill_manual(values = col) + my_theme +
+   theme(plot.title = element_text(hjust = 0.5),
+         axis.title.y = element_blank()) +
+   NoLegend() + coord_flip() )
+
+```
+
+## Save seurat object
+```{r save_SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seuratObj, paste0(result_dir,"seuratObj_filtered.RDS"))
+# seurat_object_list <- readRDS(paste0(result_dir,"seurat_object_list_not_modified.RDS"))
+```
+
+## Session info
+```{r}
+sessionInfo()
+```
