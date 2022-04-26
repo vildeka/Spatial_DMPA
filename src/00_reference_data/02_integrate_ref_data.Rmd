@@ -74,8 +74,8 @@ my_theme <-
   )
 ```
 
-## Integration
-```{r 02a_Find_HVG}
+## Identify Highly Variable Genes (HVG) across samples
+```{r Find_HVG}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
 ################################
@@ -105,8 +105,6 @@ hvgs_heat <- seuratObj_nested %>%
   mutate(rownames = hvgs_all) %>%
   column_to_rownames(var = "rownames")
 
-pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
-
 # choose the hvg present in at least two samples:
 hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
 
@@ -115,6 +113,12 @@ remove <- str_subset(hig_var, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
 hig_var <- setdiff(hig_var, remove)
 ```
 
+## Heatmap of HVG in all samples
+```{r 02a_HVG_heatmap, fig.width=10}
+pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
+```
+
+## Integration
 ```{r Integration}
 ############################
 # CCA REDUCTION INTERATION #
@@ -214,7 +218,7 @@ plot_grid(ncol = 2,
          plotlist = p)
 ```
 
-
+## Plot marker genes
 ```{r 02c_plot_marker_genes, fig.width=10}
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
@@ -272,7 +276,6 @@ plot_grid(ncol = 3,
 ```
 
 # Paulos base R code
-
 ```{r Paulos_HVG, eval=FALSE, include=FALSE}
 seuratObj.list <- SplitObject(seuratObj, split.by = "sample_name")
 
@@ -296,7 +299,6 @@ rownames(overlap) <- temp
 pheatmap::pheatmap(t(overlap * 1), cluster_rows = F, color = c("grey90", "grey20"))
 ```
 
-
 ```{r Paulos_harmony, eval=FALSE, include=FALSE}
 hig_var <- rownames(overlap)[rowSums(overlap)>2]
 seuratObj <- seuratObj %>%
@@ -314,7 +316,6 @@ seuratObj <- RunHarmony(seuratObj, group.by.vars = "sample_name", reduction = "p
 seuratObj <- RunUMAP(seuratObj, dims = 1:30, reduction = "harmony", reduction.name = "umap_harmony")
 ```
 
-
 ```{r Plot_dimreduction, eval=FALSE, fig.width=10, include=FALSE}
 plot_grid(ncol = 2,
   DimPlot(seuratObj, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA raw_data"),
@@ -329,7 +330,6 @@ plot_grid(ncol = 2,
 )
 ```
 
-
 ```{r Paulos_plot, eval=FALSE, include=FALSE}
 library(niceRplots)
 genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
@@ -342,7 +342,6 @@ for(i in genes){
 }
 grep("MYO", rownames(seuratObj), value = T)
 ```
-
 
 ```{r Paulos_code, eval=FALSE, include=FALSE}
 ##################################

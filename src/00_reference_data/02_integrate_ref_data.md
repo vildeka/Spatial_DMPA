@@ -50,7 +50,7 @@ my_theme <-
   )
 ```
 
-## Integration
+## Identify Highly Variable Genes (HVG) across samples
 
 ``` r
 ################################
@@ -78,17 +78,10 @@ hvgs_heat <- seuratObj_nested %>%
   ( function(x){unique(unlist(x)) ->> hvgs_all; return(x)} ) %>%
   # intersect across all samples:
   ( function(x){Reduce(intersect, x) ->> hvgs; return(x)} ) %>% 
-  
   imap_dfc(., ~hvgs_all %in% .x, .id=.y) %>%
   mutate(rownames = hvgs_all) %>%
   column_to_rownames(var = "rownames")
 
-pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
-```
-
-<img src="./Figures/02a_Find_HVG.png" style="display: block; margin: auto;" />
-
-``` r
 # choose the hvg present in at least two samples:
 hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
 
@@ -96,6 +89,16 @@ hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
 remove <- str_subset(hig_var, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
 hig_var <- setdiff(hig_var, remove)
 ```
+
+## Heatmap of HVG in all samples
+
+``` r
+pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
+```
+
+<img src="./Figures/02a_HVG_heatmap.png" style="display: block; margin: auto;" />
+
+## Integration
 
 ``` r
 ############################
@@ -197,6 +200,8 @@ plot_grid(ncol = 2,
 ```
 
 <img src="./Figures/02b_Plot_dim_reduction.png" style="display: block; margin: auto;" />
+
+## Plot marker genes
 
 ``` r
 ################################
