@@ -71,8 +71,7 @@ my_theme <-
   )
 ```
 
-# Clustering
-
+## Clustering
 ```{r Clustering_resolution}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
@@ -151,6 +150,13 @@ plot_grid(ncol = 2,
 ##################################
 saveRDS(seuratObj, paste0(result_dir,"seuratObj_clustered.RDS"))
 # seuratObj<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
+```
+
+```{r Convert_to_anndata, eval=FALSE, include=FALSE}
+library(SeuratDisk)
+# seuratObj <- readRDS(paste0(result_dir,"seuratObj_Li_Y_harmony.RDS"))
+SaveH5Seurat(seuratObj, filename = paste0(result_dir,"Li_Y_integrated.h5Seurat"))
+Convert(paste0(result_dir,"Li_Y_integrated.h5Seurat"), dest = "h5ad")
 ```
 
 ## Session info
