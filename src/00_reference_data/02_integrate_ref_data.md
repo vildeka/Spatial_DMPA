@@ -91,6 +91,10 @@ pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey
 ``` r
 # choose the hvg present in at least two samples:
 hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
+
+# remove all VDJ-genes from list of HVG
+remove <- str_subset(hig_var, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
+hig_var <- setdiff(hig_var, remove)
 ```
 
 ``` r
@@ -128,9 +132,6 @@ seuratObj <- seuratObj %>%
   RunUMAP(dims = 1:30, 
           reduction = "harmony",
           reduction.name = "umap_harmony")
-
-saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
-#seuratObj <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
 
 ######################
 # SCT NORMALIZATION #
@@ -232,23 +233,39 @@ plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony"
   obj <- arrange(obj,nCount_RNA)
   
   p <- ggplot(obj, aes(!!(red_1), !!(red_2), color = !!(gene)) ) + 
-  geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
-  #scale_color_viridis(option = "D", na.value="#EBECF0") +
-  scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
-  my_theme + theme_void() + theme(legend.position = "bottom")
+    
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+    #scale_color_viridis(option = "D", na.value="#EBECF0") +
+    scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
+    my_theme + theme_void() + 
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5)) #+ NoLegend()
   return(p)
 }
 
-p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = 10))
+# get approximate max value for among all features (genes)
+red <- seuratObj@reductions[["umap_harmony"]]@cell.embeddings
+max <- quantile(red,0.99,na.rm = T)
+
+#p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = max))
+p <- map(genes, ~plot_genes.fun(seuratObj, .x))
 plot_grid(ncol = 3, 
-         plotlist = p )
+          plotlist = p)
 ```
 
 <img src="./Figures/02c_plot_marker_genes.png" style="display: block; margin: auto;" />
 
 # Paulos base R code
 
-# Clustering
+## Save seurat object
+
+``` r
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
+#seuratObj <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
+```
 
 ### Session info
 

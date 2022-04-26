@@ -5,7 +5,7 @@ editor_options:
   chunk_output_type: console
 knit: (function(inputFile, out_dir, ...) {
     source("../../bin/custom_knit_functions.R");
-    knit_github(inputFile, "../../lab_book/03_integrate_reference_data")
+    knit_github(inputFile, "../../lab_book/02_integrate_reference_data")
     })
 ---
 
@@ -101,7 +101,6 @@ hvgs_heat <- seuratObj_nested %>%
   ( function(x){unique(unlist(x)) ->> hvgs_all; return(x)} ) %>%
   # intersect across all samples:
   ( function(x){Reduce(intersect, x) ->> hvgs; return(x)} ) %>% 
-  
   imap_dfc(., ~hvgs_all %in% .x, .id=.y) %>%
   mutate(rownames = hvgs_all) %>%
   column_to_rownames(var = "rownames")
@@ -110,6 +109,10 @@ pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey
 
 # choose the hvg present in at least two samples:
 hig_var <- rownames(hvgs_heat)[rowSums(hvgs_heat)>2]
+
+# remove all VDJ-genes from list of HVG
+remove <- str_subset(hig_var, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
+hig_var <- setdiff(hig_var, remove)
 ```
 
 ```{r Integration}
@@ -148,9 +151,6 @@ seuratObj <- seuratObj %>%
           reduction = "harmony",
           reduction.name = "umap_harmony")
 
-saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
-#seuratObj <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
-
 ######################
 # SCT NORMALIZATION #
 #####################
@@ -168,7 +168,7 @@ saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
 ```
 
 ## Plot before and after integration
-```{r 02b_Plot_dim_reduction}
+```{r 02b_Plot_dim_reduction, fig.width=10}
 plot_clusters.fun <- function(obj, cluster="sample_name", red = "umap_harmony", color = "Brew_all", lable = TRUE, title = NULL){
   if(color == "Brew_all"){
     pal <- c(scales::hue_pal()(8),
@@ -215,7 +215,7 @@ plot_grid(ncol = 2,
 ```
 
 
-```{r 02c_plot_marker_genes}
+```{r 02c_plot_marker_genes, fig.width=10}
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
 ################################
@@ -250,16 +250,24 @@ plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony"
   obj <- arrange(obj,nCount_RNA)
   
   p <- ggplot(obj, aes(!!(red_1), !!(red_2), color = !!(gene)) ) + 
-  geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
-  #scale_color_viridis(option = "D", na.value="#EBECF0") +
-  scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
-  my_theme + theme_void() + theme(legend.position = "bottom")
+    
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+    #scale_color_viridis(option = "D", na.value="#EBECF0") +
+    scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
+    my_theme + theme_void() + 
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5)) #+ NoLegend()
   return(p)
 }
 
-p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = 10))
+# get approximate max value for among all features (genes)
+red <- seuratObj@reductions[["umap_harmony"]]@cell.embeddings
+max <- quantile(red,0.99,na.rm = T)
+
+#p <- map(genes, ~plot_genes.fun(seuratObj, .x, maxs = max))
+p <- map(genes, ~plot_genes.fun(seuratObj, .x))
 plot_grid(ncol = 3, 
-         plotlist = p )
+          plotlist = p)
 
 ```
 
@@ -358,82 +366,13 @@ plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, la
 
 ```
 
-# Clustering
-
-```{r 02d_Clustering_resolution, eval=FALSE, include=FALSE}
+## Save seurat object
+```{r save_SeuratObject}
 ##################################
-# EVALUATE CLUSTERING RESOLUTION #
+# SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-seuratObj <- FindNeighbors(seuratObj, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
-
-# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
-    seuratObj <- FindClusters(seuratObj, resolution = res, algorithm = 1)
-}
-
-# each time you run clustering, the data is stored in meta data columns:
-# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
-# resolution you test.
-
-# obj <- seuratObj
-# cluster <- sym("RNA_snn_res.0.1")
-plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
-  if(color == "Brew_all"){
-    pal <- c(scales::hue_pal()(8),
-             RColorBrewer::brewer.pal(9,"Set1"),
-             RColorBrewer::brewer.pal(8,"Set2"),
-             RColorBrewer::brewer.pal(8,"Accent"),
-             RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )}
-  
-  cluster <- sym(cluster)
-  
-  if(lable == TRUE){ lab <- cluster
-    text <- NoLegend() + labs(color= "Clusters")
-  }else{lab <- sym(lable)
-    text <- guides(color = "none")}
-  
-  feat <- obj %>%
-    select(.cell, !!(cluster), !!(lab), sample_name, nCount_RNA, nFeature_RNA) %>%
-    group_by(!!(cluster)) %>%
-    add_tally() %>%
-    arrange(nFeature_RNA) %>%
-    arrange(desc(n))
-  
-  lable_df <- feat %>%
-    ungroup() %>%
-    group_by(!!(lab)) %>%
-    select(!!(lab), contains(red)) %>% 
-    summarize_all(mean)
-  
-  red_1 <- sym(paste0(red, "_1"))
-  red_2 <- sym(paste0(red, "_2"))
-  
-  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
-                        color = !!cluster), label=TRUE) + 
-    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
-    #labs(color= "Clusters") + 
-    geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) + 
-    #geom_text(data = lable_df, aes(label = !!cluster), col="black") +
-    #ggrepel::geom_label_repel(data = lable, aes(label = !!cluster)) +
-    guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
-    scale_color_manual(values = pal)  +
-    my_theme + text
-  return(p)
-}
-
-res <- c("RNA_snn_res.0.5", "RNA_snn_res.1")
-p <- map(res, ~plot_clusters.fun(seuratObj, cluster=.x, lable = "cell_id"))
-plot_grid(ncol = 2, 
-         plotlist = p)
-
-```
-
-```{r Convert_to_anndata, eval=FALSE, include=FALSE}
-library(SeuratDisk)
-# seuratObj <- readRDS(paste0(result_dir,"seuratObj_Li_Y_harmony.RDS"))
-SaveH5Seurat(seuratObj, filename = paste0(result_dir,"Li_Y_integrated.h5Seurat"))
-Convert(paste0(result_dir,"Li_Y_integrated.h5Seurat"), dest = "h5ad")
+saveRDS(seuratObj, paste0(result_dir,"seuratObj_harmony.RDS"))
+#seuratObj <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
 ```
 
 ### Session info
