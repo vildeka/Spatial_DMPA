@@ -193,11 +193,49 @@ parse_svg_path <- function(path) {
 #################
 # SP ANNOTATION #
 #################
-# poly <- df %>%
-#   filter(.data[["epi_1"]] == 1)
-# img_path <- paste0( input_dir,"/",red,"/",red,".svg")
-# poly_df <- svgparser::read_svg(img_path, obj_type = 'data.frame')
-
-# ggplot(poly_df) + 
-# geom_path(aes(x, y, colour = name, group = interaction(elem_idx, path_idx))) +
-# scale_y_reverse()
+# red <- "P080"
+# sample_id <- "P080"
+# a2 <- xml2::as_list( read_xml( paste0( input_dir,"/",red,"/",red,".svg")) )
+# dd <- as.numeric( strsplit( attributes(a2$svg)$viewBox , " ")[[1]] )
+# dd2 <- dim(DATA@images[[red]]@image)
+# img_coord <- img_coord[[2]][1:5]
+get_sp_annot <- function(a2, dd, dd2, img_coord, sample_id){
+  id <- a2$svg %>%
+    map_chr(., ~attr(.x,"id")) %>% 
+    set_names(seq_along(.), .)
+  
+  annot_coord <- id %>%
+    map(., ~get_shape(a2$svg[[.x]]) ) %>%
+    map(., ~as_tibble(.x, .name_repair="unique"))  %>%
+    map(., ~mutate(.x, x = .x[[1]]*dd2[2]/dd[3],
+                   y = .x[[2]]*dd2[1]/dd[4] )) %>%
+    map(., ~rowid_to_column(., var = "path_idx")) %>%
+    {. ->>  temp} %>%
+    bind_rows(., .id="name") %>%
+    group_by(., name) %>%
+    mutate(elem_idx = cur_group_id()) %>% # group_indices(., name)
+    ungroup() 
+  
+  img_coord <- temp %>%
+    list_modify("fov" = NULL, full_image = NULL) %>%
+    compact() %>%
+    imap(., ~mutate(img_coord, !!.y := sp::point.in.polygon(
+      point.x = img_coord$imagecol,
+      point.y = img_coord$imagerow,
+      pol.x = .x$x,
+      pol.y = .x$y )) ) %>%
+    map(., ~rownames_to_column(., var = "barcodes")) %>%
+    Reduce(dplyr::full_join, .)
+  
+  sp_annot <- img_coord %>%
+    mutate(across(7:ncol(.), ~ifelse(. == 0, NA, .)) ) %>%
+    pivot_longer(., cols = 7:ncol(.), names_to ="sp_annot", values_to = "count") %>%
+    filter(!(is.na(count))) %>%
+    group_by(barcodes) %>%
+    mutate(dupp = row_number()) %>%
+    ungroup() %>%
+    filter(., .$dupp == 1) %>%
+    select(., barcodes, sp_annot)
+  
+  return(list(coord=annot_coord, annot=sp_annot))
+}
