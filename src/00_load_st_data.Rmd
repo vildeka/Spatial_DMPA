@@ -144,7 +144,6 @@ pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
          scales::hue_pal()(8)),99)
 ```
 
-
 ```{r, Clean_SeuratObj}
 ####################################
 # RENAME SAMPLES, SPOTS AND IMAGES #
@@ -169,25 +168,22 @@ DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)]
 ##########################
 # ADD MANUAL ANNOTATION #
 #########################
-scale.factors <- map(DATA@images, ~pluck(.x, "scale.factors")$hires)
-img_coord <- map(DATA@images, ~pluck(.x, "coordinates"))
+# scale.factors <- map(DATA@images, ~pluck(.x, "scale.factors")$hires)
+# img_coord <- map(DATA@images, ~pluck(.x, "coordinates"))
+#   
+# img_coord <- img_coord %>%
+#   map2(., scale.factors, 
+#        ~mutate(.x, imagecol = .$imagecol * .y,
+#                    imagerow = .$imagerow * .y) )
   
-img_coord <- img_coord %>%
-  map2(., scale.factors, 
-       ~mutate(.x, imagecol = .$imagecol * .y,
-                   imagerow = .$imagerow * .y) )
-  
-a2 <- map(names(img_coord), ~xml2::as_list( read_xml( paste0( input_dir,"/",.x,"/",.x,".svg")) ) )
+a2 <- map(sample_id, ~xml2::as_list( read_xml( paste0( input_dir,"/",.x,"/",.x,".svg")) ) )
 dd <- map(a2, ~as.numeric( strsplit( attributes(.x$svg)$viewBox , " ")[[1]] ))
 dd2 <- map(sample_id, ~dim(DATA@images[[.x]]@image))
 
-# red <- "P080"
-# sample_id <- "P080"
-# a2 <- xml2::as_list( read_xml( paste0( input_dir,"/",red,"/",red,".svg")) )
-# dd <- as.numeric( strsplit( attributes(a2$svg)$viewBox , " ")[[1]] )
-# dd2 <- dim(DATA@images[[red]]@image)
-# img_coord <- img_coord[[2]][1:5]
-get_sp_annot <- function(a2, dd, dd2, img_coord, sample_id){
+get_sp_annot <- function(a2, dd, dd2, sample_id){
+  scale.factor <- DATA@images[[sample_id]]@scale.factors$hires
+  img_coord <- DATA@images[[sample_id]]@coordinates
+  
   id <- a2$svg %>%
     map_chr(., ~attr(.x,"id")) %>% 
     set_names(seq_along(.), .)
@@ -202,20 +198,29 @@ get_sp_annot <- function(a2, dd, dd2, img_coord, sample_id){
     bind_rows(., .id="name") %>%
     group_by(., name) %>%
     mutate(elem_idx = cur_group_id()) %>% # group_indices(., name)
-    ungroup() 
+    ungroup() %>%
+    mutate(colour = ifelse(grepl("fov|zoom|full_image",.$name),
+                           "transparent", "black")) %>%
+    list(.) %>%
+    set_names(., sample_id[1])
+  
+  DATA@tools <<- append(DATA@tools, annot_coord )
   
   img_coord <- temp %>%
-    list_modify("fov" = NULL, full_image = NULL) %>%
+    list_modify("fov" = NULL, "full_image" = NULL, "zoom" = NULL) %>%
     compact() %>%
     imap(., ~mutate(img_coord, !!.y := sp::point.in.polygon(
-         point.x = img_coord$imagecol,
-         point.y = img_coord$imagerow,
+         point.x = img_coord$imagecol*scale.factor,
+         point.y = img_coord$imagerow*scale.factor,
          pol.x = .x$x,
          pol.y = .x$y )) ) %>%
-    map(., ~rownames_to_column(., var = "barcodes")) %>%
-    Reduce(dplyr::full_join, .)
+    map(., ~select(.x, last_col())) %>%
+    cbind(img_coord, .)
+  
+  DATA@images[[sample_id]]@coordinates <<- img_coord 
   
   sp_annot <- img_coord %>%
+    rownames_to_column(., var = "barcodes") %>%
     mutate(across(7:ncol(.), ~ifelse(. == 0, NA, .)) ) %>%
     pivot_longer(., cols = 7:ncol(.), names_to ="sp_annot", values_to = "count") %>%
     filter(!(is.na(count))) %>%
@@ -225,14 +230,14 @@ get_sp_annot <- function(a2, dd, dd2, img_coord, sample_id){
     filter(., .$dupp == 1) %>%
     select(., barcodes, sp_annot)
   
+  #DATA <<- left_join( DATA, sp_annot, by=c(".cell"="barcodes", "sp_annot"="sp_annot")) 
+  
   return(list(coord=annot_coord, annot=sp_annot))
 }
 
-annot <- list(a2, dd, dd2, img_coord, names(img_coord)) %>%
-  pmap(., ~get_sp_annot(..1, ..2, ..3, ..4, ..5)) %>%
-  set_names(., names(img_coord))
-
-DATA@tools <- map(annot, 1)
+annot <- list(a2, dd, dd2, names(a2)) %>%
+  pmap(., ~get_sp_annot(..1, ..2, ..3, ..4)) %>%
+  set_names(., names(a2))
 
 sp <- map(annot, 2) %>% bind_rows()
 DATA <- left_join( DATA, sp, by=c(".cell"="barcodes")) 
@@ -307,7 +312,7 @@ plot_spatial_meta(
     plot_tissue = T)
 ```
 
-```{r eval=FALSE, include=FALSE}
+```{r remove_other_spots, eval=FALSE, include=FALSE}
 # Filter spots outside manual annotation
 DATA <- DATA[,DATA$sp_annot!="other"]
 ```
