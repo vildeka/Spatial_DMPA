@@ -1,0 +1,118 @@
+---
+title: "R Notebook"
+output: 
+  html_notebook: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+# if(knitr::is_latex_output()){
+#   print_session_info = FALSE
+#   knitr::opts_chunk$set(
+#     echo=FALSE,
+#     dev=c('pdf', 'png'),
+#     dpi = 300)
+# }
+# 
+# if(knitr::is_html_output()){
+#   print_session_info = TRUE
+#   knitr::opts_chunk$set(
+#     echo=TRUE,
+#     dev=c('png', 'pdf'),
+#     toc = FALSE,
+#     toc_float = FALSE,
+#     code_folding = "show",
+#     code_download = TRUE)
+# }
+
+knitr::opts_chunk$set(
+  fig.width = 6.6929133858,
+  fig.path="./Figures/",
+  fig.align = "center",
+  #dev=c('pdf', 'png'), dpi=300,
+  fig.process = function(filename){
+    new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+    fs::file_move(path = filename, new_path = new_filename)
+    ifelse(fs::file_exists(new_filename), new_filename, filename)
+    
+      # Create PNG
+      # path2 <- xfun::with_ext(new_filename, "png")
+      # img <- magick::image_read(new_filename)
+      # magick::image_write(img, path2, format = "png")
+})
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/HIV_project/reports/manuscript")
+
+#### Figure requirements Microbiome: ####
+  # - width of 85 mm for half page width figure
+  # - width of 170 mm for full page width figure
+  # - maximum height of 225 mm for figure and legend
+  # - image resolution of approximately 300 dpi (dots per inch) at the final size
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+2+2
+```
+
+
+```{r}
+##################
+# LOAD LIBRARIES #
+##################
+library(ggplot2)
+
+#############
+# LODA DATA #
+#############
+#use color brewer as default discrete colors
+scale_colour_discrete <- function(...) scale_color_brewer(palette="Set1", ...)
+scale_fill_discrete <- function(...) scale_fill_brewer(palette="Set1", ...)
+
+data('mtcars')
+# create factors with value labels
+mtcars$gear <- factor(mtcars$gear,levels=c(3,4,5),
+     labels=c("3gears","4gears","5gears"))
+mtcars$am <- factor(mtcars$am,levels=c(0,1),
+     labels=c("Automatic","Manual"))
+mtcars$cyl <- factor(mtcars$cyl,levels=c(4,6,8),
+   labels=c("4cyl","6cyl","8cyl"))
+head(mtcars)
+
+#################
+# COLOR PALETTS #
+#################
+col <- c("pla", "sla")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
