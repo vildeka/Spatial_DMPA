@@ -1,0 +1,349 @@
+---
+title: "Quality Control Spatial data"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+editor_options: 
+  chunk_output_type: console
+knit: (function(inputFile, out_dir, ...) {
+    source("../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../lab_book/01_QC_st_data/")
+    })
+---
+
+# Spatial transcriptomics
+***
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  fig.path="./Figures/",
+  fig.align="center",
+  warning=FALSE, message=FALSE,
+  fig.process = function(filename){
+    new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+    fs::file_move(path = filename, new_path = new_filename)
+    ifelse(fs::file_exists(new_filename), new_filename, filename)
+})
+
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
+#.libPaths("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/lib/R/library")
+# reticulate::use_python("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/bin/python", required = TRUE)
+# reticulate::py_config()
+```
+
+### Load packages
+
+```{r Load Library, message=FALSE, warning=FALSE}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(tidyseurat)
+library(Seurat)
+library(RColorBrewer)
+library(cowplot)
+library(patchwork)
+# remotes::install_github("czarnewski/niceRplots",force=T)
+library(niceRplots)
+source("../bin/spatial_visualization.R")
+
+```
+
+### Load ST data
+
+```{r Load data}
+#########
+# PATHS #
+#########
+input_dir <- "../results/00_load_st_data/"
+result_dir <- "../results/01_QC_st_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+#metadata <- read_csv("../data/Clinincal_data_Spatial_DMPA.csv")
+DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
+#sample_names <- unique(DATA$orig.ident)
+
+#################
+# COLOUR PALLET #
+#################
+friendly_cols <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#F8D0A4", "#E3E6AD", "#be6a7d", "#f1a6b1", "#A8EDFC", "#7fe2e9", "#c4ce96", "#9aacce", "#e7b993", "#ffc8d9")
+```
+
+
+```{r 01a_Feature_and_counts}
+###########################################
+# QUALITY CONTROLL FEATURE & COUNTS PLOTS #
+###########################################
+p1 <- ggplot() +
+  geom_histogram(data = DATA@meta.data, aes(nFeature_RNA), fill = "red", alpha = 0.7, bins = 50) +
+  ggtitle("Unique genes per spot") 
+
+p2 <- ggplot() +
+  geom_histogram(data = DATA@meta.data, aes(nCount_RNA), fill = "red", alpha = 0.7, bins = 50) +
+  ggtitle("Total counts per spots")
+
+gene_attr <- data.frame(nUMI = Matrix::rowSums(DATA@assays$RNA@counts), 
+                        nSpots = Matrix::rowSums(DATA@assays$RNA@counts > 0))
+p3 <- ggplot() +
+  geom_histogram(data = gene_attr, aes(nUMI), fill = "red", alpha = 0.7, bins = 50) +
+  scale_x_log10() +
+  ggtitle("Total counts per gene (log10 scale)")
+
+p4 <- ggplot() +
+  geom_histogram(data = gene_attr, aes(nSpots), fill = "red", alpha = 0.7,  bins = 50) +
+  ggtitle("Total spots per gene")
+
+plot_grid(ncol = 1, 
+          p1 + p2 + p3 + p4)
+```
+
+# Quality control
+***
+
+## QC violin plots
+```{r 01b_QC_plots, fig.height=15}
+################################
+# CALC. % MITO/RIBO/HEMO-GENES #
+################################
+DATA <- PercentageFeatureSet(DATA, "^MT-", col.name = "percent_mito")
+DATA <- PercentageFeatureSet(DATA, "^HB[^(P)]", col.name = "percent_hb")
+DATA <- PercentageFeatureSet(DATA, "^RP[SL]", col.name = "percent_ribo")
+
+
+################
+# SEURAT PLOT #
+################
+# VlnPlot(DATA, features = c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo"), 
+#         pt.size = 0.1, ncol = 1, y.max =100000) + NoLegend()
+# 
+# FeatureScatter(DATA, "nCount_RNA", "nFeature_RNA", group.by = "sample_name", pt.size = 0.5)
+
+################
+# VIOLIN PLOT #
+################
+feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
+# gg_violin_fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, n=2){
+#   m <- max(obj[[feature]])/n
+# obj %>%
+# tidyseurat::ggplot(aes(orig.ident, .data[[feature]], fill=.data[[fill]])) +
+#   geom_violin() + ylim(c(0, m)) + ggtitle(feature) +
+#   geom_jitter(width = 0.3, alpha = 0.3, size=.1) +
+#   scale_fill_manual(values = col_pal) +
+#   my_theme + NoLegend() +
+#   theme(axis.text.x = element_text(angle = 30, hjust=1),
+#         plot.title = element_text(hjust = 0.5),
+#         axis.title.y = element_blank()) 
+# }
+
+ p <-  map(feature, ~violin.fun(DATA, .x, fill="orig.ident", col_pal=friendly_cols))
+ plot_grid(plotlist=p, ncol = 1)
+
+```
+
+We can also plot the same data onto the tissue section.
+
+```{r, eval=FALSE, include=FALSE}
+plot_fun <- function(obj){
+SpatialPlot(obj, 
+            features = c("percent_mito"),
+            cols = c("lightgray", "mistyrose", "red", "dark red", "black"),
+            pt.size = 1.3, ncol = 1, image.alpha = 0.5) + NoLegend() 
+}
+
+DATA_n <- DATA %>%
+  nest(data = -orig.ident)
+p <- map(DATA_n$data[1:3], ~plot_fun(.x))
+
+plot_grid(plotlist=p, ncol = 3)
+```
+
+```{r 01c_sp_mt_plot, fig.height=8, fig.width=7}
+# percentage of mitochondria
+plots <- DATA %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  pmap(., 
+    ~plot_spatial.fun(..2,
+      sampleid = ..1,
+      geneid = "percent_mito",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      zoom = "zoom",
+      img_alpha = 0,
+      point_size = 1)
+    )
+legend <- get_legend(plots[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined
+```
+
+```{r 01d_sp_feat_plot, fig.height=8, fig.width=7}
+# number of genes per spot
+plots_f <- DATA %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  pmap(., 
+    ~plot_spatial.fun(..2,
+      sampleid = ..1,
+      geneid = "nFeature_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      zoom = "zoom",
+      img_alpha = 0,
+      point_size = 1)
+    )
+legend <- get_legend(plots_f[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(plots_f, ncol=2) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined
+```
+
+```{r 01e_sp_count_plot, fig.height=8, fig.width=7}
+# number of reads per spot
+plots_c <- DATA %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  pmap(., 
+    ~plot_spatial.fun(..2,
+      sampleid = ..1,
+      geneid = "nCount_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      zoom = "zoom",
+      img_alpha = 0,
+      point_size = 1)
+    )
+legend <- get_legend(plots_c[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(plots_c, ncol=2) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined
+```
+
+As you can see, the spots with low number of counts/features and high mitochondrial content is mainly towards the edges of the tissue. It is quite likely that these regions are damaged tissue. You may also see regions within a tissue with low quality if you have tears or folds in your section. 
+
+But remember, for some tissue types, the amount of genes expressed and proportion mitochondria may also be a biological features, so bear in mind what tissue you are working on and what these features mean.
+
+### Filter
+
+Select all spots with less than 25% mitocondrial reads, less than 20% hb-reads and 1000 detected genes. You must judge for yourself based on your knowledge of the tissue what are appropriate filtering criteria for your dataset.
+
+## Filtering
+```{r filtering}
+##########################
+# FILTER GENES AND CELLS #
+##########################
+# filter genes present in less than 2 spots:
+filt_low_genes <- function(x, n_cell = 2) x[rowSums(x) >= n_cell]
+# remove specified genes:
+remove_genes <- function(x, gene_name) x[!(grepl(gene_name, rownames(x[["RNA"]]))), ]
+# identify transcripts within the 0.005 percentile:
+percentile <- function(x, nF) between(nF,quantile(nF,probs = c(0.005)), quantile(nF,probs = c(0.995)))
+
+DATA_ <- DATA
+
+DATA <- DATA_ %>%
+  filter(., percentile(., .$nFeature_RNA)) %>%
+  # filter out spots with less than 500 genes and 0.05% ribo and more than 25% mt and 20% hb:
+  mutate(filt = ifelse(nFeature_RNA > 200 & percent_ribo > 0.05 & percent_mito < 25 & percent_hb < 20,
+                       "keep", "filt")) %>%
+  {. ->> temp } %>%
+  filter(., nFeature_RNA > 300 & percent_ribo > 0.05 & percent_mito < 25 & percent_hb < 20) %>% 
+  filt_low_genes(., n_cell = 2) %>%
+  remove_genes(., "MALAT1|^HB[^(P)]") # "^MT-|MALAT1|^HB[^(P)]"
+
+#################
+# SUMMARY STATS #
+#################
+dim(DATA_)
+dim(DATA)
+#rm(DATA_)
+
+DATA %>%
+  group_by(orig.ident) %>%
+  summarise(across(c(nCount_RNA:percent_hb), list(min = min, max = max))) %>%
+  rename_with(., ~str_replace(., "_RNA", "")) # |percent_
+```
+
+### Replotting QC after filtering
+```{r 01f_QC_plot_filtered, fig.height=15}
+############################
+# GGPLOT PLOT FILTERED OBJ #
+############################
+ p_ <-  map(feature, ~violin.fun(DATA, .x, fill="orig.ident", col_pal=friendly_cols, n=1))
+ plot_grid(plotlist=p_, ncol = 1)
+```
+
+### And replot onto tissue section:
+```{r 01g_filtered_spots, fig.height=8, fig.width=7}
+plots <- temp %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  pmap(., 
+    ~plot_spatial.fun(..2,
+      sampleid = ..1,
+      geneid = "filt",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      zoom = "zoom",
+      img_alpha = 0,
+      point_size = 1)
+    )
+legend <- get_legend(plots[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined
+```
+
+### Plot top expressed genes
+```{r 01h_top_abundante_genes}
+#############################
+# GET TOP 20 ABUNDANT GENES #
+#############################
+top_genes <- DATA@assays$RNA@counts %>%
+  Matrix::rowSums(.) %>%
+  sort(., decreasing = T) %>%
+  .[1:20]
+
+percent.fun <- function(df, sample_name, gene, count){
+  sample_name <- enquo(sample_name)
+  gene <- enquo(gene)
+  count <- enquo(count)
+
+  percent <- df %>%
+    select(!!sample_name, !!gene, !!count) %>%
+    group_by(!!sample_name) %>%
+    mutate(Percent = (!!count/sum(!!count)*100)) %>%
+    select(-!!count) %>%
+    ungroup() 
+  
+  return(percent$Percent)
+}
+col = (scales::hue_pal())(20)[20:1]
+
+##################
+# PLOT TOP GENES #
+##################
+(genes_plot <- DATA %>%
+   join_features(features = names(top_genes) ) %>%
+   mutate(.feature = factor(.feature, levels = rev(names(top_genes)))) %>%
+   mutate("% total count per cell" = percent.fun(., .cell, .feature, .abundance_RNA),
+          .after=.abundance_RNA) %>%
+   ggplot(aes(y=`% total count per cell`, x=.feature, fill=.feature)) +
+   stat_boxplot(geom = "errorbar", width = 0.2) +
+   geom_boxplot(outlier.alpha = 0.1, outlier.size = .5) +
+   scale_fill_manual(values = col) + my_theme +
+   theme(plot.title = element_text(hjust = 0.5),
+         axis.title.y = element_blank()) +
+   NoLegend() + coord_flip() )
+
+```
+
+## Save seurat object
+```{r save_SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(DATA_, paste0(result_dir,"seuratObj_merged.RDS"))
+saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
+#DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
+```
+
+### Session info
+```{r}
+sessionInfo()
+```
