@@ -13,7 +13,11 @@ knit_script <- function(inputFile, out_dir, ...) {
       toc_float = FALSE,
       code_folding = "show",
       code_download = TRUE)
-  )
+  )#;
+# rmarkdown::render(
+#   inputFile,
+#   output_format = rmarkdown::github_document(resource_path )
+#   )
 }
 
 ################
@@ -28,7 +32,9 @@ pkg_file_arg <- function(...) {
 css <- pkg_file_arg(
   "rmarkdown/templates/github_document/resources/github.css")
 
-
+# inputFile <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/03_clustering_st_data.Rmd"
+# out_dir <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/md_files"
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 
 knit_github <- function(inputFile, out_dir, ...) {
   name <- xfun::sans_ext(inputFile)
@@ -47,6 +53,7 @@ knit_github <- function(inputFile, out_dir, ...) {
                       highlight = "default",
                       #options=args,
                       dev= c("png","pdf"),
+                      dpi = 300,
                       keep_md = TRUE,
                       echo=TRUE,
                       toc = FALSE,
@@ -55,14 +62,15 @@ knit_github <- function(inputFile, out_dir, ...) {
                       code_download = TRUE
                       )
   )
-  fs::file_move(path = paste0(out_dir,"/",out,".md"), new_path = paste0("./",basename(name), ".md"))
+  #fs::file_move(path = paste0(out_dir,"/",out,".md"), new_path = paste0("./md_files/",basename(name), ".md"))
   format <- setNames(c("gfm"), c(".md"))
   #format <- setNames(c("gfm", "pdf", "html"), c(".md",".pdf", '.html'))
   purrr::imap(format,
-              ~rmarkdown::pandoc_convert(input= paste0("./",basename(name), ".md"),#paste0(getwd(),"/",out_dir,"/",out,".md"),
+              ~rmarkdown::pandoc_convert(input= paste0(getwd(),"/",out_dir,"/",out,".md"), # paste0("./",basename(name), ".md"),
                                          to = .x,
-                                         output=paste0(name, .y),
-                                         options=paste0('-M title=', basename(name), " standalone=TRUE", "date=", Sys.Date())
+                                         output=paste0(getwd(),"/md_files/",basename(name), .y), # paste0(name, .y),
+                                         options=paste0('-M title=', basename(name), " standalone=TRUE ", "date=", Sys.Date(),
+                                                        ' --extract-media=', getwd(),"./Figures/")
                                          # options=sub("-FILE-", paste0(out,".md"), "--lua-filter additional-metadata.lua --metadata default_meta_file:-FILE-.yaml")
                                          ))
 }
