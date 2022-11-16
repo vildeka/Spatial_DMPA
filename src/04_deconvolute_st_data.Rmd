@@ -1,0 +1,1159 @@
+---
+title: "04_deconvolut_st_data"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_notebook
+editor_options:
+  chunk_output_type: console
+knit: (function(inputFile, out_dir, ...) {
+    source("../../bin/custom_knit_functions.R");
+    knit_github(inputFile, "../../lab_book/04_DGE_reference_data")
+    })
+# editor_options: 
+#   chunk_output_type: inline
+---
+
+# Subset celltypes
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+                      fig.path="./Figures/",
+                      fig.align="center",
+                      message    = FALSE,
+                      warning    = FALSE)
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
+```
+
+## Load data and libraries
+```{r}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(SeuratObject)
+library(tidyseurat)
+library(openxlsx)
+
+library(RColorBrewer)
+library(cowplot)
+library(patchwork)
+
+library(BayesPrism)
+library(snowfall)
+library(scran)
+library(NMF)
+library(gplots)
+library(BiocParallel)
+#BiocManager::install("scran")
+library("devtools");
+#install_github("Danko-Lab/BayesPrism/BayesPrism")
+#remotes::install_github("czarnewski/niceRplots")
+#remotes::install_github("renozao/xbioc") #, dependencies = FALSE
+# remotes::install_github("meichendong/SCDC")
+library(SCDC)
+library(Biobase)
+source("../../bin/plotting_functions.R")
+
+#########
+# PATHS #
+#########
+input_dir_s <- "../results/03_clustering_st_data/"
+input_dir_r <- "../results/04_DGE_ref_data/"
+result_dir <- "../results/04_deconvolution_st_data/"
+marker_dir <- "./marker_genes/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+DATA_st <- readRDS(paste0(input_dir_s,"seuratObj_clustered.RDS"))
+DATA_r <- readRDS(paste0(input_dir_r,"seuratObj_clustered.RDS"))
+cell_id <- read.xlsx("../data/Reference_data/annotation_single_cell.xlsx")
+markers_genes <- readRDS(paste0(input_dir_r,"markers_genes.RDS"))
+
+Bulk_data <-read_csv("/Users/vilkal/Raw_data/Bulk_Transcriptomics/Raw_counts_matrix.csv")
+
+```
+
+### SCDC deconcolution steps
+1. subset the reference dataset to get more equal number of cells for each cluster
+2. Normalize the data and run UMAP
+3. select top marker genes 
+4. Create expression set
+5. run deconvolution
+
+## Subset scRNA reference dataset
+```{r subset_and_filter_ref_data}
+# filter spots with too few reads
+DATA_st_filt <- DATA_st  %>%
+  filter(., nFeature_RNA > 200)
+
+dim(DATA_st@assays$RNA@counts)
+dim(DATA_st_filt@assays$RNA@counts)
+#sum(DATA_st_filt@assays$RNA@counts[,"P031_TGCCTTGCCCTTACGG"])
+
+# creating a subset ed object with 200 spots selected from each cluster
+DATA_sub <- DATA_r %>%
+    filter(., .cell %in% WhichCells(., downsample = 200)) %>%
+    SetIdent(., value = "Clusters")
+      
+table(DATA_r$Clusters)
+table(DATA_sub$Clusters)
+
+# run normalization and dimensionality reduction
+# only necessary to get new subset ed UMAP
+DATA_sub <- DATA_sub %>%
+  SCTransform(., ncells = 3000, verbose = FALSE, method = "poisson") %>% 
+  RunPCA(verbose = FALSE) %>%
+  RunUMAP(dims = 1:30)
+
+p <- plot_clusters.fun(DATA_sub, cluster="Clusters", red = "UMAP")
+```
+## Select genes for deconvolution
+```{r Get_best_markers}
+
+# Identify the top genes that have a high difference in expression
+top30 <- markers_genes %>%
+  filter(.$gene %in% rownames(DATA_st@assays$RNA@counts)) %>%
+  group_by(cluster) %>%
+  top_n(-50, p_val_adj) %>%
+  top_n(40, pct.diff) %>%
+  top_n(30, log.pct.diff) 
+
+# remove all VDJ-genes from list of HVG
+# remove <- str_subset(top30$gene, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
+# top25_gr <- top25 %>%
+#   ungroup() %>%
+#   filter(., !(.$gene %in% remove)) %>%
+#   group_by(cluster) %>%
+#   group_split() %>%
+#   set_names(., seq(0, length(.)-1) )
+
+m_feats <- unique(as.character(top30$gene))
+```
+## Create ExpressionSet
+```{r ExpressionSet}
+# Create Expression Sets
+eset_SC <- ExpressionSet(assayData = as.matrix(DATA_r@assays$RNA@counts[m_feats,
+    ]), phenoData = AnnotatedDataFrame(DATA_r@meta.data))
+eset_ST <- ExpressionSet(assayData = as.matrix(DATA_st_filt@assays$RNA@counts[m_feats,
+    ]), phenoData = AnnotatedDataFrame(DATA_st_filt@meta.data))
+
+bulk <- Bulk_data %>%
+  select(-entrez, -length) %>%
+  group_by(symbol) %>% 
+  summarise_all(sum) %>%
+  filter(!(is.na(.$symbol))) %>%
+  filter(.$symbol %in% m_feats) %>%
+  column_to_rownames(., var = "symbol")
+
+eset_B <- ExpressionSet(assayData = as.matrix(bulk[m_feats,]))
+```
+## deconvolution
+```{r deconvolution}
+################
+# BULK DECONV. #
+#################
+deconvolution <- SCDC::SCDC_prop(bulk.eset = eset_B, sc.eset = eset_SC, 
+                                 ct.varname = "Clusters",
+                                 ct.sub = as.character(unique(eset_SC$Clusters)))
+
+saveRDS(deconvolution, paste0(result_dir,"deconvolution_bulk.RDS"))
+# deconvolution <- readRDS(paste0(result_dir,"deconvolution.RDS"))
+
+###################
+# SPATIAL DECONV. #
+###################
+deconvolution <- SCDC::SCDC_prop(bulk.eset = eset_ST, sc.eset = eset_SC, 
+                                 ct.varname = "Clusters",
+                                 ct.sub = as.character(unique(eset_SC$Clusters)))
+
+saveRDS(deconvolution, paste0(result_dir,"deconvolution_sc.RDS"))
+# deconvolution <- readRDS(paste0(result_dir,"deconvolution.RDS"))
+
+head(deconvolution$prop.est.mvw)
+
+# Create empty matrix and populate with SCDC results
+temp <- Matrix::Matrix(0, 
+                 nrow = ncol(deconvolution$prop.est.mvw), 
+                 ncol = ncol(DATA_st), 
+                 dimnames = list(colnames(deconvolution$prop.est.mvw), colnames(DATA_st)))
+
+temp[,rownames(deconvolution$prop.est.mvw)] <- t(deconvolution$prop.est.mvw)
+
+decon_column <- deconvolution$prop.est.mvw %>%
+  DATA_st@assays$SCDC@data %>%
+  as_tibble(., rownames = ".cell") %>%
+  pivot_longer(., cols = -.cell, names_to = "decon_clus", values_to = "values") %>%
+  filter(!(values==0)) %>% nest( data = -decon_clus)
+
+DATA_st <- DATA_st %>% 
+  left_join(., decon_column, by=".cell")
+
+# take the deconvolution output and add it to the Seurat object as a new assay.
+DATA_st@assays[["SCDC"]] <- CreateAssayObject(data = temp)
+DATA_st@assays$SCDC@key <- "scdc_"
+
+saveRDS(DATA_st, paste0(result_dir,"SeuratObj_deconvolution.RDS"))
+# DATA_st <- readRDS(paste0(result_dir,"SeuratObj_deconvolution.RDS"))
+
+meta <- read_csv("../data/Clinical_data/Clinical_data_Spatial_DMPA.csv") %>%
+  select(orig.ident="ID", groups=Contraception) %>%
+  mutate(groups = ifelse(.$groups=="no HC", "ctrl", .$groups))
+
+DATA_st <-  DATA_st %>%
+  #mutate(sp_annot2 = ifelse(.$sp_annot == "epi_1"|.$sp_annot == "epi_2"|.$sp_annot == "epi_3", "epi", .$sp_annot )) %>%
+  #mutate(sp_annot2 = ifelse(.$sp_annot2 == "SubMuc_1"|.$sp_annot2 == "SubMuc_2"|.$sp_annot2 == "SubMuc_3", "SubMuc", .$sp_annot2 )) %>%
+  left_join(., meta, by="orig.ident") %>%
+  select(groups, everything())
+```
+
+## Paulos code
+```{r}
+start_time <- Sys.time()
+
+img_list <- names(DATA_st@images)
+clusters <- rownames(DATA_st@assays$SCDC@data)
+
+
+if(!dir.exists(result_dir)){dir.create(result_dir,recursive = T)}
+
+library(niceRplots)
+
+pdf(paste0(result_dir, "_HE.pdf"),width = (length(img_list) + 1)*3.5,height = 3.5,useDingbats = F)
+par(mfrow= c(1,length(img_list) + 1))
+plot_meta( DATA_sub , feat = "Clusters" , cex=.5,label = T, red = "umap_harmony" )
+for(i in img_list){
+  plot_spatial_feat(DATA_st, red = i,feat =  "CDH1", main="",assay="RNA", # CDH1, "ACTB"
+                    pch=16,cex=1,plot_tissue = T,
+                    transparency = "00")}
+dev.off()
+
+grid_genes <- function(plot_list, title){
+  title <- ggdraw() + draw_label(paste0("Top 10 Markers for Cluster ", title), fontface='bold')
+  g <- plot_grid(plotlist = plot_list,
+            ncol = 4)
+  g_ <- plot_grid(title, g, ncol=1, rel_heights=c(0.1, 1))
+  return(g_)
+}
+
+for(j in clusters){
+  pdf(paste0(result_dir,"cluster",j,".pdf"),
+      width = (length(img_list) + 1)*3.5,
+      height = 3.5,useDingbats = F)
+  
+  par(mfrow= c(1,length(img_list) + 1))
+  DATA_sub$temp <- (DATA_sub$Clusters == j)*1
+  plot_feat( DATA_sub , feat = "temp" ,red = "umap_harmony",  cex=.5, main=j )
+  
+  for(i in img_list){
+    plot_spatial_feat(DATA_st, 
+                      red = i, 
+                      feat =  j, 
+                      main=paste0(i," (",j,")"),
+                      assay="SCDC", maxs=max(DATA_st@assays$SCDC@data[j,],0.1),
+                      pch=16,cex=1, 
+                      plot_tissue = F)
+  }
+dev.off()
+}
+end_time <- Sys.time()
+time <- end_time - start_time
+```
+
+```{r, dev.args = list(bg = 'transparent')}
+###############
+# Facet wrap #
+###############
+clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
+  #c <- unique( pull(spe, as_label(clusters)))
+  col=c("grey90","grey80","grey60","navy","black")
+  clus_col <- c("grey90","navy")
+  clusters <- enquo(clusters)
+  c <- unique( pull(clus_spe, !!(clusters))) %>% sort(.) %>% set_names()
+    
+  # Create Columns for induvidual clusters:
+  clus_columns <- map(c, ~(clus_spe@meta.data[["Clusters"]] == .x)*1) %>% 
+    map(.,~as.character(.x)) %>%
+    set_names(., paste0("Clus_",names(.)))
+  
+  # Add the Cluster columns to seurat obj.
+  clus_spe <- bind_cols(clus_spe, clus_columns)
+  # Plot Individal plot for each cluster
+  P <- {map(c, ~plot_clusters.fun(clus_spe, color=clus_col, paste0("Clus_",.x), 
+                                  red="umap_harmony"), txt_size=20, dot_size = 0.2, lable=F)}
+  #clus_plot <- plot_clusters.fun(spe, color=col, paste0("Clus_","2"), red="umapharmony", txt_size=20, lable=F)
+  
+  filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
+  
+  decon_columns <- spe@assays$SCDC@data %>%
+    Matrix::t() %>%
+    as_tibble(., rownames = ".cell") %>% 
+    mutate_if(is.numeric, ~1 * (. > 0)) %>%
+    filt_empty(., 0) %>%
+    mutate(across(-.cell, ~as.character(.x)))
+    
+    c <- intersect(as.character(c), colnames(decon_columns))
+  
+  # plots <- spe %>%
+  #   left_join(., decon_columns, by=".cell") %>%
+  #   #mutate(group = orig.ident) %>%
+  #   mutate(clus = decon_column) %>% # need to add the actual column with the reference clusters to the meta data
+  #   nest(., data = -clus) %>%
+  #   arrange(clus) %>%
+  #   mutate(data = setNames(.[["data"]], .$clus)) %>%
+  #   mutate(c = map(.$data, ~unique(pull(.x, orig.ident))))
+  #   
+  #   pivot_longer(., cols = -decon_clus, names_to = ".cell", values_to = "values") %>%
+  #   filter(!(values==0)) %>% 
+  #   nest( data = -decon_clus) %>%
+  #   arrange(factor(decon_clus, levels = c)) %>%
+  #   mutate(data = setNames(.[["data"]], .$decon_clus)) %>%
+  #   mutate(c = map(.$data, ~unique(pull(.x, orig.ident)))) 
+  
+  PLOTS <- tibble("clus" = c) %>%
+    #sample_n(., size = 2) %>%
+    mutate(plots = pmap(.,
+      ~plot_facets.fun(filter(spe, decon_columns[[..1]]=="1"),
+        assay=assay,
+        geneid = "CDH1",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+        zoom = "zoom", #"zoom"
+        colors = col,
+        #annot_col = "#dbd9d9",
+        annot_line = .1,
+        img_alpha = 0,
+        point_size = 0.5)
+      )) %>%
+    mutate(clus_plot = ifelse(.$clus %in% names(P), P[.$clus], NA)) %>%
+    mutate(., combined = pmap(.,
+      ~plot_grid( ..3, ..2, ncol=2, rel_widths=c(1.2,4)) ))
+
+  # PLOTS$combined[[1]]
+  #PLOTS$data[[1]]
+
+  combined <- plot_grid( plotlist=PLOTS$combined, ncol=1, rel_heights=rep_len(1, length(PLOTS$combined) ) )
+
+  return(combined)
+}
+Key(DATA_st@reductions$umap_harmony) <- "umapharmony_"
+mutate(DATA_st, Ref_clus = rownames(Matrix::t(spe@assays$SCDC@data)))
+
+# spe <- DATA_st
+# clusters <- sym("Clusters")
+# gene <- "CDH1"
+# assay <- "SCDC"
+# clus_col <- c("grey90","navy")
+# gr <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")
+start_time <- Sys.time()
+CLUS_PLOTS <- clus_exp(DATA_st, DATA_r,clusters=Clusters, gene="CDH1", assay="SCDC")
+end_time <- Sys.time()
+time_n <- end_time - start_time
+ggsave("./clus_plots.pdf",CLUS_PLOTS, height = 50, width = 10, limitsize = FALSE)
+```
+
+
+```{r}
+coocurrence <- lapply(img_list,function(x){
+  temp <- DATA_st@assays$SCDC@data[,DATA_st$orig.ident == x]
+  temp <- sqrt( temp %*% Matrix::t(temp) / ncol(temp))
+  rownames(temp) <- rownames(DATA_st@assays$SCDC@data)
+  colnames(temp) <- rownames(DATA_st@assays$SCDC@data)
+  return( temp )
+})
+names(coocurrence) <- img_list
+```
+
+
+
+```{r}
+library(igraph)
+pdf(paste0(result_dir,"cell-cell_codetection.pdf"),width = 7*3.5,height = 2*3.5, useDingbats = F)
+par(mfrow= c(2,7),mar=c(1,1,1,1))
+
+plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = T)
+for(i in names(coocurrence)){
+  l <-  t(sapply( as.character(unique(DATA_sub$Clusters)) , 
+                          reds=as.data.frame(DATA_sub@reductions$umap_harmony@cell.embeddings[,1:2]), 
+                          cl1=DATA_sub$Clusters, function(jj,reds,cl1) { pmean(reds[cl1==jj,])  }))
+  plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = F,col = "grey90",main=i)
+  g <- igraph::graph_from_adjacency_matrix( coocurrence[[i]] , mode = "undirected",weighted = T)
+  el <- data.frame(as_edgelist(g),E(g)$weight)
+  el <- el[el[,3] > 0.01,]
+  segments( x0 = l[el[,1],1] , y0 = l[el[,1],2] ,x1 =  l[el[,2],1] , y1 = l[el[,2],2],
+            col=paste0(colorRampPalette(c("grey80","black"))( 100 ),sprintf("%02d",round((0:99)/2+50) ))[round(el[,3]*98)+1],
+            lwd=el[,3]*20)
+}
+
+
+plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = T)
+for(i in names(coocurrence)){
+  l <-  t(sapply( as.character(unique(DATA_sub$Clusters)) , 
+                          reds=as.data.frame(DATA_sub@reductions$umap_harmony@cell.embeddings[,1:2]), 
+                          cl1=DATA_sub$Clusters, function(jj,reds,cl1) { pmean(reds[cl1==jj,])  }))
+  plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = F,col = "grey90",main=i)
+  temp <- (coocurrence[["P031"]]+coocurrence[["P105"]]+coocurrence[["P118"]]+coocurrence[["P080"]])/4
+  temp <- log2( ( coocurrence[[i]] +1) /  (temp +1) ) # sum 
+  if(sum(abs(temp)) != 0){
+      g <- igraph::graph_from_adjacency_matrix( as.matrix(temp) , mode = "undirected",weighted = T)
+      el <- data.frame(as_edgelist(g),E(g)$weight)
+
+      el <- el[abs(el[,3]) > 0.01,]
+      segments( x0 = l[el[,1],1] , y0 = l[el[,1],2] ,x1 =  l[el[,2],1] , y1 = l[el[,2],2],
+              col=paste0(colorRampPalette(c("navy","grey80","firebrick"))( 100 ), sprintf("%02d",c(49:0,0:49)+50 ))[ round((el[,3]*200))+50 ] ,
+              lwd=abs(el[,3]*20) )
+  }
+}
+dev.off()
+
+```
+
+# Differetial cell abundance
+
+```{r}
+library(glmnet)
+library(glmnetUtils)
+
+DATA_st$orig.ident <- factor(DATA_st$orig.ident)
+temp <- DATA_st@assays$SCDC@data[,grepl("d22|d43",DATA_st$orig.ident)]
+rownames(temp) <- paste0("c",rownames(temp))
+group <- factor(gsub(".*[_]","",DATA_st$orig.ident[grepl("d22|d43",DATA_st$orig.ident)]))
+treat <- factor(gsub("d22|d43","chow",DATA_st$orig.ident[grepl("d22|d43",DATA_st$orig.ident)]))
+
+# First step: using .*. for all interactions
+# f <- as.formula(y ~ .*.)
+# y <- temp[,"y"]
+# # Second step: using model.matrix to take advantage of f
+# x <- model.matrix(f, df)[, -1]
+# mod2 <- bigGlm(x, y)
+# mod2$beta
+# fit <- cv.glmnet(x,y)
+
+
+plan(multiprocess, workers=future::availableCores()-1  )
+
+temp2 <- data.frame(group,treat)
+cl <- future_lapply(rownames(temp),temp=temp,temp2=temp2, function(x,temp,temp2) {
+  df <- cbind(temp2,y=temp[x,])
+  m <- summary( glm( y ~ group*treat ,data = df) )
+  return( m$coefficients )
+} , future.seed = 1 )
+names(cl) <- rownames(temp)
+cl
+
+
+pdf("differential_abundance_plot.pdf",width = 4*3,height = 4,useDingbats = F)
+mypar(1,3)
+for( i in rownames(cl[[1]])[-1]){
+  
+  cl_group <- data.frame(t(sapply(cl,i=i,function(x,i){x[i, c("Estimate","Pr(>|t|)") ]})))
+  cl_group <- cbind(cl_group , sig = ( abs(cl_group[,1]) > 0.015 ) & ( cl_group[,2] < 1e-50 ) )
+  cl_group[,2][cl_group[,2]==0] <- min(cl_group[,2][cl_group[,2]!=0])
+
+  plot( cl_group[,1] , -log10(cl_group[,2]) , ylim=c(0,400),
+        xlim=c(-0.4,0.4), pch=16, main=i, 
+        ylab="-log10(pvalue)",xlab="Estimate",
+        col= ifelse(cl_group[,3] ,"red","grey70") )
+  
+  text( cl_group[cl_group[,3],1] , 
+        -log10(cl_group[cl_group[,3],2]) , 
+        labels = rownames(cl_group)[cl_group[,3]] , 
+        pos=ifelse(cl_group[cl_group[,3],1]>0,3,3) )
+  
+  abline(v=c(-0.015,0,0.015),h=50,lty=20,col="grey50")
+}
+dev.off()
+
+```
+
+
+# BayesPrism
+
+```{r load_GEO_data}
+######################
+# LOAD SPARSE MATRIX #
+######################
+data_dir <- "../data/Reference_data/GSE173231/"
+f <- c("matrix.mtx$", "genes.tsv$|features.tsv$", "barcodes.tsv$") %>% set_names()
+
+f_list <- map_df(f, ~list.files(path = data_dir, pattern = .x,
+                      full.names = T, recursive = T) ) %>%
+  mutate(sample_name = str_match(.$"matrix.mtx$", ".*\\/([^\\/]+).matrix\\.mtx$")[,2]) %>%
+  mutate(sample_id = str_extract(.$sample_name, "(?<=_).+(?=_)"), .$sample_name) 
+
+matrix_list <- pmap(f_list, ~ReadMtx(mtx = ..1, features = ..2, cells = ..3, 
+                                     feature.column = 1) ) %>% # , mtx.transpose=T
+                     set_names(., f_list$sample_id) %>% 
+  map(., ~t(.x)) %>%
+  imap(., ~`rownames<-`(., paste0(str_extract(rownames(.x), "^[ATCG]+"),"_",.y)))
+
+
+#################################
+# substitute symbols for entrez #
+#################################
+genes <- f_list$`genes.tsv$|features.tsv$` %>%
+  set_names(., f_list$sample_id) %>% 
+  map(., ~read_tsv(.x, col_names = F)) %>%
+  bind_rows(., .id = "sample_id")
+  
+genes %>% 
+  dplyr::group_by(X2) %>%
+  dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
+  dplyr::filter(n > 10) 
+
+gene_list <- set_names(genes$X2, genes$X1)
+
+
+DATA_r@assays$RNA@counts %>%
+  t() %>%
+  colnames()
+  
+t <- tibble(symbol = dimnames(DATA_r@assays$RNA@counts)[[1]]) %>%
+  left_join(., select(genes, entrez="X1", symbol="X2"), by="symbol") %>%
+  unique() %>%
+  arrange(dimnames(DATA_r@assays$RNA@counts)[[1]])
+  unique()
+  mutate(., genes = cell_type[as.character(DATA_sub$Clusters)])
+
+
+
+matrix_list %>%  
+  bind_rows()
+  
+table(DATA_r@active.ident)
+matrix_list$CX1@Dimnames[[1]]
+
+
+###################################
+# Get scRNA-seq  and filter genes #
+###################################
+sc.dat <- DATA_r %>%
+  GetAssayData(., slot = 'counts', assay = "RNA") %>%
+  # .[rownames(.) %in% Bulk_data$symbol, ] %>% # filtering is not neccesary done by BayesPrisem
+  t(.) %>%
+  as.matrix(.)
+
+################################
+# Get Cell type for scRNA-seq #
+###############################
+cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., seq_along(.))
+
+Clustering <- DATA_r@meta.data %>%
+  mutate(., cell_type = cell_type[as.character(DATA_r$Clusters)]) %>%
+  select(Clusters, cell_type) 
+
+cell.state.labels <- Clustering$Clusters
+cell.type.labels <- Clustering$cell_type
+
+table(cell.state.labels)
+table(cell.type.labels)
+
+table(cbind.data.frame(cell.state.labels, cell.type.labels))
+# Please make sure that all cell states contain a reasonable number of cells, e.g. >20 or >50, so that their profile can be represented accurately
+##############
+# BULK DATA #
+#############
+# entrez
+bk.dat <- Bulk_data %>%
+  select(symbol, contains("P")) %>%
+  # mutate(entrez = paste0("ENSG",str_pad(as.character(Bulk_data$entrez), 11, pad = "0"))) %>%
+  pivot_longer(-symbol) %>% 
+  pivot_wider(names_from=symbol, values_fn = function(x) sum(x)) %>% #aggregates the duplicates
+  column_to_rownames(var = "name")
+
+####################################
+# QC of cell type and state labels #
+####################################
+plot.cor.phi(input=sc.dat,
+                         input.labels=cell.state.labels,
+                         title="cell state correlation",
+                         #specify pdf.prefix if need to output to pdf
+                         #pdf.prefix="gbm.cor.cs", 
+                         cexRow=0.2, cexCol=0.2,
+                         margins=c(2,2))
+
+plot.cor.phi(input=sc.dat, 
+                         input.labels=cell.type.labels, 
+                         title="cell type correlation",
+                         #specify pdf.prefix if need to output to pdf
+                         #pdf.prefix="gbm.cor.ct",
+                         cexRow=0.5, cexCol=0.5,
+                         )
+
+sc.stat <- plot.scRNA.outlier(
+  input=sc.dat, #make sure the colnames are gene symbol or ENSMEBL ID 
+  cell.type.labels=cell.type.labels,
+  species="hs", #currently only human(hs) and mouse(mm) annotations are supported
+  return.raw=TRUE #return the data used for plotting. 
+  #pdf.prefix="gbm.sc.stat" specify pdf.prefix if need to output to pdf
+)
+
+bk.stat <- plot.bulk.outlier(
+  bulk.input=bk.dat,#make sure the colnames are gene symbol or ENSMEBL ID 
+    sc.input=sc.dat, #make sure the colnames are gene symbol or ENSMEBL ID 
+  cell.type.labels=cell.type.labels,
+  species="hs", #currently only human(hs) and mouse(mm) annotations are supported
+  return.raw=TRUE
+  #pdf.prefix="gbm.bk.stat" specify pdf.prefix if need to output to pdf
+)
+
+#################
+# Filter genes #
+################
+sc.dat.filtered <- cleanup.genes (input=sc.dat,
+                                  input.type="count.matrix",
+                                    species="hs", 
+                                    gene.group=c( "Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY") ,
+                                    exp.cells=5)
+setdiff(colnames(sc.dat.filtered), colnames(bk.dat))
+
+plot.bulk.vs.sc (sc.input = sc.dat.filtered,
+                            bulk.input = bk.dat
+                            #pdf.prefix="gbm.bk.vs.sc" specify pdf.prefix if need to output to pdf
+)
+# select only protein coding genes
+sc.dat.filtered.pc <-  select.gene.type (sc.dat.filtered,
+                                        gene.type = "protein_coding")
+
+############################
+# Construct a prism object #
+############################
+myPrism <- new.prism(
+  reference=sc.dat.filtered.pc, 
+  mixture=bk.dat,
+  input.type="count.matrix", 
+  cell.type.labels = cell.type.labels, 
+  cell.state.labels = cell.state.labels,
+  key=NULL,
+  outlier.cut=0.01,
+    outlier.fraction=0.1,
+)
+##################
+# RUN BAYESPRISM #
+##################
+bp.res <- run.prism(prism = myPrism, n.cores=50)
+```
+
+
+## Subset SeuratObj
+```{r}
+DATA_nested <- DATA %>%
+  left_join(cell_id, by=c("Clusters"="cluster")) %>%
+  select(.cell, sample_name, Clusters, annotation_level1:Genes_level3, nCount_RNA:percent_ribo) %>%
+  filter(., grepl("fibroblasts|endothelial|epithelial|immune", .$annotation_level1)) %>%
+  filter(., ifelse(!(annotation_level1=="immune" & annotation_level2 != "T cell"), TRUE, FALSE)) %>%
+  nest(data = -annotation_level1)
+```
+
+```{r Functions}
+#######################
+# PLOT GENES FUNCTION #
+#######################
+# obj <- DATA
+ # gene <- sym("CTSK")
+plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony", lable = TRUE){
+  gene <- sym(gene)
+  obj <- obj %>%
+    mutate(lab = obj@active.ident) %>%
+    mutate(., FetchData(., vars = c(as_label(gene))) ) %>%
+    mutate(feat = !!(gene))
+  feat_vec <- pull(obj, as_label(gene))
+  
+  # Colour pal:
+  if(is.null(mins)){
+    mins <- min(c(feat_vec, 0),na.rm = T)} # get 0 or negative value
+  if(is.null(maxs)){maxs <- quantile(feat_vec,0.99,na.rm = T) # get percentile
+    if(maxs==0){maxs <- max(feat_vec,na.rm = T)}
+  }
+  if(max(feat_vec, na.rm=T) != 0){
+    # Calculate percentage:
+    obj <- obj %>%
+      mutate(feat = (!!(gene) - mins) / ( maxs - mins) ) %>%
+      mutate(feat = ifelse(.$feat > 1, 1, .$feat))
+  }
+  
+  obj <- obj %>%
+      #select(1:3, !!(gene)) %>%
+      mutate(feat = round(.$feat*98)+1) %>%
+      mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) %>%
+      arrange(!!(gene))
+  
+  # reduction method:
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  # txt lable:
+  if(lable == FALSE){l = FALSE
+    text <- NoLegend() #+ labs(color= "Clusters")
+  }else{l = TRUE
+    if(lable != TRUE){obj <- mutate(obj, lab = pull(obj, lable))}
+    
+    lable_df <- obj %>%
+      group_by(lab) %>%
+      select(lab, contains(red)) %>% 
+      summarize_all(mean) 
+    
+    text <- geom_text(data = lable_df, aes(label = lab), col="black", size=2.5) }
+  
+  p <- ggplot(obj, aes(!!(red_1), !!(red_2), label=l , color = pal) ) +
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+    text + #scale_color_viridis(option = "D", na.value="#EBECF0") +
+    scale_colour_identity() +
+    my_theme + theme_void() +
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5)) 
+  return(p)
+}
+
+##########################
+# PLOT CLUSTERS FUNCTION #
+##########################
+# obj <- DATA
+# cluster <- sym("RNA_snn_res.0.1")
+plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
+  if(color == "Brew_all"){
+    pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )}
+  
+  cluster <- sym(cluster)
+  
+  if(lable == TRUE){ lab <- cluster
+    text <- NULL#NoLegend() #+ labs(color= "Clusters")
+  }else{lab <- enquo(lable)
+    text <- guides(color = "none")}
+  
+  feat <- obj %>%
+    select(.cell, !!(cluster), !!(lab), sample_name, nCount_RNA, nFeature_RNA) %>%
+    group_by(!!(cluster)) %>%
+    add_tally() %>%
+    arrange(nFeature_RNA) %>%
+    arrange(desc(n))
+  
+  lable_df <- feat %>%
+    ungroup() %>%
+    group_by(!!(lab)) %>%
+    select(!!(lab), contains(red)) %>% 
+    summarize_all(mean)
+  
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
+                        color = !!cluster), label=TRUE) + 
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
+    geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) +
+    guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+    scale_color_manual(values = pal)  +
+    my_theme + text
+  return(p)
+}
+
+################
+# GGPLOT THEME #
+################
+my_theme <-
+  list(
+    #scale_fill_manual(values = friendly_cols),
+    #scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(size = 0.2),
+        panel.grid.minor = element_line(size = 0.1),
+        text = element_text(size = 12),
+        legend.position = "bottom",
+        #aspect.ratio = 1,
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+      )
+  )
+```
+
+```{r Find_HVG, eval=FALSE, include=FALSE}
+################################
+# SPLIT INTO SEPERATE DATASETS #
+################################
+DATA_nested <- DATA %>%
+  mutate(subset = annotation_level1) %>% 
+  nest(data = -annotation_level1)%>%
+  mutate(data = imap(
+    data, ~ .x %>%
+      #NormalizeData(., normalization.method = "LogNormalize",verbose = FALSE) %>%
+      FindVariableFeatures(selection.method = "vst", 
+                           nfeatures = 2000, 
+                           verbose = FALSE) )) %>%
+  mutate(data = setNames(.[["data"]], .$annotation_level1))
+
+#########################################
+# FIND HIGLY VARIABLE GENES PER SUBSET #
+#########################################
+hig_var <- DATA_nested %>%
+  .$data %>%
+  map(., ~ unique(unlist(.x@assays$RNA@var.features))) %>%
+  # remove all VDJ-genes from list of HVG:
+  map(., ~ setdiff(.x, str_subset(.x, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")))
+
+
+hig_var.fun <- function(Obj){
+  hig_var <- Obj@assays$RNA@var.features %>%
+    # remove all VDJ-genes from list of HVG:
+    setdiff(., str_subset(., "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG"))
+  Obj@assays$RNA@var.features <- hig_var
+  return(Obj)
+}
+
+
+###########################
+# DIMENTIONAITY REDUCTION #
+###########################
+DATA_nested <- DATA_nested %>%
+  .$data %>%
+  map2(., hig_var, ~ ScaleData(.x, verbose = FALSE, features = .y )) %>%
+  map2(.,  ~ RunPCA(verbose = FALSE, npcs = 50)) %>%
+  map2(.,  ~ RunUMAP(dims = 1:50, n.components = 2L) )
+
+# DATA <- DATA_nested$data$fibroblasts %>%
+#   ScaleData(verbose = FALSE, features = hig_var$fibroblasts ) %>%
+#   RunPCA(verbose = FALSE, npcs = 50) %>%
+#   RunUMAP(dims = 1:50, n.components = 2L) 
+```
+
+## Identify Highly Variable Genes (HVG) in each subset
+```{r}
+#########################################
+# FIND HIGLY VARIABLE GENES PER SUBSET #
+#########################################
+hig_var.fun <- function(Obj){
+  hig_var <- Obj@assays$RNA@var.features %>%
+    # remove all VDJ-genes from list of HVG:
+    setdiff(., str_subset(., "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG"))
+  Obj@assays$RNA@var.features <- hig_var
+  return(Obj)
+}
+
+###########################
+# DIMENTIONAITY REDUCTION #
+###########################
+DATA_nested <- DATA_nested[1:2,] %>%
+  mutate(data = map(
+    data, ~ .x %>%
+      FindVariableFeatures(verbose = FALSE) %>%
+      hig_var.fun(.) %>%
+      RunPCA(npcs = 20, verbose = FALSE) %>%
+      RunHarmony(group.by.vars = "sample_name", 
+             reduction = "pca", 
+             dims.use = 1:20, 
+             assay.use = "RNA") %>%
+      RunUMAP(reduction = "harmony", dims = 1:20, 
+              n.components = 2L, verbose = FALSE) %>%
+      FindNeighbors(verbose = FALSE, reduction = "harmony", dims = 1:20) )) #%>%
+      #FindClusters( verbose = FALSE, resolution = 0.8)
+
+# DATA_fibro <- DATA_nested$data$fibroblasts %>%
+#   FindVariableFeatures(verbose = FALSE) %>%
+#   hig_var.fun(.) %>%
+#   RunPCA(npcs = 10, verbose = FALSE) %>%
+#   FindNeighbors(verbose = FALSE) %>%
+#   FindClusters(method = "igraph", verbose = FALSE) %>%
+#   RunUMAP(reduction = "pca", dims = 1:10, n.components = 3L, verbose = FALSE)
+
+```
+
+## Save seurat object
+```{r save_SeuratObject_}
+###########################
+# SAVE INTERMEDIATE OJECT #
+###########################
+saveRDS(DATA_nested, paste0(result_dir,"subset_celltypes.RDS"))
+# DATA_nested <- readRDS(paste0(result_dir,"subset_celltypes.RDS"))
+```
+
+## Clustering
+```{r Clustering_resolution}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
+clus_res.fun <- function(obj){
+  for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    obj <- FindClusters(obj, resolution = res, algorithm = 1)
+  }
+  return(obj)
+}
+
+DATA_nested <- DATA_nested %>%
+  mutate(data = map(
+    data, ~ .x %>%
+      clus_res.fun(.) ))
+
+# each time you run clustering, the data is stored in meta data columns:
+# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
+# resolution you test.
+
+```
+
+```{r, fig.width=10}
+#res <- c("RNA_snn_res.0.1", "RNA_snn_res.0.25")
+res <- c("RNA_snn_res.0.1", "RNA_snn_res.0.25",
+         "RNA_snn_res.0.5","RNA_snn_res.1", "RNA_snn_res.1.5")
+clus_plots <- DATA_nested %>%
+  add_column(., Res = list(res)) %>%
+  rowwise() %>%
+  mutate(Plots = list(map(Res, ~plot_clusters.fun(data, cluster=.x, red = "UMAP"))) )
+
+clus_plots <- clus_plots %>%
+  rowwise() %>%
+  mutate(., plot_grid = list(plot_grid(plotlist = Plots)))
+
+clus_plots$plot_grid[[1]]
+clus_plots$plot_grid[[2]]
+clus_plots$plot_grid[[3]]
+clus_plots$plot_grid[[4]]
+
+res <- c(fibroblasts="RNA_snn_res.0.1", immune="RNA_snn_res.0.25",
+         endothelial="RNA_snn_res.0.25", epithelial="RNA_snn_res.0.5")
+
+DATA_nested <- DATA_nested %>%
+  mutate(name = res) %>%
+  mutate(data = imap(
+    data, ~ .x %>%
+      select(.cell, sample_name, Clusters_old="Clusters", 
+             Clusters=name[[.y]], everything()) %>%
+      SetIdent(., value = "Clusters") %>%
+      select(-starts_with("RNA_snn_res."))))
+
+DATA_nested_$data[[2]]
+```
+
+```{r tidySeurat_plot}
+DATA_nested %>%
+
+  # Convert to tibble otherwise Seurat drops reduced dimensions when unifying data sets.
+  mutate(data = map(data, ~ .x %>% as_tibble())) %>%
+  unnest(data) %>%
+
+  # Define unique clusters
+  unite("cluster", c(annotation_level1, Clusters), remove = FALSE) %>%
+
+  # Plotting
+  ggplot(aes(UMAP_1, UMAP_2, color = cluster)) +
+  geom_point() +
+  facet_wrap(~annotation_level1) +
+  my_theme
+```
+
+```{r, fig.width=10}
+clus_plots <- DATA_nested %>%
+  mutate(data = map(
+    data, ~ .x %>%
+      mutate(Clusters = factor(.$Clusters)) %>%
+      plot_clusters.fun(., cluster="Clusters", red = "UMAP")) ) # "umap_harmony"
+
+fibro <- clus_plots$data[[1]]# + theme_void() + NoLegend()
+T_cell <- clus_plots$data[[2]]
+endo <- clus_plots$data[[3]]
+epi <- clus_plots$data[[4]]
+clus <- plot_clusters.fun(DATA, cluster="Clusters", red = "umap_harmony")
+
+plot_grid(clus, fibro)
+```
+
+## Identify marker genes to seperate clusters
+```{r Find_marker_genes}
+# Compute differential expression one clusters against rest 
+markers_genes <- DATA_nested %>%
+  mutate(data = map(
+    data, ~ .x %>%
+    FindAllMarkers(.,
+      log2FC.threshold = 0.1, 
+      test.use = "wilcox",
+      min.pct = 0.1, 
+      min.diff.pct = 0.1, 
+      only.pos = TRUE, 
+      max.cells.per.ident = 50,
+      assay = "RNA", slot = "data") ) %>%
+      set_names(., DATA_nested$annotation_level1))
+
+#markers_genes$pct.diff <- -markers_genes$pct.2-markers_genes$pct.1
+#markers_genes$log.pct.diff <- -log2(markers_genes$pct.2/markers_genes$pct.1)
+```
+
+## Save marker genes object
+```{r save_marker_genes}
+###########################
+# SAVE INTERMEDIATE OJECT #
+###########################
+saveRDS(markers_genes, paste0(result_dir,"markers_genes.RDS"))
+# markers_genes <- readRDS(paste0(result_dir,"markers_genes.RDS"))
+```
+
+```{r Get_best_markers}
+# Get difference in expression between one cluster and the rest
+markers_genes <- markers_genes %>%
+  mutate(data = map(
+    data, ~ .x %>%
+      mutate(pct.diff = -.$pct.2-.$pct.1) %>%
+      mutate(log.pct.diff = -log2(.$pct.2/.$pct.1)) ))
+
+# Identify the top genes that have a high difference in expression
+remove <- "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG"
+markers_genes <- markers_genes %>%
+  mutate(top25 = map(
+    data, ~ .x %>%
+      group_by(cluster) %>%
+      top_n(-40, p_val_adj) %>%
+      top_n(30, pct.diff) %>%
+      top_n(20, log.pct.diff) %>%
+      
+      ungroup() %>%
+      # remove all VDJ-genes from list of HVG:
+      filter(., !(.$gene %in% str_subset(.$gene, remove)))
+    ))
+    
+# top25 <- markers_genes$data$fibroblasts %>%
+#   group_by(cluster) %>%
+#   top_n(-40, p_val_adj) %>%
+#   top_n(30, pct.diff) %>%
+#   top_n(20, log.pct.diff) 
+
+markers_genes <- markers_genes %>%
+  mutate(top25_gr = map(
+    top25, ~ .x %>%
+    group_by(cluster) %>%
+    group_split() %>%
+    set_names(., seq(0, length(.)-1) ) ))
+  
+# top25[grep("NCR1",top25$gene),]
+```
+
+
+```{r Save_dotplot}
+top25 <- markers_genes$top25$fibroblasts
+
+gene_list <- map2(DATA_nested$data,markers_genes$top25, 
+                  ~niceRplots::getcluster(.x,as.character(unique(.y$gene)),
+                                          "Clusters"))
+immune <- DATA_nested$data[[2]]
+genes_immune <- rownames(immune)[grepl( "CD3|TR[ABGD]C|IL[0-9]|CC[LR][0-9]",rownames(immune))] %>%
+genes_immune <- getcluster(data = immune, clustering =  "Clusters", genes = gene_list)
+
+library(niceRplots)
+gene_list2 <- 
+
+p <- map2(list(DATA_nested$data[[2]]), list(gene_list2),
+          ~DotPlot(.x, features = rev(names(.y)[order(.y)]),
+                   group.by = "Clusters",
+                   assay = "RNA") + coord_flip() ) #%>%
+  #set_names(., DATA_nested$annotation_level1)
+
+walk(p, ~ggsave(paste0("./dotplot_", "immune_related_genes",".pdf"), .x, height = 30, width = 7, limitsize = FALSE))
+```
+
+
+```{r 04a_barplot_top25, fig.width=10, , fig.height=6}
+pdf(paste0(marker_dir,"top_DEG.pdf"), #width = 4*10*300, height = 30*4*300#, res = 300
+    )
+par(mfrow=c(2, 5), mar = c(4, 6, 3, 1))
+for (i in unique(top25$cluster)) {
+    barplot(sort(setNames(top25$avg_log2FC, top25$gene)[top25$cluster == i], F),
+        horiz = T, las = 1, main = paste0(i, " vs. rest"), border = "white", yaxs = "i")
+    abline(v = c(0, 0.25), lty = c(1, 2))
+}
+dev.off()
+
+par(mfrow=c(2, 5), mar = c(4, 6, 3, 1))
+for (i in unique(top25$cluster)[1:10]) {
+    barplot(sort(setNames(top25$avg_log2FC, top25$gene)[top25$cluster == i], F),
+        horiz = T, las = 1, main = paste0(i, " vs. rest"), border = "white", yaxs = "i")
+    abline(v = c(0, 0.25), lty = c(1, 2))
+}
+```
+
+```{r graph_plot_top25, fig.width=10, fig.height=10}
+col=c("grey90","grey80","grey60","navy","black")
+
+clus_plot <- plot_clusters.fun(DATA, cluster="RNA_snn_res.1.5") + theme_void() + NoLegend()
+
+grid_genes <- function(plot_list, title){
+  title <- ggdraw() + draw_label(paste0("Top 10 Markers for Cluster ", title), fontface='bold')
+  g <- plot_grid(plotlist = plot_list,
+            ncol = 4)
+  g_ <- plot_grid(title, g, ncol=1, rel_heights=c(0.1, 1))
+  return(g_)
+}
+
+plots <- imap(top25_gr, "gene") %>%
+  map(., map, ~plot_genes.fun(DATA, .x, lable = "RNA_snn_res.1.5"))
+
+cluster_markers <- plots %>%
+  map(., ~c("Clusters"=list(clus_plot), .x)) %>%
+  imap(., ~grid_genes(.x, .y ))
+
+cluster_markers[[1]]
+
+imap(cluster_markers, ~ggsave(paste0(marker_dir,"Marker_genes_cluster_", .y, ".jpg"), plot=.x))
+# ggsave("multipage.pdf", gridExtra::marrangeGrob(grobs=cluster_markers, ncol=1, nrow=1))
+```
+
+# Paulos Code
+```{r eval=FALSE, include=FALSE}
+library(niceRplots)
+#pdf("out.pdf", width = 4*10, height = 27*4, useDingbats = F)
+
+for(df in top25_gr){
+  for(gene in df){
+    png(paste0(name,"out_gr.png"), width = 4*10*300, height = 30*4*300, res = 300)
+  #par(mfrow=c(30,10), mar=c(1,1,1,1))
+    par(mfrow=c(6,4), mar=c(1,1,1,1))
+    plot_feat(DATA, 
+              red = "umap_harmony", 
+              feat = gene, cex = 0.5, 
+              label = "RNA_snn_res.1.5"
+              #, add_legend=T
+            )
+  }
+}
+dev.off()
+
+plot_feat(DATA, 
+              red = "umap_harmony", 
+              feat = "CTSK", cex = 0.5, 
+              label = "RNA_snn_res.1.5"
+              #, add_legend=T
+            )
+```
+
+```{r eval=FALSE, include=FALSE}
+g <- c("CCL2", "COL1A1", "SYTL3", "IGFBP4", "PTGDS", "LTB")
+genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4", "JCHAIN", "KRT13")
+Fibroblast <- c("APOD", "DCN")
+NK <- c()
+
+library(niceRplots)
+#pdf("out.pdf", width = 4*10, height = 27*4, useDingbats = F)
+png("out_.png", width = 4*10*300, height = 30*4*300, res = 300)
+par(mfrow=c(30,10), mar=c(1,1,1,1))
+#par(mfrow=c(2,4), mar=c(1,1,1,1))
+for(i in top25$gene[1:200]){
+  plot_feat(DATA, red = "umap_harmony", feat = i, cex = 0.5, label = "RNA_snn_res.1.5"#, add_legend=T
+            )
+}
+dev.off()
+
+annot <- c(FIB_DCN = "DCN",
+           NK_cell = "NCR1",
+           )
+
+markers_genes[grep("NCR1",rownames(markers_genes)),]
+```
+
+## Session info
+```{r}
+sessionInfo()
+```
