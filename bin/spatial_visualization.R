@@ -61,7 +61,6 @@ plot_spatial.fun <- function(
   alpha = 1,
   spectral = TRUE,
   colors = NULL, # lightgray
-  sp_col = ,
   point_size = 1.75,
   img_alpha = .5,
   zoom = NULL ) {
@@ -331,7 +330,6 @@ plot_facets.fun <- function(
       myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
       cont_colors <- myPalette(100)
     }else{cont_colors <- colors}
-    colour_pallet <- scale_fill_gradientn(colours = cont_colors)
     colour_pallet <- list(scale_fill_gradientn(colours = cont_colors), 
                           scale_color_gradientn(colours = cont_colors))
     guides <- NULL
