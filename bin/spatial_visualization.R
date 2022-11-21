@@ -41,8 +41,9 @@ geom_spatial <-  function(mapping = NULL,
 }
 
 #####################
-# PLOTTING FUNCTION #
+# PLOT SINGLE IMAGE #
 #####################
+# old plotting function without facet_wrap()
 # spe <- DATA_st
 # geneid <- sym("CDH1")
 # zoom <- sym("zoom")
@@ -280,18 +281,18 @@ violin.fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, 
           axis.title.y = element_blank()) 
 }
 
-################
-# FACET_WRAP #
-################
-orig.ident = sym("orig.ident")
-spe <- DATA_st
-geneid <- sym("CDH1")
-zoom <- sym("zoom")
-assay="SCDC"
-img_alpha = 0
-colors=c("grey90","grey80","grey60","navy","black")
+##############################
+# FACET_WRAP DISCRETE GROUPS #
+##############################
+# orig.ident = sym("orig.ident")
+# spe <- DATA_st
+# geneid <- sym("CDH1")
+# zoom <- sym("zoom")
+# assay="SCDC"
+# img_alpha = 0
+# colors=c("grey90","grey80","grey60","navy","black")
 
-plot_facets.fun <- function(
+plot_st_meta.fun <- function(
     spe,
     assay="RNA",
     sp_annot = TRUE,
@@ -324,6 +325,8 @@ plot_facets.fun <- function(
   }
   
   ## Colour pallets:
+  # This is old part where dicrete and continuous was in the same function. 
+  # I might change this later
   if (is.numeric(pull(spe, geneid))){
     if (is.null(colors)){
       #cont_colors <- c("grey90", "mistyrose", "red", "dark red", "black")
@@ -467,4 +470,190 @@ plot_facets.fun <- function(
   return(p)
 }
 
+##################################
+# FACET_WRAP CONTINEOUS FEATURES #
+##################################
+# orig.ident = sym("orig.ident")
+# spe <- DATA_st
+# geneid <- sym("CDH1")
+# zoom <- sym("zoom")
+# assay="SCDC"
+# img_alpha = 0
+# colors=c("grey90","grey80","grey60","navy","black")
+
+plot_st_feat.fun <- function(
+    spe,
+    assay="RNA",
+    sp_annot = TRUE,
+    geneid = "CDH1", #"LINC01135",# "nFeature_RNA"
+    orig.ident = "orig.ident",
+    lvls = c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031"),
+    title = " ",
+    image_id = "hires",
+    alpha = 1,
+    ncol = 4,
+    col = c("grey95","grey70","navy","black"),
+    mins = NULL, maxs = NULL,
+    annot_col = "#808080",
+    annot_line = .3,
+    point_size = 1.75,
+    img_alpha = .5,
+    zoom = NULL ) {
+  
+  gene <- sym(geneid)
+  orig.ident <- enquo(orig.ident) 
+  ID <- unique(pull(spe, orig.ident)) %>% set_names(.)
+  
+  # spe <- filter(DATA_st, decon_columns[["12"]]=="1")
+  # Set default assay
+  DefaultAssay(spe) <- assay
+  
+  ## get feature to plot:
+  if (!(as_label(gene) %in% colnames(spe@meta.data))) {
+    spe <- spe %>%
+      mutate(., FetchData(., vars = c(as_label(gene))) ) %>%
+      mutate(feat = !!(gene))
+  }
+  feat_vec <- pull(spe, as_label(gene))
+  
+  # Colour pal:
+  if(is.null(mins)){
+    mins <- min(c(feat_vec, 0),na.rm = T)} # get 0 or negative value
+  if(is.null(maxs)){maxs <- quantile(feat_vec,0.99,na.rm = T) # get percentile
+  if(maxs==0){maxs <- max(feat_vec,na.rm = T)}
+  }
+  if(max(feat_vec, na.rm=T) != 0){
+    # Calculate percentage:
+    spe <- spe %>%
+      mutate(feat = (!!(gene) - mins) / ( maxs - mins) ) %>%
+      mutate(feat = ifelse(.$feat > 1, 1, .$feat))
+  }
+  
+  spe <- spe %>%
+    #select(1:3, feat, !!(gene)) %>%
+    mutate(feat_val = !!(gene)) %>%
+    mutate(!!(gene) := round(.$feat*98)+1) #%>%
+    #mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) 
+    
+
+  # get scale factor:
+  scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
+  # get all spot coordinates:
+  df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
+    map2(., scale_fact, ~mutate(.x, scale_fact = .y)) %>%
+    bind_rows() %>%
+    mutate(imagecol = .$imagecol * .$scale_fact) %>%
+    mutate(imagerow = .$imagerow * .$scale_fact) %>%
+    cbind(.,as_tibble(select(spe, feat_val))) %>%
+    cbind(.,as_tibble(select(spe, feat))) %>%
+    cbind(.,as_tibble(select(spe, !!(gene)))) %>%
+    cbind(.,as_tibble(select(spe, "orig.ident"=!!(orig.ident)))) %>%
+    #mutate(orig.ident = !!(facet)) %>%
+    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
+    #cbind(.,as_tibble(select(spe, groups))) %>%
+    rownames_to_column(var = "barcode") %>%
+    as_tibble() %>%
+    arrange(feat_val) 
+  
+  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, )
+  
+  # select viewframe:
+  if (!(is.null(zoom))){
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+    l <- tools %>% 
+      filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
+      #select(row=imagerow)
+      dplyr::rename("_row"=y, "_col"=x) %>%
+      summarise(across("_row":"_col", 
+                       list(min=min, max=max), 
+                       .names = "{.fn}{.col}")) 
+  }
+  else{l <- tibble( min_col = 0, max_col = ncol(img),
+                    min_row = 0, max_row = nrow(img))}
+  
+  ## Spatial image:
+  if (!(img_alpha == 0)){
+    
+    # set image alpha:
+    im <- map(ID, ~pluck(spe@images, .x, "image")) 
+    im <- map(im, ~ matrix(
+      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    
+    img <- map(im, ~as.raster(.x))
+    img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
+    
+    # get grob and save as list
+    grob <- map(img_, ~grid::rasterGrob(.x, width=unit(1,"npc"), height=unit(1,"npc")))
+    images_tibble <- tibble(sample=factor(ID), grob=grob, orig.ident = ID)
+    
+    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)
+  }
+  
+  
+  else{spatial_image <- NULL}
+  
+  ## Spatial annotation:
+  if(sp_annot){
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident") %>%
+      filter(.$colour == "black")
+    spatial_annotation <- geom_path(
+      data=tools, 
+      show.legend = FALSE, size = annot_line,
+      aes(x=x, y=y, #colour=colour,
+          group=interaction(elem_idx)),colour=annot_col)
+  }
+  else{spatial_annotation <- NULL}
+  #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
+  
+  p <- ggplot() +
+    geom_point(data=df, aes(x=imagecol,y=imagerow, colour=.data[[gene]]),
+               stroke = 0, size = point_size, alpha = alpha) +
+    #scale_colour_identity() +
+    scale_color_gradientn(colours = col, 
+                          values = seq(from=0, to=1, along.with=col),
+                          na.value = "white") + 
+    spatial_image + 
+    spatial_annotation + 
+    #scale_color_manual(values=c(annot_col, "transparent")) +
+    coord_cartesian(expand=FALSE ) + #theme(l) +
+    xlim(l$min_col,l$max_col) +
+    ylim(l$max_row,l$min_row) +
+    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F) + # sample ID
+    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
+  #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
+  
+  #Hexagon shape:
+  # p <- p +
+  #   ggstar::geom_star(data=df, aes(x=imagecol,y=imagerow, fill=.data[[gene]], colour=.data[[gene]]),
+  #     starshape = "hexagon",
+  #     size = point_size,
+  #     #stroke = 0,
+  #     alpha = alpha
+  #   )
+  
+  p <- p +
+    xlab("") +
+    ylab("") +
+    
+    theme_set(theme_bw(base_size = 10))+
+    theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
+          legend.position = "right",
+          #rect = element_rect(fill = "transparent"),
+          legend.key = element_rect(fill = "white"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          #panel.background = element_blank(),
+          axis.title = element_blank(),
+          axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          panel.background = element_rect(fill = "transparent", colour = NA),  
+          plot.background = element_rect(fill = "transparent", colour = NA),
+          strip.background = element_blank(),
+          strip.text.x = element_blank()
+    ) 
+  #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
+  
+  return(p)
+}
 
