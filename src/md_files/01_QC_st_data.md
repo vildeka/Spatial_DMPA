@@ -69,8 +69,7 @@ plot_grid(ncol = 1,
           p1 + p2 + p3 + p4)
 ```
 
-<img src="../Figures/01/01a_Feature_and_counts.png"
-data-fig-align="center" />
+<img src="../Figures/01/01a_Feature_and_counts.png" data-fig-align="center" />
 
 # Quality control
 
@@ -289,8 +288,7 @@ DATA %>%
  plot_grid(plotlist=p_, ncol = 1)
 ```
 
-<img src="../Figures/01/01f_QC_plot_filtered.png"
-data-fig-align="center" />
+<img src="../Figures/01/01f_QC_plot_filtered.png" data-fig-align="center" />
 
 ### And replot onto tissue section:
 
@@ -312,8 +310,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="../Figures/01/01g_filtered_spots.png"
-data-fig-align="center" />
+<img src="../Figures/01/01g_filtered_spots.png" data-fig-align="center" />
 
 ### Plot top expressed genes
 
@@ -359,8 +356,7 @@ col = (scales::hue_pal())(20)[20:1]
    NoLegend() + coord_flip() )
 ```
 
-<img src="../Figures/01/01h_top_abundante_genes.png"
-data-fig-align="center" />
+<img src="../Figures/01/01h_top_abundante_genes.png" data-fig-align="center" />
 
 ## Save seurat object
 

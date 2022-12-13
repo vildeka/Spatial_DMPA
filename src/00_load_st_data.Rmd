@@ -6,7 +6,7 @@ format:
     embed-resources: true
     code-fold: show
 params:
-  fig.path: "`r paste0(params$fig.path)`" #./Figures/
+  fig.path: "./Figures/00/"
 editor_options: 
   chunk_output_type: console
 ---
@@ -32,7 +32,7 @@ knitr::opts_chunk$set(#fig.width = 6.6929133858,
 # reticulate::py_config()
 ```
 
-```{r background_job, eval=FALSE}
+```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
 file_name <- "./00_plotting_st_data.md"
 lab_dir <- "../lab_book/00_load_st_data/"

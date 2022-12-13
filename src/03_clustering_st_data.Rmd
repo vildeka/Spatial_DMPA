@@ -6,7 +6,7 @@ format:
     embed-resources: true
     code-fold: show
 params:
-  fig.path: "./Figures/03/" #./Figures/
+  fig.path: "./Figures/03/"
 editor_options: 
   chunk_output_type: console
 ---
@@ -15,6 +15,8 @@ editor_options:
 knitr::opts_chunk$set(#fig.width = 6.6929133858,
     fig.path    = params$fig.path,
     fig.align   = "center",
+    dev         = c("png"),
+    dpi         = 300,
     message     = FALSE,
     warning     = FALSE,
     fig.process = function(filename){
@@ -25,7 +27,7 @@ knitr::opts_chunk$set(#fig.width = 6.6929133858,
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 ```
 
-```{r background_job, eval=FALSE}
+```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
 file_name <- "./03_cluster_st_data.md"
 lab_dir <- "../lab_book/03_cluster_st_data"

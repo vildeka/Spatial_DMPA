@@ -6,18 +6,17 @@ format:
     embed-resources: true
     code-fold: show
 params:
-  fig.path: "`r paste0(params$fig.path)`" #./Figures/
+  fig.path: "./Figures/01/"
 editor_options: 
   chunk_output_type: console
 ---
-
-# Spatial transcriptomics
-***
 
 ```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(
   fig.path    = params$fig.path,
   fig.align   = "center",
+  dev         = c("png"),
+  dpi         = 300,
   warning     = FALSE, 
   message     = FALSE,
   fig.process = function(filename){
@@ -30,7 +29,7 @@ knitr::opts_chunk$set(
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 ```
 
-```{r background_job, eval=FALSE}
+```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
 file_name <- "./01_QC_st_data.md"
 lab_dir <- "../lab_book/01_QC_st_data/"
