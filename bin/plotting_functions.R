@@ -147,3 +147,80 @@ plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony"
           plot.title = element_text(hjust = 0.5)) 
   return(p)
 }
+
+#################
+# VOLCANO PLOT #
+#################
+revlog_trans <- function(base = exp(1)){
+  ## Define the desired transformation.
+  trans <- function(x){
+    -log(x, base)
+  }
+  ## Define the reverse of the desired transformation
+  inv <- function(x){
+    base^(-x)
+  }
+  ## Creates the transformation
+  scales::trans_new(paste("revlog-", base, sep = ""),
+            trans, ## The transformation function (can be defined using anonymous functions)
+            inv,  ## The reverse of the transformation
+            scales::log_breaks(base = base), ## default way to define the scale breaks
+            domain = c(1e-100, Inf) ## The domain over which the transformation is valued
+  )
+}
+Volcano.fun <- function(DEGs_table, y.axis, up=c(1, 0.001), down = c(-1, 0.001)){
+  
+  tt <- DEGs_table %>% 
+    mutate('0.05 threshold' = ifelse(avg_log2FC >= 0 & p_val <= 0.05 ,"Up", 
+                                     ifelse(avg_log2FC <= -0 & p_val_adj  <= 0.05, "Down", 'NotSig'))) %>%
+    mutate('Lable' = ifelse(avg_log2FC >= up[1] & p_val <= up[2] | avg_log2FC <= down[1] & p_val <= down[2],.$gene,NA))
+  
+  if(y.axis == 'p-value') {
+    plot <- ggplot(tt, aes(x = group, y = avg_log2FC, colour = `0.05 threshold`)) +
+      #scale_x_continuous(trans = revlog_trans(), expand = c(0.005, 0.05)) +
+      #expand_limits(x = c(0.001, 1)) +
+      #geom_point(data = tt, alpha = 0.5, lable = tt$Lable) +
+      geom_jitter(width = 0.3, alpha = 0.3, size=.1) +
+      geom_hline(yintercept = 0, linetype = "solid") +
+      #geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+      scale_colour_manual(values = c("Up"= "red", "NotSig"= "grey90", "Down"="red")) #+
+      #facet_wrap(~cluster, nrow = 1)
+    
+  } else {
+    pos <- which(abs(TopTable$FDR-0.05)==min(abs(TopTable$FDR-0.05)))
+    plot <- ggplot(tt, aes(x = logFC, y = -log10(P.Value), colour = `0.05 threshold`)) +
+      geom_point(data = tt, alpha = 0.5, size=3) +
+      geom_text(data = tt, label= tt$Lable, colour = "black", size=4, vjust = -0.6,
+                show.legend=FALSE, 
+                #check_overlap = TRUE 
+                #,point.padding = NA, segment.color = NA,
+      ) + 
+      # aes(label=taxa$Genus, color='Taxa')
+      geom_hline(yintercept = -log10(0.05), linetype = "dashed", alpha = 0.5) +
+      geom_hline(yintercept = -log10(0.001), linetype = "dashed", alpha = 0.5) +
+      geom_hline(yintercept = -log10(TopTable$P.Value[pos]), linetype = "dashed", alpha = 0.5) +
+      #geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
+      theme_linedraw() + theme_classic() + # Set the theme
+      xlab(bquote('                                             '~log[2]~ "(fold change)")) + ylab(bquote('-'~log[10]~ "(p-value)")) + # Relabel the axes
+      theme(#legend.position="none", 
+        axis.title.x = element_text(hjust=0.001),
+        legend.title = element_blank()) + # Hide the legend
+      scale_colour_manual(values = c("Up"= "red", "NotSig"= "black", "Down"="blue"),
+                          breaks = c("Up", "Down"),
+                          labels = c("Upregualated\nin DMPA\n", #"Non sig. diff.\nexpressed", 
+                                     "Downregulated\nin DMPA")) +
+      annotate(geom="text", x = Inf, y = -log10(TopTable$P.Value[pos]), size = 3, label = "FDR 0.05",
+               color = "black", hjust = -.1) + 
+      annotate(geom="text", x = Inf, y = -log10(0.001), size = 3, label = "p 0.001",
+               color = "black", hjust = -.1) + 
+      annotate(geom="text", x = Inf, y = -log10(0.05), size = 3, label = "p 0.05",
+               color = "black", hjust = -.1) + coord_cartesian(clip = 'off') +
+      annotate(geom="text", x = -3.5, y = 0, size = 8, label = "down in DMPA",
+               color = "black", hjust = -.1, fontface =2) +
+      annotate(geom="text", x = 1.5, y = 0, size = 8, label = "up in DMPA",
+               color = "black", hjust = -.1, fontface =2)
+  }
+  return(plot)
+}

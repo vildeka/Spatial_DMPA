@@ -296,7 +296,7 @@ plot_st_meta.fun <- function(
     spe,
     assay="RNA",
     sp_annot = TRUE,
-    geneid = "CDH1", #"LINC01135",# "nFeature_RNA"
+    feat = "groups",
     orig.ident = "orig.ident",
     lvls = c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031"),
     title = " ",
@@ -304,14 +304,16 @@ plot_st_meta.fun <- function(
     alpha = 1,
     ncol = 4,
     spectral = TRUE,
-    colors = NULL, # lightgray
+    colors = NULL,
     annot_col = "#808080",
     annot_line = .3,
     point_size = 1.75,
     img_alpha = .5,
     zoom = NULL ) {
   
-  #orig.ident
+  feature <- enquo(feat)
+  feat <- sym(feat)
+  orig.ident <- enquo(orig.ident)
   ID <- unique(pull(spe, orig.ident)) %>% set_names(.)
   # Set default assay
   DefaultAssay(spe) <- assay
@@ -319,15 +321,15 @@ plot_st_meta.fun <- function(
   # filter samples:
   #spe <- spe %>% filter(., orig.ident %in% sampleid)
   ## get feature to plot:
-  if (!(as_label(geneid) %in% colnames(spe@meta.data))) {
+  if (!(as_label(feat) %in% colnames(spe@meta.data))) {
     spe <- spe %>%
-      mutate(., FetchData(., vars = c(geneid)) ) 
+      mutate(., FetchData(., vars = c(feat)) ) 
   }
   
   ## Colour pallets:
   # This is old part where dicrete and continuous was in the same function. 
   # I might change this later
-  if (is.numeric(pull(spe, geneid))){
+  if (is.numeric(pull(spe, feat))){
     if (is.null(colors)){
       #cont_colors <- c("grey90", "mistyrose", "red", "dark red", "black")
       myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
@@ -351,11 +353,6 @@ plot_st_meta.fun <- function(
     guides <- guides(fill = guide_legend(override.aes = list(size=3), keyheight = .7))
   }
   
-  # get scale factor:
-  geneid <- enquo(geneid) 
-  orig.ident <- enquo(orig.ident) 
-  
-  
   # get all spot coordinates:
   scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
   df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
@@ -363,7 +360,7 @@ plot_st_meta.fun <- function(
     bind_rows() %>%
     mutate(imagecol = .$imagecol * .$scale_fact) %>%
     mutate(imagerow = .$imagerow * .$scale_fact) %>%
-    cbind(.,as_tibble(select(spe, !!(geneid)))) %>%
+    cbind(.,as_tibble(select(spe, !!(feature)))) %>%
     cbind(.,as_tibble(select(spe, "orig.ident"=!!(orig.ident)))) %>%
     #mutate(orig.ident = !!(facet)) %>%
     #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
@@ -422,7 +419,7 @@ plot_st_meta.fun <- function(
   #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
   
   p <- ggplot() +
-    geom_point(data=df, aes(x=imagecol,y=imagerow, fill=.data[[geneid]], colour=.data[[geneid]]),
+    geom_point(data=df, aes(x=imagecol,y=imagerow, fill=.data[[feat]], colour=.data[[feat]]),
                shape = 21, stroke = 0, size = point_size, alpha = alpha) + 
     colour_pallet +
     spatial_image + 
@@ -437,7 +434,7 @@ plot_st_meta.fun <- function(
   
   #Hexagon shape:
   # p <- p +
-  #   ggstar::geom_star(data=df, aes(x=imagecol,y=imagerow, fill=.data[[geneid]], colour=.data[[geneid]]),
+  #   ggstar::geom_star(data=df, aes(x=imagecol,y=imagerow, fill=.data[[feat]], colour=.data[[feat]]),
   #     starshape = "hexagon",
   #     size = point_size,
   #     #stroke = 0,
@@ -539,7 +536,7 @@ plot_st_feat.fun <- function(
   # get scale factor:
   scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
   # get all spot coordinates:
-  df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
+  df_ <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
     map2(., scale_fact, ~mutate(.x, scale_fact = .y)) %>%
     bind_rows() %>%
     mutate(imagecol = .$imagecol * .$scale_fact) %>%
@@ -559,7 +556,7 @@ plot_st_feat.fun <- function(
   
   # select viewframe:
   if (!(is.null(zoom))){
-    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident") #%>% select(-contains("..."))
     l <- tools %>% 
       filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
       #select(row=imagerow)
@@ -594,7 +591,7 @@ plot_st_feat.fun <- function(
   
   ## Spatial annotation:
   if(sp_annot){
-    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident") %>%
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(.) %>%
       filter(.$colour == "black")
     spatial_annotation <- geom_path(
       data=tools, 
@@ -611,7 +608,7 @@ plot_st_feat.fun <- function(
     #scale_colour_identity() +
     scale_color_gradientn(colours = col, 
                           values = seq(from=0, to=1, along.with=col),
-                          na.value = "white") + 
+                          na.value = "#FFFFFF") + 
     spatial_image + 
     spatial_annotation + 
     #scale_color_manual(values=c(annot_col, "transparent")) +

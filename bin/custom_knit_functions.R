@@ -1,23 +1,77 @@
-################
-# KNIT SCRIPTS #
-################
-knit_script <- function(inputFile, out_dir, ...) {
+#####################
+# QUARTO KNIT HTML #
+#####################
+custom_knit <- function(inputFile, fig_path, ...) {
+  #file_name = paste0(basename(xfun::sans_ext(inputFile)), '_', Sys.Date(),'.html')
+  quarto::quarto_render(
+    inputFile,
+    output_file = paste0(basename(xfun::sans_ext(inputFile)), '_', Sys.Date(),'.html'),
+    execute_params = list(fig.path = fig_path),
+    #output_dir = paste0("../lab_book/",out_dir,"/"),
+    output_format = "html",
+    as_job = FALSE
+  )#;
+  # quarto::quarto_render(
+  #   inputFile,
+  #   output_format = "gfm",
+  #   output_file = file_name
+  #   )
+}
+
+# for script to run in hte background
+# cat(
+#   'res <- quarto::quarto_render("', basename(rmd_path), '",',
+#   '"', paste0(basename(xfun::sans_ext(rmd_path)), '_', Sys.Date(), '.html'), '",',
+#   'execute_params = list(fig.path =','"',fig_path, '"),',
+#   ' output_format = "html"', ')\n',
+#   sep = ""
+# )
+
+
+###################
+# QUARTO KNIT GIT #
+###################
+git_knit <- function(inputFile, fig_path, ...) {
+  #file_name = paste0(basename(xfun::sans_ext(inputFile)))
+  #dir =  paste0(getwd(),"/md_files/")
+  out_file = paste0(basename(xfun::sans_ext(inputFile)), ".md")
+  #new_filename = paste0(dirname(inputFile),"/md_files/", basename(inputFile))
+  #fs::file_copy(path = inputFile, new_path = new_filename)
+  quarto::quarto_render(
+    new_filename,
+    output_file = out_file,
+    execute_params = list(fig.path = fig_path),
+    #execute_dir = "file",
+    #output_dir = paste0("../lab_book/",out_dir,"/"),
+    output_format = "gfm"
+  )
+  #fs::file_delete(new_filename)
+  #fs::file_move(path = out_file, new_path = paste0(dirname(inputFile),"/md_files/", out_file))
+}
+
+#####################
+# GIT KNIT FUNCTION #
+#####################
+rmd_custom_knit <- function(inputFile, out_dir, ...) {
   rmarkdown::render(
     inputFile,
     output_file = paste0(
       xfun::sans_ext(inputFile), '_', Sys.Date(),'.html'),
     output_dir = paste0("../lab_book/",out_dir,"/"),
     output_format = rmarkdown::html_document(
-      echo = TRUE,
+      dev = c("jpeg", "tiff", "pdf"),
+      dpi = 300,
+      echo=TRUE,
+      #keep_md = TRUE,
       toc = FALSE,                             
       toc_float = FALSE,
       code_folding = "show",
       code_download = TRUE)
   )#;
-# rmarkdown::render(
-#   inputFile,
-#   output_format = rmarkdown::github_document(resource_path )
-#   )
+  # rmarkdown::render(
+  #   inputFile,
+  #   output_format = rmarkdown::pdf_document()
+  #   )
 }
 
 ################
