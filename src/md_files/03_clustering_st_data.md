@@ -2,24 +2,6 @@ Clustering reference data
 ================
 12/13/22
 
-``` r
-source("../bin/render_with_jobs.R")
-file_name <- "./03_cluster_st_data.md"
-lab_dir <- "../lab_book/03_cluster_st_data"
-
-file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
-
-# quarto
-# render_html_with_job(out_dir = lab_dir)
-# fs::file_move(path = file, new_path = paste0(lab_dir, file))
-
-# currently using quarto for github and kniter for html due to source code option 
-render_git_with_job()
-
-# kniter
-knit_html_with_job(out_dir = lab_dir)
-```
-
 ## Load data and libraries
 
 ``` r
@@ -45,7 +27,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-DATA <- readRDS(paste0(input_dir,"seuratObj_harmony.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
 
 #################
 # COLOUR PALLET #
@@ -97,58 +79,58 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6700
-    Number of edges: 249921
+    Number of nodes: 6401
+    Number of edges: 239212
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.9420
-    Number of communities: 4
+    Maximum modularity in 10 random starts: 0.9425
+    Number of communities: 3
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6700
-    Number of edges: 249921
+    Number of nodes: 6401
+    Number of edges: 239212
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8989
+    Maximum modularity in 10 random starts: 0.8957
     Number of communities: 6
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6700
-    Number of edges: 249921
+    Number of nodes: 6401
+    Number of edges: 239212
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8490
-    Number of communities: 9
+    Maximum modularity in 10 random starts: 0.8465
+    Number of communities: 7
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6700
-    Number of edges: 249921
+    Number of nodes: 6401
+    Number of edges: 239212
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7904
-    Number of communities: 14
+    Maximum modularity in 10 random starts: 0.7870
+    Number of communities: 13
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6700
-    Number of edges: 249921
+    Number of nodes: 6401
+    Number of edges: 239212
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7493
-    Number of communities: 17
-    Elapsed time: 1 seconds
+    Maximum modularity in 10 random starts: 0.7447
+    Number of communities: 15
+    Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6700
-    Number of edges: 249921
+    Number of nodes: 6401
+    Number of edges: 239212
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7133
-    Number of communities: 18
-    Elapsed time: 1 seconds
+    Maximum modularity in 10 random starts: 0.7067
+    Number of communities: 16
+    Elapsed time: 0 seconds
 
 ``` r
 # each time you run clustering, the data is stored in meta data columns:
@@ -202,7 +184,8 @@ plot_grid(ncol = 2,
          plotlist = p)
 ```
 
-<img src="../Figures/03/03a_plot_resolution.png" data-fig-align="center" />
+<img src="../Figures/03/03a_plot_resolution.png"
+data-fig-align="center" />
 
 ``` r
 DATA <- DATA %>%
@@ -232,7 +215,8 @@ combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
 (combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) )
 ```
 
-<img src="../Figures/03/03b_sp_mt_plot_filt.png" data-fig-align="center" />
+<img src="../Figures/03/03b_sp_mt_plot_filt.png"
+data-fig-align="center" />
 
 ``` r
 #is.character(pull(DATA, RNA_snn_res.1.5))
@@ -268,7 +252,7 @@ combined
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
+saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
 # DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
 ```
 
