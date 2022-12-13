@@ -2,28 +2,6 @@ Quality Control Spatial data
 ================
 12/13/22
 
-# Spatial transcriptomics
-
-------------------------------------------------------------------------
-
-``` r
-source("../bin/render_with_jobs.R")
-file_name <- "./01_QC_st_data.md"
-lab_dir <- "../lab_book/01_QC_st_data/"
-
-file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
-
-# quarto
-# render_html_with_job(out_dir = lab_dir)
-# fs::file_move(path = file, new_path = paste0(lab_dir, file))
-
-# currently using quarto for github and kniter for html du to source code option 
-render_git_with_job()
-
-# kniter
-knit_html_with_job(out_dir = lab_dir)
-```
-
 ### Load packages
 
 ``` r
@@ -218,7 +196,8 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="../Figures/01/01e_sp_count_plot.png" data-fig-align="center" />
+<img src="../Figures/01/01e_sp_count_plot.png"
+data-fig-align="center" />
 
 As you can see, the spots with low number of counts/features and high
 mitochondrial content is mainly towards the edges of the tissue. It is
@@ -310,7 +289,8 @@ DATA %>%
  plot_grid(plotlist=p_, ncol = 1)
 ```
 
-<img src="../Figures/01/01f_QC_plot_filtered.png" data-fig-align="center" />
+<img src="../Figures/01/01f_QC_plot_filtered.png"
+data-fig-align="center" />
 
 ### And replot onto tissue section:
 
@@ -332,7 +312,8 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="../Figures/01g_filtered_spots.png" data-fig-align="center" />
+<img src="../Figures/01/01g_filtered_spots.png"
+data-fig-align="center" />
 
 ### Plot top expressed genes
 
@@ -378,7 +359,7 @@ col = (scales::hue_pal())(20)[20:1]
    NoLegend() + coord_flip() )
 ```
 
-<img src="../Figures/01h_top_abundante_genes.png"
+<img src="../Figures/01/01h_top_abundante_genes.png"
 data-fig-align="center" />
 
 ## Save seurat object
