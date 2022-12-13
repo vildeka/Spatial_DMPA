@@ -1,6 +1,28 @@
+Quality Control Spatial data
+================
+12/13/22
+
 # Spatial transcriptomics
 
 ------------------------------------------------------------------------
+
+``` r
+source("../bin/render_with_jobs.R")
+file_name <- "./01_QC_st_data.md"
+lab_dir <- "../lab_book/01_QC_st_data/"
+
+file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html du to source code option 
+render_git_with_job()
+
+# kniter
+knit_html_with_job(out_dir = lab_dir)
+```
 
 ### Load packages
 
@@ -69,7 +91,8 @@ plot_grid(ncol = 1,
           p1 + p2 + p3 + p4)
 ```
 
-<img src="./Figures/01a_Feature_and_counts.png" style="display: block; margin: auto;" />
+<img src="./Figures/01a_Feature_and_counts.png"
+data-fig-align="center" />
 
 # Quality control
 
@@ -115,7 +138,7 @@ feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent
  plot_grid(plotlist=p, ncol = 1)
 ```
 
-<img src="./Figures/01b_QC_plots.png" style="display: block; margin: auto;" />
+<img src="./Figures/01b_QC_plots.png" data-fig-align="center" />
 
 We can also plot the same data onto the tissue section.
 
@@ -126,6 +149,7 @@ plots <- DATA %>%
   nest(., data = -group) %>%
   pmap(., 
     ~plot_spatial.fun(..2,
+      assay="RNA",
       sampleid = ..1,
       geneid = "percent_mito",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
       zoom = "zoom",
@@ -138,7 +162,21 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01c_sp_mt_plot.png" style="display: block; margin: auto;" />
+<img src="./Figures/01c_sp_mt_plot.png" data-fig-align="center" />
+
+``` r
+# plot_st_feat.fun( DATA, 
+#         geneid = "percent_mito",
+#         #orig.ident = "orig.ident",
+#         zoom = "zoom", 
+#         col = col,
+#         #maxs = max(DATA$percent_mito, na.rm = T),
+#         #annot_col = "#dbd9d9",
+#         annot_line = .1,
+#         img_alpha = 0,
+#         point_size = 0.5
+#       )
+```
 
 ``` r
 # number of genes per spot
@@ -159,7 +197,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01d_sp_feat_plot.png" style="display: block; margin: auto;" />
+<img src="./Figures/01d_sp_feat_plot.png" data-fig-align="center" />
 
 ``` r
 # number of reads per spot
@@ -180,7 +218,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01e_sp_count_plot.png" style="display: block; margin: auto;" />
+<img src="./Figures/01e_sp_count_plot.png" data-fig-align="center" />
 
 As you can see, the spots with low number of counts/features and high
 mitochondrial content is mainly towards the edges of the tissue. It is
@@ -230,13 +268,13 @@ DATA <- DATA_ %>%
 dim(DATA_)
 ```
 
-    ## [1] 36601  6700
+    [1] 36601  6508
 
 ``` r
 dim(DATA)
 ```
 
-    ## [1] 21950  6527
+    [1] 21906  6401
 
 ``` r
 #rm(DATA_)
@@ -247,19 +285,20 @@ DATA %>%
   rename_with(., ~str_replace(., "_RNA", "")) # |percent_
 ```
 
-    ## # A tibble: 8 × 9
-    ##   orig.ident nCount_min nCount_max nFeature_min nFeature_max percent_mito_min
-    ##   <chr>           <dbl>      <dbl>        <int>        <int>            <dbl>
-    ## 1 P031              355      32525          301         5880            0.832
-    ## 2 P080              364      18944          297         5487            0.748
-    ## 3 P097              383      35452          313         6353            0.921
-    ## 4 P105              366      34872          300         6484            1.17 
-    ## 5 P107              601      32542          316         5997            0.737
-    ## 6 P108              415      44508          313         6419            1.31 
-    ## 7 P114              496      17684          304         5184            1.08 
-    ## 8 P118              406      30163          304         6518            1.58 
-    ## # … with 3 more variables: percent_mito_max <dbl>, percent_hb_min <dbl>,
-    ## #   percent_hb_max <dbl>
+    # A tibble: 8 × 11
+      orig.ident nCount_min nCount…¹ nFeat…² nFeat…³ sp_an…⁴ sp_an…⁵ perce…⁶ perce…⁷
+      <chr>           <dbl>    <dbl>   <int>   <int> <chr>   <chr>     <dbl>   <dbl>
+    1 P031              355    32525     301    5880 epi     SubMuc    0.832   16.6 
+    2 P080              364    18944     312    5487 epi_1   SubMuc    0.748   11.9 
+    3 P097              383    35451     313    6353 epi_1   SubMuc…   0.921   11.0 
+    4 P105              366    34872     300    6574 epi     SubMuc    1.17    10.7 
+    5 P107              601    32542     316    5997 epi     SubMuc    0.737   12.5 
+    6 P108              415    35345     313    6419 epi     SubMuc    1.31     9.70
+    7 P114              496    17684     304    5184 epi_1   SubMuc    1.08     8.28
+    8 P118              408    30163     339    6518 epi     SubMuc    1.58    10.9 
+    # … with 2 more variables: percent_hb_min <dbl>, percent_hb_max <dbl>, and
+    #   abbreviated variable names ¹​nCount_max, ²​nFeature_min, ³​nFeature_max,
+    #   ⁴​sp_annot2_min, ⁵​sp_annot2_max, ⁶​percent_mito_min, ⁷​percent_mito_max
 
 ### Replotting QC after filtering
 
@@ -271,7 +310,7 @@ DATA %>%
  plot_grid(plotlist=p_, ncol = 1)
 ```
 
-<img src="./Figures/01f_QC_plot_filtered.png" style="display: block; margin: auto;" />
+<img src="./Figures/01f_QC_plot_filtered.png" data-fig-align="center" />
 
 ### And replot onto tissue section:
 
@@ -293,7 +332,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01g_filtered_spots.png" style="display: block; margin: auto;" />
+<img src="./Figures/01g_filtered_spots.png" data-fig-align="center" />
 
 ### Plot top expressed genes
 
@@ -339,7 +378,8 @@ col = (scales::hue_pal())(20)[20:1]
    NoLegend() + coord_flip() )
 ```
 
-<img src="./Figures/01h_top_abundante_genes.png" style="display: block; margin: auto;" />
+<img src="./Figures/01h_top_abundante_genes.png"
+data-fig-align="center" />
 
 ## Save seurat object
 
@@ -358,65 +398,63 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
 sessionInfo()
 ```
 
-    ## R version 4.1.2 (2021-11-01)
-    ## Platform: x86_64-apple-darwin13.4.0 (64-bit)
-    ## Running under: macOS Catalina 10.15.7
-    ## 
-    ## Matrix products: default
-    ## BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.18.dylib
-    ## 
-    ## locale:
-    ## [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
-    ## 
-    ## attached base packages:
-    ## [1] stats     graphics  grDevices utils     datasets  methods   base     
-    ## 
-    ## other attached packages:
-    ##  [1] niceRplots_0.1.0   patchwork_1.1.1    cowplot_1.1.1      RColorBrewer_1.1-3
-    ##  [5] Seurat_4.1.0       tidyseurat_0.5.3   SeuratObject_4.0.4 ttservice_0.1.2   
-    ##  [9] forcats_0.5.1      stringr_1.4.0      dplyr_1.0.8        purrr_0.3.4       
-    ## [13] readr_2.1.2        tidyr_1.2.0        tibble_3.1.7       ggplot2_3.3.6     
-    ## [17] tidyverse_1.3.1   
-    ## 
-    ## loaded via a namespace (and not attached):
-    ##   [1] Rtsne_0.15            colorspace_2.0-3      deldir_1.0-6         
-    ##   [4] ellipsis_0.3.2        ggridges_0.5.3        fs_1.5.2             
-    ##   [7] spatstat.data_2.1-4   rstudioapi_0.13       farver_2.1.0         
-    ##  [10] leiden_0.3.9          listenv_0.8.0         ggrepel_0.9.1        
-    ##  [13] fansi_1.0.3           lubridate_1.8.0       xml2_1.3.3           
-    ##  [16] codetools_0.2-18      splines_4.1.2         knitr_1.38           
-    ##  [19] polyclip_1.10-0       jsonlite_1.8.0        broom_0.7.12         
-    ##  [22] ica_1.0-2             cluster_2.1.2         dbplyr_2.1.1         
-    ##  [25] png_0.1-7             uwot_0.1.11           spatstat.sparse_2.1-0
-    ##  [28] sctransform_0.3.3     shiny_1.7.1           compiler_4.1.2       
-    ##  [31] httr_1.4.2            backports_1.4.1       lazyeval_0.2.2       
-    ##  [34] assertthat_0.2.1      Matrix_1.4-1          fastmap_1.1.0        
-    ##  [37] cli_3.3.0             later_1.3.0           htmltools_0.5.2      
-    ##  [40] tools_4.1.2           igraph_1.3.0          gtable_0.3.0         
-    ##  [43] glue_1.6.2            reshape2_1.4.4        RANN_2.6.1           
-    ##  [46] Rcpp_1.0.8.3          scattermore_0.8       cellranger_1.1.0     
-    ##  [49] jquerylib_0.1.4       vctrs_0.4.1           nlme_3.1-157         
-    ##  [52] lmtest_0.9-40         spatstat.random_2.2-0 xfun_0.30            
-    ##  [55] globals_0.14.0        rvest_1.0.2           mime_0.12            
-    ##  [58] miniUI_0.1.1.1        lifecycle_1.0.1       irlba_2.3.5          
-    ##  [61] goftest_1.2-3         future_1.24.0         MASS_7.3-57          
-    ##  [64] zoo_1.8-9             scales_1.2.0          spatstat.core_2.4-2  
-    ##  [67] spatstat.utils_2.3-0  hms_1.1.1             promises_1.2.0.1     
-    ##  [70] parallel_4.1.2        yaml_2.3.5            gridExtra_2.3        
-    ##  [73] reticulate_1.24       pbapply_1.5-0         sass_0.4.1           
-    ##  [76] rpart_4.1.16          stringi_1.7.6         highr_0.9            
-    ##  [79] rlang_1.0.2           pkgconfig_2.0.3       matrixStats_0.61.0   
-    ##  [82] evaluate_0.15         lattice_0.20-45       tensor_1.5           
-    ##  [85] ROCR_1.0-11           labeling_0.4.2        htmlwidgets_1.5.4    
-    ##  [88] tidyselect_1.1.2      parallelly_1.31.0     RcppAnnoy_0.0.19     
-    ##  [91] plyr_1.8.7            magrittr_2.0.3        R6_2.5.1             
-    ##  [94] generics_0.1.2        DBI_1.1.2             mgcv_1.8-40          
-    ##  [97] pillar_1.7.0          haven_2.4.3           withr_2.5.0          
-    ## [100] fitdistrplus_1.1-8    abind_1.4-5           survival_3.2-13      
-    ## [103] future.apply_1.8.1    modelr_0.1.8          crayon_1.5.1         
-    ## [106] KernSmooth_2.23-20    utf8_1.2.2            spatstat.geom_2.4-0  
-    ## [109] plotly_4.10.0         tzdb_0.2.0            rmarkdown_2.11       
-    ## [112] grid_4.1.2            readxl_1.3.1          data.table_1.14.2    
-    ## [115] reprex_2.0.1          digest_0.6.29         xtable_1.8-4         
-    ## [118] httpuv_1.6.5          munsell_0.5.0         viridisLite_0.4.0    
-    ## [121] bslib_0.3.1
+    R version 4.1.2 (2021-11-01)
+    Platform: x86_64-apple-darwin13.4.0 (64-bit)
+    Running under: macOS Big Sur 10.16
+
+    Matrix products: default
+    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.18.dylib
+
+    locale:
+    [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
+
+    attached base packages:
+    [1] stats     graphics  grDevices utils     datasets  methods   base     
+
+    other attached packages:
+     [1] niceRplots_0.1.0   patchwork_1.1.1    cowplot_1.1.1      RColorBrewer_1.1-3
+     [5] Seurat_4.1.0       tidyseurat_0.5.3   SeuratObject_4.0.4 ttservice_0.1.2   
+     [9] forcats_0.5.1      stringr_1.4.1      dplyr_1.0.7        purrr_0.3.4       
+    [13] readr_2.1.2        tidyr_1.2.0        tibble_3.1.8       ggplot2_3.3.6     
+    [17] tidyverse_1.3.1   
+
+    loaded via a namespace (and not attached):
+      [1] Rtsne_0.15            colorspace_2.0-3      deldir_1.0-6         
+      [4] ellipsis_0.3.2        ggridges_0.5.3        fs_1.5.2             
+      [7] spatstat.data_2.1-4   rstudioapi_0.13       farver_2.1.1         
+     [10] leiden_0.3.9          listenv_0.8.0         ggrepel_0.9.1        
+     [13] fansi_1.0.3           lubridate_1.8.0       xml2_1.3.3           
+     [16] codetools_0.2-18      splines_4.1.2         knitr_1.40           
+     [19] polyclip_1.10-0       jsonlite_1.8.2        broom_0.7.12         
+     [22] ica_1.0-2             cluster_2.1.4         dbplyr_2.1.1         
+     [25] png_0.1-7             uwot_0.1.11           spatstat.sparse_2.1-0
+     [28] sctransform_0.3.3     shiny_1.7.1           compiler_4.1.2       
+     [31] httr_1.4.4            backports_1.4.1       lazyeval_0.2.2       
+     [34] assertthat_0.2.1      Matrix_1.5-3          fastmap_1.1.0        
+     [37] cli_3.4.1             later_1.3.0           htmltools_0.5.3      
+     [40] tools_4.1.2           igraph_1.3.0          gtable_0.3.1         
+     [43] glue_1.6.2            reshape2_1.4.4        RANN_2.6.1           
+     [46] Rcpp_1.0.9            scattermore_0.8       cellranger_1.1.0     
+     [49] vctrs_0.4.2           nlme_3.1-160          lmtest_0.9-40        
+     [52] spatstat.random_2.2-0 xfun_0.33             globals_0.14.0       
+     [55] rvest_1.0.2           mime_0.12             miniUI_0.1.1.1       
+     [58] lifecycle_1.0.3       irlba_2.3.5           goftest_1.2-3        
+     [61] future_1.24.0         MASS_7.3-58.1         zoo_1.8-9            
+     [64] scales_1.2.1          spatstat.core_2.4-2   spatstat.utils_2.3-0 
+     [67] hms_1.1.1             promises_1.2.0.1      parallel_4.1.2       
+     [70] yaml_2.3.5            gridExtra_2.3         reticulate_1.24      
+     [73] pbapply_1.5-0         rpart_4.1.16          stringi_1.7.8        
+     [76] rlang_1.0.6           pkgconfig_2.0.3       matrixStats_0.61.0   
+     [79] evaluate_0.18         lattice_0.20-45       tensor_1.5           
+     [82] ROCR_1.0-11           labeling_0.4.2        htmlwidgets_1.5.4    
+     [85] tidyselect_1.2.0      parallelly_1.31.0     RcppAnnoy_0.0.19     
+     [88] plyr_1.8.7            magrittr_2.0.3        R6_2.5.1             
+     [91] generics_0.1.3        DBI_1.1.2             mgcv_1.8-40          
+     [94] pillar_1.8.1          haven_2.4.3           withr_2.5.0          
+     [97] fitdistrplus_1.1-8    abind_1.4-5           survival_3.4-0       
+    [100] future.apply_1.8.1    modelr_0.1.8          crayon_1.5.2         
+    [103] KernSmooth_2.23-20    utf8_1.2.2            spatstat.geom_2.4-0  
+    [106] plotly_4.10.0         tzdb_0.2.0            rmarkdown_2.18       
+    [109] grid_4.1.2            readxl_1.3.1          data.table_1.14.2    
+    [112] reprex_2.0.1          digest_0.6.30         xtable_1.8-4         
+    [115] httpuv_1.6.5          munsell_0.5.0         viridisLite_0.4.1    
