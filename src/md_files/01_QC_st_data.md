@@ -91,7 +91,7 @@ plot_grid(ncol = 1,
           p1 + p2 + p3 + p4)
 ```
 
-<img src="./Figures/01a_Feature_and_counts.png"
+<img src="./Figures/01/01a_Feature_and_counts.png"
 data-fig-align="center" />
 
 # Quality control
@@ -138,7 +138,7 @@ feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent
  plot_grid(plotlist=p, ncol = 1)
 ```
 
-<img src="./Figures/01b_QC_plots.png" data-fig-align="center" />
+<img src="./Figures/01/01b_QC_plots.png" data-fig-align="center" />
 
 We can also plot the same data onto the tissue section.
 
@@ -162,7 +162,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01c_sp_mt_plot.png" data-fig-align="center" />
+<img src="./Figures/01/01c_sp_mt_plot.png" data-fig-align="center" />
 
 ``` r
 # plot_st_feat.fun( DATA, 
@@ -197,7 +197,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01d_sp_feat_plot.png" data-fig-align="center" />
+<img src="./Figures/01/01d_sp_feat_plot.png" data-fig-align="center" />
 
 ``` r
 # number of reads per spot
@@ -218,7 +218,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/01e_sp_count_plot.png" data-fig-align="center" />
+<img src="./Figures/01/01e_sp_count_plot.png" data-fig-align="center" />
 
 As you can see, the spots with low number of counts/features and high
 mitochondrial content is mainly towards the edges of the tissue. It is
@@ -310,7 +310,7 @@ DATA %>%
  plot_grid(plotlist=p_, ncol = 1)
 ```
 
-<img src="./Figures/01f_QC_plot_filtered.png" data-fig-align="center" />
+<img src="./Figures/01/01f_QC_plot_filtered.png" data-fig-align="center" />
 
 ### And replot onto tissue section:
 

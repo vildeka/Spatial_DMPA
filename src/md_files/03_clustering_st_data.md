@@ -202,7 +202,7 @@ plot_grid(ncol = 2,
          plotlist = p)
 ```
 
-<img src="./Figures/03a_plot_resolution.png" data-fig-align="center" />
+<img src="./Figures/03/03a_plot_resolution.png" data-fig-align="center" />
 
 ``` r
 DATA <- DATA %>%
@@ -232,7 +232,7 @@ combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
 (combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) )
 ```
 
-<img src="./Figures/03b_sp_mt_plot_filt.png" data-fig-align="center" />
+<img src="./Figures/03/03b_sp_mt_plot_filt.png" data-fig-align="center" />
 
 ``` r
 #is.character(pull(DATA, RNA_snn_res.1.5))
@@ -258,7 +258,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/03c_clust_plot.png" data-fig-align="center" />
+<img src="./Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
