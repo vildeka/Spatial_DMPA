@@ -1,0 +1,281 @@
+---
+title: "Clustering reference data"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "./Figures/03/" #./Figures/
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+    fig.path    = params$fig.path,
+    fig.align   = "center",
+    message     = FALSE,
+    warning     = FALSE,
+    fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)})
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
+```
+
+```{r background_job, eval=FALSE}
+source("../bin/render_with_jobs.R")
+file_name <- "./03_cluster_st_data.md"
+lab_dir <- "../lab_book/03_cluster_st_data"
+
+file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html due to source code option 
+render_git_with_job(fig_path = "../Figures/03/")
+
+# kniter
+knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/03/")
+```
+
+## Load data and libraries
+```{r Load_Library_and_data}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(tidyseurat)
+library(cowplot)
+library(patchwork)
+source("../bin/spatial_visualization.R")
+source("../bin/plotting_functions.R")
+#library(harmony)
+
+#########
+# PATHS #
+#########
+input_dir <- "../results/02_integrate_st_data/"
+result_dir <- "../results/03_clustering_st_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
+
+#################
+# COLOUR PALLET #
+#################
+clus <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )
+```
+
+```{r ggplot_theme}
+my_theme <-
+  list(
+    #scale_fill_manual(values = friendly_cols),
+    #scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(size = 0.2),
+        panel.grid.minor = element_line(size = 0.1),
+        text = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5),
+        #legend.position = "bottom",
+        #aspect.ratio = 1,
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+      )
+  )
+```
+
+## Clustering
+```{r Clustering_resolution}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
+
+# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
+for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    DATA <- FindClusters(DATA, resolution = res, algorithm = 1)
+}
+
+# each time you run clustering, the data is stored in meta data columns:
+# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
+# resolution you test.
+
+```
+
+```{r 03a_plot_resolution, fig.width=10}
+# obj <- DATA
+# cluster <- sym("RNA_snn_res.0.1")
+# plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
+#   if(color == "Brew_all"){
+#     pal <- clus}
+#   
+#   cluster <- sym(cluster)
+#   
+#   if(lable == TRUE){ lab <- cluster
+#     text <- NoLegend() #+ labs(color= "Clusters")
+#   }else{lab <- sym(lable)
+#     text <- guides(color = "none")}
+#   
+#   feat <- obj %>%
+#     select(.cell, !!(cluster), !!(lab), orig.ident, nCount_RNA, nFeature_RNA) %>%
+#     group_by(!!(cluster)) %>%
+#     add_tally() %>%
+#     arrange(nFeature_RNA) %>%
+#     arrange(desc(n))
+#   
+#   lable_df <- feat %>%
+#     ungroup() %>%
+#     group_by(!!(lab)) %>%
+#     select(!!(lab), contains(red)) %>% 
+#     summarize_all(mean)
+#   
+#   red_1 <- sym(paste0(red, "_1"))
+#   red_2 <- sym(paste0(red, "_2"))
+#   
+#   p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
+#                         color = !!cluster), label=TRUE) + 
+#     geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
+#     geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) +
+#     #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+#     scale_color_manual(values = pal)  +
+#     my_theme + text
+#   return(p)
+# }
+
+res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
+p <- map(res, ~plot_clusters.fun(DATA, cluster=.x))
+plot_grid(ncol = 2, 
+         plotlist = p)
+
+```
+
+```{r set_resolution}
+DATA <- DATA %>%
+  rename(Clusters="RNA_snn_res.1.5") %>%
+  SetIdent(., value = "Clusters")
+```
+
+### Plot clusters on tissue section:
+```{r 03b_sp_mt_plot_filt, fig.height=10}
+plot_fun <- function(obj){
+p <- SpatialPlot(obj, 
+            group.by = "Clusters", cols = clus,
+            #cols = c("lightgray", "mistyrose", "red", "dark red", "black"),
+            pt.size.factor = 5, ncol = 1, image.alpha = 0) + 
+            theme(panel.grid.major = element_blank(), 
+                  panel.grid.minor = element_blank(),
+                  legend.title = element_blank())
+}
+
+DATA_n <- DATA %>%
+  nest(data = -orig.ident)
+p <- map(DATA_n$data, ~plot_fun(.x))
+
+legend <- get_legend(p[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
+(combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) )
+```
+
+```{r 03c_clust_plot, fig.height=8, fig.width=10}
+#is.character(pull(DATA, RNA_snn_res.1.5))
+
+plots <- DATA %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  pmap(., 
+    ~plot_spatial.fun(..2,
+      sampleid = ..1,
+      colors = clus,
+      geneid = "Clusters",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      zoom = "zoom",
+      img_alpha = 0,
+      point_size = 1)
+    )
+
+
+
+legend <- get_legend(plots[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined
+```
+
+
+# Paulos Code 
+```{r Clustering, eval=FALSE, include=FALSE}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:30, k.param = 20, prune.SNN = 1/15) 
+
+for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    DATA <- FindClusters(DATA, graph.name = "RNA_snn", resolution = res, algorithm = 1)
+}
+
+library(niceRplots)
+plot_meta(DATA, red = "umap_harmony", feat = "Clusters", cex = 0.5, label = T)
+plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.2", cex = 0.5, label = T)
+
+# plot_grid(ncol = 3, DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.0.5") +
+#     ggtitle("leiden_0.5"), DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.1") +
+#     ggtitle("leiden_1"), DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.2") +
+#     ggtitle("leiden_2"))
+
+DATA <- SetIdent(DATA, value = "RNA_snn_res.1.5")
+```
+
+## Save seurat object
+```{r save_SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
+# DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
+```
+
+## Session info
+```{r}
+sessionInfo()
+```
+
+
+### Paulo section
+```{r eval=FALSE, include=FALSE}
+sample_names
+niceRplots::plot_spatial_feat(DATA, red = "P107", assay = "RNA", feat = "RNA_snn_res.1.5", plot_tissue = F)
+
+par(mfrow=c(length(gene_list), length(DATA@images)+1))
+for(i in gene_list){
+  niceRplots::plot_feat(DATA, red = "umap_harmony", feat = "RNA_snn_res.1.5", plot_tissue = F)
+  for(j in names(DATA@images)){
+    niceRplots::plot_spatial_feat(DATA, red = j, assay = "RNA", feat = "RNA_snn_res.1.5", plot_tissue = F)
+  }
+}
+
+
+niceRplots::plot_spatial_feat(DATA, red = "P101", feat = c("nCount_Spatial", "percent_mito"), plot_tissue = F,)
+
+#niceRplots::plot_spatial_feat(brain, red = "posterior1", feat = "nCount_Spatial", plot_tissue = F)
+#niceRplots::plot_spatial_feat(brain, red = "anterior1", feat = "nCount_Spatial", plot_tissue = T, transparency = "00")
+
+DATA@reductions
+```

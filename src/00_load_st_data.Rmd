@@ -1,25 +1,30 @@
 ---
 title: "Load Spatial data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "`r paste0(params$fig.path)`" #./Figures/
 editor_options: 
   chunk_output_type: console
-knit: (function(inputFile, out_dir, ...) {
-    source("../bin/custom_knit_functions.R");
-    knit_github(inputFile, "../lab_book/00_load_st_data/")
-    })
 ---
 
 ```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(
-  fig.path="./Figures/",
-  fig.align="center",
-  warning=FALSE, message=FALSE,
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+  fig.path      = params$fig.path,#"../Figures/",
+  fig.align     = "center",
+  message       = FALSE,
+  warning       = FALSE,
+  dev           = c("png"),
+  dpi           = 300,
   fig.process = function(filename){
-    new_filename <- stringr::str_remove(string = filename, 
+    new_filename <- stringr::str_remove(string = filename,
                                         pattern = "-1")
     fs::file_move(path = filename, new_path = new_filename)
     ifelse(fs::file_exists(new_filename), new_filename, filename)
-})
+  })
 
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/")
 #.libPaths("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/lib/R/library")
@@ -27,7 +32,26 @@ knitr::opts_chunk$set(
 # reticulate::py_config()
 ```
 
+```{r background_job, eval=FALSE}
+source("../bin/render_with_jobs.R")
+file_name <- "./00_plotting_st_data.md"
+lab_dir <- "../lab_book/00_load_st_data/"
+
+file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html du to source code option 
+render_git_with_job(fig_path = "../Figures/00/")
+
+# kniter
+knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/00/")
+```
+
 ### Load packages
+
 ```{r Load data, message=FALSE, warning=FALSE}
 ##################
 # LOAD LIBRARIES #
@@ -42,6 +66,7 @@ library(niceRplots)
 library(xml2) # loads the image 
 library(sp)
 source("../bin/help_functions.R")
+source("../bin/spatial_visualization.R")
 
 #########
 # PATHS #
@@ -104,10 +129,12 @@ rm(image)
 ```
 
 ### Load ST data
+
 ```{r Load_data}
 #############
 # LODA DATA #
 #############
+meta <- read_csv("../data/Clinical_data/Clinical_data_Spatial_DMPA.csv")
 h5_files <- list.dirs(path = input_dir,
                       full.names = T, recursive = T) %>%
             grep("P\\d\\d\\d$", ., value = TRUE) %>%
@@ -164,7 +191,7 @@ seuratObj_list <- seuratObj_list %>%
 DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
 ```
 
-```{r anual_annot}
+```{r Manual_annot}
 ##########################
 # ADD MANUAL ANNOTATION #
 #########################
@@ -245,7 +272,22 @@ DATA <- left_join( DATA, sp, by=c(".cell"="barcodes"))
 DATA 
 ```
 
-```{r Add_manual_annot, eval=FALSE, include=FALSE}
+## add meta info
+
+```{r add_groups}
+meta <- meta %>%
+  select(orig.ident="ID", groups=Contraception) %>%
+  mutate(groups = ifelse(.$groups=="no HC", "ctrl", .$groups))
+
+DATA <-  DATA %>%
+  rename(sp_annot2="sp_annot") %>%
+  mutate(sp_annot = ifelse(grepl("epi_1|epi_2|epi_3", .$sp_annot2), "epi", .$sp_annot2 )) %>%
+  mutate(sp_annot = ifelse(grepl("SubMuc_1|SubMuc_2|SubMuc_3", .$sp_annot2), "SubMuc", .$sp_annot2 )) %>%
+  left_join(., meta, by="orig.ident") %>%
+  select(groups, sp_annot, everything())
+```
+
+```{r Paulos_manual_annot, eval=FALSE, include=FALSE}
 ##########################
 # ADD MANUAL ANNOTATION #
 #########################
@@ -312,15 +354,28 @@ plot_spatial_meta(
     plot_tissue = T)
 ```
 
-```{r remove_other_spots, eval=FALSE, include=FALSE}
+```{r plot_spots_to_remove}
+DATA %>%
+  mutate(filt = ifelse(is.na(.$sp_annot),"filt","keep")) %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "filt",
+          zoom = "zoom",
+          annot_line = .1,
+          img_alpha = 0,
+          point_size = 0.5
+        )
+```
+
+```{r remove_other_spots}
 # Filter spots outside manual annotation
-DATA <- DATA[,DATA$sp_annot!="other"]
+DATA <- DATA[, !(is.na(DATA$sp_annot))]
+DATA
 ```
 
 ## Save seurat object
+
 ```{r save_SeuratObject}
-DATA <- DATA %>%
-  select(sp_annot, everything())
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
@@ -329,6 +384,7 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_merged.RDS"))
 ```
 
 ### Session info
+
 ```{r}
 sessionInfo()
 ```

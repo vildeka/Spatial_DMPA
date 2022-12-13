@@ -1,12 +1,14 @@
 ---
 title: "Quality Control Spatial data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "`r paste0(params$fig.path)`" #./Figures/
 editor_options: 
   chunk_output_type: console
-knit: (function(inputFile, out_dir, ...) {
-    source("../bin/custom_knit_functions.R");
-    knit_github(inputFile, "../lab_book/01_QC_st_data/")
-    })
 ---
 
 # Spatial transcriptomics
@@ -14,9 +16,10 @@ knit: (function(inputFile, out_dir, ...) {
 
 ```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(
-  fig.path="./Figures/",
-  fig.align="center",
-  warning=FALSE, message=FALSE,
+  fig.path    = params$fig.path,
+  fig.align   = "center",
+  warning     = FALSE, 
+  message     = FALSE,
   fig.process = function(filename){
     new_filename <- stringr::str_remove(string = filename, 
                                         pattern = "-1")
@@ -25,9 +28,24 @@ knitr::opts_chunk$set(
 })
 
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
-#.libPaths("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/lib/R/library")
-# reticulate::use_python("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/bin/python", required = TRUE)
-# reticulate::py_config()
+```
+
+```{r background_job, eval=FALSE}
+source("../bin/render_with_jobs.R")
+file_name <- "./01_QC_st_data.md"
+lab_dir <- "../lab_book/01_QC_st_data/"
+
+file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html du to source code option 
+render_git_with_job(fig_path = "../Figures/01/")
+
+# kniter
+knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/01/")
 ```
 
 ### Load packages
@@ -166,6 +184,7 @@ plots <- DATA %>%
   nest(., data = -group) %>%
   pmap(., 
     ~plot_spatial.fun(..2,
+      assay="RNA",
       sampleid = ..1,
       geneid = "percent_mito",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
       zoom = "zoom",
@@ -176,6 +195,18 @@ legend <- get_legend(plots[[1]] + theme(legend.position="right"))
 combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
 combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
 combined
+
+# plot_st_feat.fun( DATA, 
+#         geneid = "percent_mito",
+#         #orig.ident = "orig.ident",
+#         zoom = "zoom", 
+#         col = col,
+#         #maxs = max(DATA$percent_mito, na.rm = T),
+#         #annot_col = "#dbd9d9",
+#         annot_line = .1,
+#         img_alpha = 0,
+#         point_size = 0.5
+#       )
 ```
 
 ```{r 01d_sp_feat_plot, fig.height=8, fig.width=7}

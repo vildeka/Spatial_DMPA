@@ -67,7 +67,7 @@ if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-DATA_st <- readRDS(paste0(input_dir_s,"seuratObj_clustered.RDS"))
+DATA_st <- readRDS(paste0(input_dir_s,"seuratObj_clustered_filt.RDS"))
 DATA_r <- readRDS(paste0(input_dir_r,"seuratObj_clustered.RDS"))
 cell_id <- read.xlsx("../data/Reference_data/annotation_single_cell.xlsx")
 markers_genes <- readRDS(paste0(input_dir_r,"markers_genes.RDS"))
@@ -146,6 +146,7 @@ top30 <- markers_genes %>%
 
 m_feats <- unique(as.character(top30$gene))
 ```
+
 ## Create ExpressionSet
 ```{r ExpressionSet}
 # Create Expression Sets
@@ -164,6 +165,7 @@ bulk <- Bulk_data %>%
 
 eset_B <- ExpressionSet(assayData = as.matrix(bulk[m_feats,]))
 ```
+
 ## deconvolution
 ```{r deconvolution}
 ################
@@ -174,7 +176,7 @@ deconvolution <- SCDC::SCDC_prop(bulk.eset = eset_B, sc.eset = eset_SC,
                                  ct.sub = as.character(unique(eset_SC$Clusters)))
 
 saveRDS(deconvolution, paste0(result_dir,"deconvolution_bulk.RDS"))
-# deconvolution <- readRDS(paste0(result_dir,"deconvolution.RDS"))
+# deconvolution <- readRDS(paste0(result_dir,"deconvolution_bulk.RDS"))
 
 ###################
 # SPATIAL DECONV. #
@@ -209,13 +211,255 @@ DATA_st <- DATA_st %>%
 DATA_st@assays[["SCDC"]] <- CreateAssayObject(data = temp)
 DATA_st@assays$SCDC@key <- "scdc_"
 
-saveRDS(DATA_st, paste0(result_dir,"SeuratObj_deconvolution.RDS"))
-# DATA_st <- readRDS(paste0(result_dir,"SeuratObj_deconvolution.RDS"))
+saveRDS(DATA_st, paste0(result_dir,"seuratObj_deconvolution_filt.RDS"))
+# DATA_st <- readRDS(paste0(result_dir,"seuratObj_deconvolution.RDS"))
+# DATA_st <- readRDS(paste0(result_dir,"seuratObj_deconvolution_filt.RDS"))
 
 ```
 
+```{r Colour_pallet_sub}
+ColourPalleteMulti <- function(df, group, subgroup){
+
+  # Find how many colour categories to create and the number of colours in each
+  categories <- aggregate(as.formula(paste(subgroup, group, sep="~" )), df, function(x) length(unique(x)))
+  category.start <- (scales::hue_pal(l = 100)(nrow(categories))) # Set the top of the colour pallete
+  category.end  <- (scales::hue_pal(l = 40)(nrow(categories))) # set the bottom
+
+  # Build Colour pallette
+  colours <- unlist(lapply(1:nrow(categories),
+                          function(i){
+                            colorRampPalette(colors = c(category.start[i],
+                                                        category.end[i]))(categories[i,2])}))
+  return(colours)
+}
+
+#colours <-ColourPalleteMulti(TRA_TRAB[["BEA19P035_KB_94_S16"]], "TRV", "V_region")
+colours <-ColourPalleteMulti(CVLv3, "Genus", "Species")
+colours <-ColourPalleteMulti(CVLv3, "Family", "Species")
+colours <-ColourPalleteMulti(CVLv3, "Phylum", "Species")
+colours <-ColourPalleteMulti(CVLv3, "Family", "Genus")
+
+
+pal <- c(RColorBrewer::brewer.pal(9,"Set1"),RColorBrewer::brewer.pal(8,"Set2"),
+         RColorBrewer::brewer.pal(9,"Pastel1"),RColorBrewer::brewer.pal(8,"Pastel2")) #color pallete for plots
+pal <- c(pal, "#FFD9D0", "#FFE3AA")
+
+colours <- pal[-c(1:7)]
+```
+
+```{r Add_cell_annotation}
+cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., seq_along(.))
+
+annot2 <- c("fibroblasts","fibroblasts","T-cell","T-cell","T-cell","T-cell","T-cell","T-cell","T-cell","fibroblasts","T-cell","NA","NA","T-cell","fibroblasts","fibroblasts","myeloid","NA","myeloid","NA","NA","NA","NA","NA","T-cell","B cell","NA","T-cell","NA") %>% set_names(., seq_along(.))
+
+tibble(cell_type)
+
+DATA_st %>%
+  filter()
+
+df <- DATA_st@assays$SCDC@data %>%
+  as_tibble(., rownames = "clus") %>%
+  pivot_longer(., cols = -clus, names_to = ".cell", values_to = "values") %>%
+  filter(!(values==0)) %>% 
+  #nest( data = -clus) %>%
+  left_join(., select(as_tibble(DATA_st),.cell, Clusters, groups, sp_annot), by=".cell") %>%
+  mutate(., cell_type = cell_type[as.character(.$clus)]) %>%
+  mutate(., cell_type_2 = annot2[as.character(.$clus)]) %>%
+  mutate(clus = factor(clus, levels = as.character(0:28))) 
+
+df_ <- df %>%
+    #mutate(orig.ident = !!(facet)) %>%
+    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
+    #cbind(.,as_tibble(select(spe, groups))) %>%
+  mutate(cell_type_2 = case_when(.$cell_type == "epithelial" & .$Clusters == "9" ~ 'ker_1',
+                                 .$cell_type == "epithelial" & .$Clusters == "8" ~ 'ker_1',
+                                 .$cell_type == "epithelial" & .$Clusters == "7" ~ 'ker_1',
+                                 .$cell_type == "epithelial" & .$Clusters == "6" ~ 'ker_1',
+                                 FALSE ~ .$cell_type_2))
+  #mutate(cell_type_2 = ifelse(grepl("9|8|7|6", .$Clusters), ) 
+    
+ 
+kreatins <- decon_column %>% 
+  filter(cell_type == "epithelial") 
+  #mutate(Keratinocytes = ifelse(grepl("9|8|7", .$Clusters), ) 
+```
+
+```{r waist_of_time}
+DATA_st <- DATA_st %>% mutate(sp_annot2 = ifelse(.$sp_annot == "epi_1"|.$sp_annot == "epi_2"|.$sp_annot == "epi_3", "epi", .$sp_annot )) %>%
+    mutate(sp_annot2 = ifelse(.$sp_annot2 == "SubMuc_1"|.$sp_annot2 == "SubMuc_2"|.$sp_annot2 == "SubMuc_3", "SubMuc", .$sp_annot2 ))
+
+find_hull <- function(df) df[chull(df$eff, df$man), ]
+
+df_ <- df %>%
+  cbind(.,as_tibble(select(DATA_st, Clusters))) %>%
+  mutate(Clusters = as.character(.$Clusters)) %>%
+  cbind(.,as_tibble(select(spe, orig.ident))) %>%
+    #mutate(orig.ident = !!(facet)) %>%
+    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
+    #cbind(.,as_tibble(select(spe, groups))) %>%
+    rownames_to_column(var = "barcode") %>%
+    as_tibble() %>%
+    filter(orig.ident == "P118")
+
+get_chull <- function(df_){
+  chull <- df_[grDevices::chull(df_$imagecol, df_$imagerow), ][["barcode"]]
+  chull <- ifelse(df_$barcode %in% chull, "c", NA)
+  return(chull)
+}
+      
+  df_ <- df_ %>% 
+  nest(data= -Clusters) %>%
+  mutate(chull = map(.$data, ~get_chull(.x))) %>%
+  unnest(c(data, chull))
+
+
+hull <- df_ %>%
+  filter(!(is.na(.$chull)))
+
+p <- ggplot(data=df_, aes(x=imagecol,y=imagerow)) +
+      ggstar::geom_star(data=df_, aes(x=imagecol,y=imagerow, fill=Clusters, colour=Clusters),
+        starshape = "hexagon",
+        size = 2.8,
+        #stroke = 0,
+        alpha = alpha
+      )+ spatial_annotation + 
+      geom_point(aes(x=imagecol,y=imagerow, colour=Clusters),
+               stroke = 0, size = point_size, alpha = alpha) +
+      geom_polygon(data=hull, alpha =0.3, aes(group = Clusters, fill=Clusters))
+  
+      geom_voronoi_tile(aes(fill = Clusters), colour = NA, max.radius = 0.4)
+      geom_voronoi_tile(aes(fill = Clusters), colour = NA) +
+      geom_voronoi_segment() +
+      
+      
+      #scale_colour_identity() +
+      scale_color_gradientn(colours = col, 
+                            values = seq(from=0, to=1, along.with=col),
+                            na.value = "#FFFFFF") + 
+      spatial_image + 
+      spatial_annotation + 
+      #scale_color_manual(values=c(annot_col, "transparent")) +
+      coord_cartesian(expand=FALSE ) + #theme(l) +
+      xlim(l$min_col,l$max_col) +
+      ylim(l$max_row,l$min_row) +
+      geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F) + # sample ID
+      facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
+      
+ggplot(iris, aes(Sepal.Length, Sepal.Width, group = -1L)) +
+  geom_point(aes(colour=Species))
+  geom_voronoi_tile(aes(fill = Species)) +
+  geom_voronoi_segment() +
+  geom_text(aes(label = after_stat(nsides), size = after_stat(vorarea)),
+    stat = 'delvor_summary', switch.centroid = TRUE
+  )
+```
+
+```{r cells_per_cluster}
+################
+# ST BAR PLOT #
+################
+decon_column <- DATA_st@assays$SCDC@data %>%
+  as_tibble(., rownames = "clus") %>%
+  pivot_longer(., cols = -clus, names_to = ".cell", values_to = "values") %>%
+  filter(!(values==0)) %>% 
+  #nest( data = -clus) %>%
+  left_join(., select(as_tibble(DATA_st),.cell, Clusters, groups, sp_annot), by=".cell") %>%
+  mutate(sp_annot2 = ifelse(.$sp_annot == "epi_1"|.$sp_annot == "epi_2"|.$sp_annot == "epi_3", "epi", .$sp_annot )) %>%
+  mutate(sp_annot2 = ifelse(.$sp_annot2 == "SubMuc_1"|.$sp_annot2 == "SubMuc_2"|.$sp_annot2 == "SubMuc_3", "SubMuc", .$sp_annot2 )) %>%
+  filter(!(is.na(.$sp_annot2))) %>% 
+  mutate(., cell_type = cell_type[as.character(.$clus)]) %>%
+  mutate(., cell_type_2 = annot2[as.character(.$clus)]) %>%
+  mutate(clus = factor(clus, levels = as.character(0:28)))
+  
+
+n <- decon_column %>%
+  select(clus, Clusters, cell_type, cell_type_2) %>%
+  #unique() %>%
+  group_by(Clusters) %>%
+
+  nest() %>%
+  ungroup() %>%
+  #tally()
+  map(.$data, ~count(.x))
+  mutate(n = map(.$data, ~enframe(table(.x))))
+  
+  
+kreatins <- decon_column %>% 
+  filter(cell_type == "epithelial") 
+  #mutate(Keratinocytes = ifelse(grepl("9|8|7", .$Clusters), )
+         
+percent.fun <- function(obj, var, name){
+  for(i in length(var)){
+    obj <- PercentageFeatureSet(obj, var[i], col.name = name[i])
+  }
+  return(obj)
+}
+
+genes <- c("KRT15", "KRT14", "KRT10", "KRT5", "KRT1", "LOR", "CDH1", "CD4") 
+genes <- c( "CD4") 
+ker <- percent.fun(DATA_st, ker, ker) %>%
+  select(Clusters, nCount_RNA, any_of(c("KRT15", "KRT14", "KRT10", "KRT5", "KRT1"))) %>%
+  sum(.[,"rna_KRT1"])
+
+ker <- DATA_st %>% 
+  #mutate(., FetchData(., vars = genes, slot = "counts" )) %>%
+  mutate(., FetchData(., vars = genes, slot = "data" )) %>%
+  select(groups, Clusters, nCount_RNA, any_of(genes)) %>% # nCount_RNA,
+  group_by(Clusters, groups) %>%
+  summarise(across(where(is_numeric), ~sum(.))) %>%
+  ungroup() %>%
+  #mutate(across(any_of(genes), ~./.data[["nCount_RNA"]])) %>%
+  select(-nCount_RNA) %>%
+  pivot_longer(cols = -any_of(c("Clusters", "groups")), names_to="Genes", values_to = "values")
+
+ggplot(ker, aes(fill=Genes, y=values, x=Clusters)) + 
+    geom_bar(position="stack", stat="identity") +
+    #scale_y_continuous(labels=scales::percent) +
+    facet_wrap(~groups) + theme_minimal()
+
+ggplot(decon_column, aes(fill=clus, y=values, x=Clusters)) + 
+    geom_bar(position="stack", stat="identity") +
+  scale_fill_manual(values = pal) +
+  facet_wrap(~groups + sp_annot2) + theme_minimal() 
+```
+
+```{r bulk_cells}
+#################
+# BULK BAR PLOT #
+#################
+id <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")  
+gr <- c("DMPA", "DMPA", "DMPA", "DMPA", "ctrl", "ctrl", "ctrl", "ctrl") %>% set_names(., id)
+
+decon_column <- deconvolution$prop.est.mvw %>%
+  as_tibble(., rownames = "ID") %>%
+  pivot_longer(., cols = -ID, names_to = "decon_clus", values_to = "values") %>%
+  mutate(decon_clus = factor(decon_clus, levels = as.character(0:28))) %>%
+  filter(ID %in% DATA_st$orig.ident) %>%
+  mutate(., group = gr[as.character(.$ID)]) 
+  #pivot_wider(., names_from = ID, values_from = values) #%>%
+  #filter(!(values==0)) %>% nest( data = -decon_clus)
+
+pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )
+
+ggplot(decon_column, aes(fill=decon_clus, y=values, x=ID)) + 
+    geom_bar(position="stack", stat="identity") +
+    facet_wrap(~group ) + theme_minimal() +
+    scale_fill_manual(values = pal) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+#################
+# BULK HEATMAP #
+#################
+```
+
+
 ## Paulos code
-```{r}
+```{r Paulos_facet_wrap_plotting}
 start_time <- Sys.time()
 
 img_list <- names(DATA_st@images)
@@ -269,67 +513,10 @@ time <- end_time - start_time
 ```
 
 ```{r, dev.args = list(bg = 'transparent')}
-###################
-# Facet wrap GENE #
-###################
-clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
-  #c <- unique( pull(spe, as_label(clusters)))
-  col=c("grey90","grey80","grey60","navy","black")
-  clus_col <- c("grey90","navy")
-  clusters <- enquo(clusters)
-  c <- unique( pull(clus_spe, !!(clusters))) %>% sort(.) %>% set_names()
-    
-  # Create Columns for induvidual clusters:
-  clus_columns <- map(c, ~(clus_spe@meta.data[["Clusters"]] == .x)*1) %>% 
-    map(.,~as.character(.x)) %>%
-    set_names(., paste0("Clus_",names(.)))
-  
-  # Add the Cluster columns to seurat obj.
-  clus_spe <- bind_cols(clus_spe, clus_columns)
-  # Plot Individal plot for each cluster
-  P <- {map(c, ~plot_clusters.fun(clus_spe, color=clus_col, paste0("Clus_",.x), 
-                                  red="umap_harmony"), txt_size=20, dot_size = 0.2, lable=F)}
-  #clus_plot <- plot_clusters.fun(spe, color=col, paste0("Clus_","2"), red="umapharmony", txt_size=20, lable=F)
-  
-  filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
-  
-  decon_columns <- spe@assays$SCDC@data %>%
-    Matrix::t() %>%
-    as_tibble(., rownames = ".cell") %>% 
-    mutate_if(is.numeric, ~1 * (. > 0)) %>%
-    filt_empty(., 0) %>%
-    mutate(across(-.cell, ~as.character(.x)))
-    
-    c <- intersect(as.character(c), colnames(decon_columns))
-  
-  PLOTS <- tibble("clus" = c) %>%
-    #sample_n(., size = 2) %>%
-    mutate(plots = pmap(.,
-      ~plot_facets.fun(filter(spe, decon_columns[[..1]]=="1"),
-        assay=assay,
-        geneid = gene,#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
-        zoom = "zoom", #"zoom"
-        colors = col,
-        #annot_col = "#dbd9d9",
-        annot_line = .1,
-        img_alpha = 0,
-        point_size = 0.5)
-      )) %>%
-    mutate(clus_plot = ifelse(.$clus %in% names(P), P[.$clus], NA)) %>%
-    mutate(., combined = pmap(.,
-      ~plot_grid( ..3, ..2, ncol=2, rel_widths=c(1.2,4)) ))
-
-  # PLOTS$combined[[1]]
-  #PLOTS$data[[1]]
-
-  combined <- plot_grid( plotlist=PLOTS$combined, ncol=1, rel_heights=rep_len(1, length(PLOTS$combined) ) )
-
-  return(combined)
-}
 ######################
-# Facet wrap CLUSTER #
+# FACET WRAP CLUSTER #
 #####################
-# I want to plot the intinsity of the cell population in 
+# I want to plot the intensity of the cell population in 
 clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
   #c <- unique( pull(spe, as_label(clusters)))
   col=c("grey90","grey80","grey60", "blue4","navy","black")
@@ -351,7 +538,7 @@ clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
   
   filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
   
-  decon_columns <- spe@assays$SCDC@data %>%
+  decon_columns <- spe@assays$SCDC@data %>% 
     Matrix::t() %>%
     as_tibble(., rownames = ".cell") %>% 
     mutate_if(is.numeric, ~1 * (. > 0)) %>%
@@ -405,150 +592,6 @@ ggsave("./clus_plots.pdf",CLUS_PLOTS, height = 60, width = 10, limitsize = FALSE
 plot_grid( PLOTS$clus_plot[[1]], PLOTS$plots[[1]], ncol=2, rel_widths=c(2,4)) 
 ```
 
-
-```{r coocurrence_df}
-coocurrence.fun <- function(spe, gr){
-  coocurrence <- lapply(gr,function(x){
-    temp <- DATA_st@assays$SCDC@data[,spe$orig.ident == x]
-    temp <- sqrt( temp %*% Matrix::t(temp) / ncol(temp))
-    rownames(temp) <- rownames(DATA_st@assays$SCDC@data)
-    colnames(temp) <- rownames(DATA_st@assays$SCDC@data)
-    return( temp )})
-  names(coocurrence) <- gr
-  return(coocurrence)
-}
-gr <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")
-ctrl <- c("P107", "P108", "P114", "P097")
-DMPA <- c("P118", "P105", "P080", "P031")
-coocurrence_all <- coocurrence.fun(DATA_st, gr)
-
-coocurrence_ctrl <- coocurrence.fun(DATA_st, ctrl)
-coocurrence_ctrl <- (coocurrence_ctrl[[1]]+coocurrence_ctrl[[2]]+coocurrence_ctrl[[3]]+coocurrence_ctrl[[3]])/4
-
-coocurrence_DMPA <- coocurrence.fun(DATA_st, DMPA)
-coocurrence_DMPA <- (coocurrence_DMPA[[1]]+coocurrence_DMPA[[2]]+coocurrence_DMPA[[3]]+coocurrence_DMPA[[3]])/4
-
-coocurrence_gr <- c(coocurrence_DMPA, coocurrence_ctrl)
-names(coocurrence_gr) <- c("DMPA", "ctrl")
-```
-
-```{r coocurrence_plot}
-# igraph to ggplot2:
-# https://chrischizinski.github.io/rstats/igraph-ggplotll/
-library(igraph)
-cell_codetection.fun <- function(DATA_sub, coocurrence, out){
-  pdf(paste0(result_dir,out),width = 7*3.5,height = 2*3.5, useDingbats = F)
-  par(mfrow= c(2,5),mar=c(1,1,1,1))
-  
-  plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = T)
-  for(i in names(coocurrence)){
-    l <-  t(sapply( as.character(unique(DATA_sub$Clusters)) , 
-                            reds=as.data.frame(DATA_sub@reductions$umap_harmony@cell.embeddings[,1:2]), 
-                            cl1=DATA_sub$Clusters, function(jj,reds,cl1) { pmean(reds[cl1==jj,])  }))
-    plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = F,col = "grey90",main=i)
-    g <- igraph::graph_from_adjacency_matrix( coocurrence[[i]] , mode = "undirected",weighted = T)
-    el <- data.frame(as_edgelist(g),E(g)$weight)
-    el <- el[el[,3] > 0.01,]
-    segments( x0 = l[el[,1],1] , y0 = l[el[,1],2] ,x1 =  l[el[,2],1] , y1 = l[el[,2],2],
-              col=paste0(colorRampPalette(c("grey80","black"))( 100 ),sprintf("%02d",round((0:99)/2+50) ))[round(el[,3]*98)+1],
-              lwd=el[,3]*20)
-  }
-  dev.off()
-}
-
-diff_codetection.fun <- function(DATA_sub, 
-                                 coocurrence, 
-                                 int,
-                                 ncol=5, nrow=1){
-  pdf(paste0(result_dir,"cell-cell_codetection_diff.pdf"),width = 7*3.5,height = 2*3.5, useDingbats = F)
-  par(mfrow= c(nrow,ncol),mar=c(1,1,1,1))
-  plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = T)
-  for(i in names(coocurrence)){
-    l <-  t(sapply( as.character(unique(DATA_sub$Clusters)) , 
-                            reds=as.data.frame(DATA_sub@reductions$umap_harmony@cell.embeddings[,1:2]), 
-                            cl1=DATA_sub$Clusters, function(jj,reds,cl1) { pmean(reds[cl1==jj,])  }))
-    plot_meta( DATA_sub,red = "umap_harmony",feat = "Clusters",cex=.8,label = F,col = "grey90",main=i)
-    #int <- (coocurrence[["P031"]]+coocurrence[["P105"]]+coocurrence[["P118"]]+coocurrence[["P080"]])/4
-    temp <- log2( ( coocurrence[[i]] +1) /  (int +1) ) # sum 
-    if(sum(abs(temp)) != 0){
-        g <- igraph::graph_from_adjacency_matrix( as.matrix(temp) , mode = "undirected",weighted = T)
-        el <- data.frame(as_edgelist(g),E(g)$weight)
-  
-        el <- el[abs(el[,3]) > 0.01,]
-        segments( x0 = l[el[,1],1] , y0 = l[el[,1],2] ,x1 =  l[el[,2],1] , y1 = l[el[,2],2],
-                col=paste0(colorRampPalette(c("navy","grey80","firebrick"))( 100 ), sprintf("%02d",c(49:0,0:49)+50 ))[ round((el[,3]*200))+50 ] ,
-                lwd=abs(el[,3]*20) )
-    }
-  }
-  dev.off()
-}
-
-cell_codetection.fun(DATA_r, coocurrence_gr, "cell-cell_codetection_gr.pdf")
-cell_codetection.fun(DATA_r, coocurrence_all, "cell-cell_codetection_id.pdf")
-
-# difference in co-ocurrence
-diff_codetection.fun(DATA_r, coocurrence=list("Diff"=coocurrence_DMPA), int=coocurrence_ctrl, nrow = 1)
-```
-
-
-# Differetial cell abundance
-
-```{r}
-library(glmnet)
-library(glmnetUtils)
-
-#DATA_st$orig.ident <- factor(DATA_st$orig.ident)
-temp <- DATA_st@assays$SCDC@data
-rownames(temp) <- paste0("c",rownames(temp))
-#group <- factor(DATA_st$orig.ident[grepl("P107|P108|P114|P097",DATA_st$orig.ident)])
-#treat <- factor(DATA_st$orig.ident[grepl("P118|P105|P080|P031",DATA_st$orig.ident)])
-
-# First step: using .*. for all interactions
-# f <- as.formula(y ~ .*.)
-# y <- temp[,"y"]
-# # Second step: using model.matrix to take advantage of f
-# x <- model.matrix(f, df)[, -1]
-# mod2 <- bigGlm(x, y)
-# mod2$beta
-# fit <- cv.glmnet(x,y)
-
-
-#future::plan(multiprocess, workers=future::availableCores()-1  )
-
-temp2 <- data.frame(groups=factor(DATA_st$groups))
-cl <- lapply(rownames(temp),temp=temp,temp2=temp2, function(x,temp,temp2) {
-  set.seed(1)
-  df <- cbind(temp2,y=temp[x,])
-  m <- summary( glm( y ~ groups ,data = df) )
-  return( m$coefficients )
-} )
-names(cl) <- rownames(temp)
-cl
-
-
-pdf("differential_abundance_plot.pdf",width = 4*3,height = 4,useDingbats = F)
-par(mfrow= c(1,3),mar=c(1,1,1,1))
-for( i in rownames(cl[[1]])[-1]){
-  
-  cl_group <- data.frame(t(sapply(cl,i=i,function(x,i){x[i, c("Estimate","Pr(>|t|)") ]})))
-  cl_group <- cbind(cl_group , sig = ( abs(cl_group[,1]) > 0.015 ) & ( cl_group[,2] < 1e-50 ) )
-  cl_group[,2][cl_group[,2]==0] <- min(cl_group[,2][cl_group[,2]!=0])
-
-  plot( cl_group[,1] , -log10(cl_group[,2]) , ylim=c(0,400),
-        xlim=c(-0.4,0.4), pch=16, main=i, 
-        ylab="-log10(pvalue)",xlab="Estimate",
-        col= ifelse(cl_group[,3] ,"red","grey70") )
-  
-  # text( cl_group[cl_group[,3],1] , 
-  #       -log10(cl_group[cl_group[,3],2]) , 
-  #       labels = rownames(cl_group)[cl_group[,3]] , 
-  #       pos=ifelse(cl_group[cl_group[,3],1]>0,3,3) )
-  
-  abline(v=c(-0.015,0,0.015),h=50,lty=20,col="grey50")
-}
-dev.off()
-
-```
 
 
 # BayesPrism
@@ -718,6 +761,71 @@ myPrism <- new.prism(
 bp.res <- run.prism(prism = myPrism, n.cores=50)
 ```
 
+
+
+```{r}
+# This was an earlier version of the clus_plot function before I completely understod what to do
+# might still be interesting but could also be just crap, Plots the the gene expression of a specific gene per cell type defined by deconvolution
+###################
+# Facet wrap GENE #
+###################
+clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
+  #c <- unique( pull(spe, as_label(clusters)))
+  col=c("grey90","grey80","grey60","navy","black")
+  clus_col <- c("grey90","navy")
+  clusters <- enquo(clusters)
+  c <- unique( pull(clus_spe, !!(clusters))) %>% sort(.) %>% set_names()
+    
+  # Create Columns for induvidual clusters:
+  clus_columns <- map(c, ~(clus_spe@meta.data[["Clusters"]] == .x)*1) %>% 
+    map(.,~as.character(.x)) %>%
+    set_names(., paste0("Clus_",names(.)))
+  
+  # Add the Cluster columns to seurat obj.
+  clus_spe <- bind_cols(clus_spe, clus_columns)
+  # Plot Individal plot for each cluster
+  P <- {map(c, ~plot_clusters.fun(clus_spe, color=clus_col, paste0("Clus_",.x), 
+                                  red="umap_harmony"), txt_size=20, dot_size = 0.2, lable=F)}
+  #clus_plot <- plot_clusters.fun(spe, color=col, paste0("Clus_","2"), red="umapharmony", txt_size=20, lable=F)
+  
+  filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
+  
+  decon_columns <- spe@assays$SCDC@data %>%
+    Matrix::t() %>%
+    as_tibble(., rownames = ".cell") %>% 
+    mutate_if(is.numeric, ~1 * (. > 0)) %>%
+    filt_empty(., 0) %>%
+    mutate(across(-.cell, ~as.character(.x)))
+    
+    c <- intersect(as.character(c), colnames(decon_columns))
+  
+  PLOTS <- tibble("clus" = c) %>%
+    #sample_n(., size = 2) %>%
+    mutate(plots = pmap(.,
+      ~plot_facets.fun(filter(spe, decon_columns[[..1]]=="1"),
+        assay=assay,
+        geneid = gene,#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+        zoom = "zoom", #"zoom"
+        colors = col,
+        #annot_col = "#dbd9d9",
+        annot_line = .1,
+        img_alpha = 0,
+        point_size = 0.5)
+      )) %>%
+    mutate(clus_plot = ifelse(.$clus %in% names(P), P[.$clus], NA)) %>%
+    mutate(., combined = pmap(.,
+      ~plot_grid( ..3, ..2, ncol=2, rel_widths=c(1.2,4)) ))
+
+  # PLOTS$combined[[1]]
+  #PLOTS$data[[1]]
+
+  combined <- plot_grid( plotlist=PLOTS$combined, ncol=1, rel_heights=rep_len(1, length(PLOTS$combined) ) )
+
+  return(combined)
+}
+```
+
+### old code from previous script?
 
 ## Subset SeuratObj
 ```{r}
