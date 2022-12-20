@@ -1,0 +1,586 @@
+---
+title: "Differential gene expression"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "`r paste0(params$fig.path)`" #./Figures/
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+  fig.path      = params$fig.path,#"../Figures/",
+  fig.align     = "center",
+  message       = FALSE,
+  warning       = FALSE,
+  dev           = c("jpeg", "tiff", "pdf"),
+  dpi           = 300,
+  fig.process = function(filename){
+    new_filename <- stringr::str_remove(string = filename,
+                                        pattern = "-1")
+    fs::file_move(path = filename, new_path = new_filename)
+    ifelse(fs::file_exists(new_filename), new_filename, filename)
+  }
+  )
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
+```
+
+```{r background_job, eval=FALSE}
+file <- paste0(basename(xfun::sans_ext("./05_DGE_st_data.md")), '_', Sys.Date(), '.html')
+
+# quarto
+render_html_with_job(out_dir = "../lab_book/test/")
+fs::file_move(path = file, new_path = paste0("../lab_book/test/", file))
+
+render_git_with_job()
+
+# kniter
+knit_html_with_job(out_dir = "../lab_book/test/")
+```
+
+## Load data and libraries
+```{r}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(SeuratObject)
+library(tidyseurat)
+library(cowplot)
+library(niceRplots)
+library(MAST)
+
+source("../bin/plotting_functions.R")
+
+#########
+# PATHS #
+#########
+input_dir <- "../results/04_deconvolution_st_data/"
+result_dir <- "../results/05_DGE_st_data/"
+marker_dir <- "./marker_genes/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) }
+
+#############
+# LODA DATA #
+#############
+DATA <- readRDS(paste0(input_dir,"seuratObj_deconvolution.RDS"))
+```
+
+```{r Functions, eval=FALSE}
+#######################
+# PLOT GENES FUNCTION #
+#######################
+# obj <- DATA
+ # gene <- sym("CTSK")
+plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony", lable = TRUE){
+  gene <- sym(gene)
+  obj <- obj %>%
+    mutate(lab = obj@active.ident) %>%
+    mutate(., FetchData(., vars = c(as_label(gene))) ) %>%
+    mutate(feat = !!(gene))
+  feat_vec <- pull(obj, as_label(gene))
+  
+  # Colour pal:
+  if(is.null(mins)){
+    mins <- min(c(feat_vec, 0),na.rm = T)} # get 0 or negative value
+  if(is.null(maxs)){maxs <- quantile(feat_vec,0.99,na.rm = T) # get percentile
+    if(maxs==0){maxs <- max(feat_vec,na.rm = T)}
+  }
+  if(max(feat_vec, na.rm=T) != 0){
+    # Calculate percentage:
+    obj <- obj %>%
+      mutate(feat = (!!(gene) - mins) / ( maxs - mins) ) %>%
+      mutate(feat = ifelse(.$feat > 1, 1, .$feat))
+  }
+  
+  obj <- obj %>%
+      #select(1:3, !!(gene)) %>%
+      mutate(feat = round(.$feat*98)+1) %>%
+      mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) %>%
+      arrange(!!(gene))
+  
+  # reduction method:
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  # txt lable:
+  if(lable == FALSE){l = FALSE
+    text <- NoLegend() #+ labs(color= "Clusters")
+  }else{l = TRUE
+    if(lable != TRUE){obj <- mutate(obj, lab = pull(obj, lable))}
+    
+    lable_df <- obj %>%
+      group_by(lab) %>%
+      select(lab, contains(red)) %>% 
+      summarize_all(mean) 
+    
+    text <- geom_text(data = lable_df, aes(label = lab), col="black", size=2.5) }
+  
+  p <- ggplot(obj, aes(!!(red_1), !!(red_2), label=l , color = pal) ) +
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+    text + #scale_color_viridis(option = "D", na.value="#EBECF0") +
+    scale_colour_identity() +
+    my_theme + theme_void() +
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5)) 
+  return(p)
+}
+
+##########################
+# PLOT CLUSTERS FUNCTION #
+##########################
+# obj <- DATA
+# cluster <- sym("RNA_snn_res.0.1")
+plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
+  if(color == "Brew_all"){
+    pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )}
+  
+  cluster <- sym(cluster)
+  
+  if(lable == TRUE){ lab <- cluster
+    text <- NoLegend() #+ labs(color= "Clusters")
+  }else{lab <- sym(lable)
+    text <- guides(color = "none")}
+  
+  feat <- obj %>%
+    select(.cell, !!(cluster), !!(lab), orig.ident, nCount_RNA, nFeature_RNA) %>%
+    group_by(!!(cluster)) %>%
+    add_tally() %>%
+    arrange(nFeature_RNA) %>%
+    arrange(desc(n))
+  
+  lable_df <- feat %>%
+    ungroup() %>%
+    group_by(!!(lab)) %>%
+    select(!!(lab), contains(red)) %>% 
+    summarize_all(mean)
+  
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
+                        color = !!cluster), label=TRUE) + 
+    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
+    geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) +
+    #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+    scale_color_manual(values = pal)  +
+    my_theme + text
+  return(p)
+}
+```
+
+```{r ggplot_theme}
+my_theme <-
+  list(
+    #scale_fill_manual(values = friendly_cols),
+    #scale_color_manual(values = friendly_cols),
+    theme_bw() +
+      theme(
+        panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(size = 0.2),
+        panel.grid.minor = element_line(size = 0.1),
+        text = element_text(size = 12),
+        legend.position = "bottom",
+        #aspect.ratio = 1,
+        strip.background = element_blank(),
+        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
+        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+      )
+  )
+```
+
+```{r add_meta_info, eval=FALSE}
+meta <- read_csv("../data/Clinical_data/Clinical_data_Spatial_DMPA.csv") %>%
+  select(orig.ident="ID", groups=Contraception) %>%
+  mutate(groups = ifelse(.$groups=="no HC", "ctrl", .$groups))
+
+# add group condition and merge sp_annot subgroups
+DATA <-  DATA %>%
+  rename(sp_annot2="sp_annot") %>%
+  mutate(sp_annot = ifelse(.$sp_annot2 == "epi_1"|.$sp_annot2 == "epi_2"|.$sp_annot2 == "epi_3", "epi", .$sp_annot2 )) %>%
+  mutate(sp_annot = ifelse(.$sp_annot2 == "SubMuc_1"|.$sp_annot2 == "SubMuc_2"|.$sp_annot2 == "SubMuc_3", "SubMuc", .$sp_annot2 )) %>%
+  left_join(., meta, by="orig.ident") %>%
+  select(groups, sp_annot, everything(), sp_annot2)
+```
+
+
+```{r DGE_analysis, eval=FALSE}
+# tidy code:
+# creating a subseted object with 200 spots selected from each clusters
+DATA_sub <- DATA %>%
+    filter(., .cell %in% WhichCells(., downsample = 60)) %>%
+    SetIdent(., value = "Clusters")
+      
+table(DATA$Clusters)
+table(DATA_sub$Clusters)
+
+# running DGE analysis on each cluster (subgroup) between conditions
+#column <- sym("groups")
+DEGs_fun <- function(obj, condition, subgroup){
+  group <- enquo(subgroup)
+  obj <- SetIdent(obj, value = condition)
+  
+    obj_nest <- obj %>%
+    nest(data = -!!(group)) %>%
+    mutate(DEG_df = map(
+      data, ~ .x %>%
+        FindAllMarkers(., 
+                       test.use = "wilcox",
+                       only.pos = F,
+                       return.thresh = 1,
+                       max.cells.per.ident = Inf,
+                       logfc.threshold = 0,
+                       assay = "RNA",
+                       min.pct = -Inf)
+                    )) %>%
+      mutate(., DEG_df = setNames(.[["DEG_df"]], pull(., var=1)))
+  
+  DEG_df <- obj_nest$DEG_df %>%
+    bind_rows(., .id = "group") %>%
+    mutate(pct.diff = -.$pct.2-.$pct.1) %>%
+    mutate(log.pct.diff = -log2(.$pct.2/.$pct.1))
+  
+  return(DEG_df)
+}
+DEGs_table_ <- DEGs_table %>%
+  mutate(avg_log2FC = ifelse(.$cluster== "ctrl", .$avg_log2FC*(-1), .$avg_log2FC))
+
+DEGs_table <- DEGs_fun(DATA_sub,  "groups", Clusters)
+# DEGs_table <- DEGs_fun(DATA_sub, groups, "sp_annot")
+
+```
+
+```{r}
+my_ttest <- function(df, variable, by, env = parent.frame()){  
+
+  exp1 <- expr(!!ensym(variable) ~ !!ensym(by))
+
+    #t_test <- t.test(formula = eval(exp1), data = df)
+    test <-  wilcox.test(formula = eval(exp1), data = df)
+
+  return(test)
+  }
+
+# https://stackoverflow.com/questions/62456915/how-to-run-wilcox-test-on-all-combination-of-groups-across-large-number-of-featu
+
+
+
+filt <- DATA_sub %>%
+  filter(., grepl("9|8", .$Clusters)) %>%
+  mutate(test_gr = paste(.$groups, .$Clusters, sep = "_"))
+  #{. ->> filt } %>% 
+  #GetAssay(object = ., assay = "RNA") %>%
+  #.[25:40,1:5] %>%
+
+tidyr::expand(filt@meta.data, nesting( groups, Clusters))
+
+group = paste(filt$groups, filt$Clusters, sep = "_")
+
+pairwise_DGEs <- function(obj, groups, FDR = 0.1) {
+  comb_uniq <- apply(combn(unique(obj@meta.data[[groups]]),2),2,paste,collapse='_')
+  
+  pwt <- pairwiseWilcox(obj@assays$RNA@data, groups=obj@meta.data[[groups]])
+  names <- paste(pwt[["pairs"]][,1], pwt[["pairs"]][,2], sep = "_")
+  
+  dfs <- pwt[["statistics"]] %>%
+    set_names(., names) %>%
+    .[comb_uniq] %>%
+    map(., ~as_tibble(.x, rownames = "gene")) %>%
+    map(., ~filter(.x, FDR < 0.05))
+  return(dfs)
+}
+  
+pairwise_DGEs(DATA_sub, "groups")
+
+unique_comps <- !duplicated(t(apply(pwt$pairs, 1, sort)))
+res <- data.table::rbindlist(setNames(lapply(pwt$statistics[unique_comps], 
+                                 function(x) data.table::as.data.table(x, keep.rownames=TRUE)), 
+                          apply(pwt$pairs[unique_comps,], 1, paste, collapse = '_')),
+                 idcol = "comparison")[, .(comparison, rn, p.value)]
+
+
+res_filt <- res %>% 
+  filter(p.value < 0.01) %>%
+  as_tibble()
+
+my_ttest(mtcars, mpg, am)
+
+iris %>% 
+  mutate(Max.Len= purrr::pmap_dbl(list(Sepal.Length, Petal.Length), max))
+
+
+Alternative 
+my_ttest <- function(df, var, group){  
+   var <- enquo(var)
+  group <- enquo(group)
+
+  f <- paste0(as_label(var)," ~ ", as_label(group) )
+  Model <- eval(bquote( lm(.(f), data = df) ))
+
+return(Model)
+}
+
+my_ttest(mtcars, mpg, gear)
+```
+
+```{r}
+set.seed(111)
+celltypes = c("astro","endo","micro","neuron","oligo","opc")
+mat = matrix(rnorm(10000*120),ncol=120)
+colnames(mat) = paste0("cell",1:120)
+rownames(mat) = paste0("gene",1:10000)
+metadata = data.frame(celltype=rep(celltypes,each=20))
+num_sample = 10
+use_cols = tapply(1:nrow(metadata),metadata$celltype,sample,num_sample)
+use_cols = unlist(use_cols)
+group = metadata$celltype[use_cols]
+
+library(scran)
+library(data.table)
+pwt <- pairwiseWilcox(mat[,use_cols], groups=group)
+unique_comps <- !duplicated(t(apply(pwt$pairs, 1, sort)))
+res <- rbindlist(setNames(lapply(pwt$statistics[unique_comps], 
+                                 function(x) as.data.table(x, keep.rownames=TRUE)), 
+                          apply(pwt$pairs[unique_comps,], 1, paste, collapse = '_')),
+                 idcol = "comparison")[, .(comparison, rn, p.value)]
+
+setnames(res, "rn", "gene")
+res[gene=="gene999"]
+```
+
+
+```{r save_DGEs}
+# write_csv(DEGs_table, paste0(result_dir, "DGEs_DMPA_perClus_MAST.csv"))
+DEGs_table <- read_csv(paste0(result_dir,"DGEs_DMPA_perClus_MAST.csv"))
+```
+
+```{r volcano_plot_DGEs_perClus}
+DEGs_filt <- DEGs_table %>% 
+  filter(cluster == "DMPA") %>%
+  filter(p_val < 0.1) %>%
+  filter()
+Volcano.fun(DEGs_filt, y.axis="p-value", up=c(0.2, 0.01), down = c(-0.2, 0.01)) # threshold: (log2FC, p-value)
+```
+
+
+```{r plott_top20_DGEs}
+#| fig-format: pdf
+
+top20 <- DEGs_table %>%
+  #mutate(feature = paste0(.$cluster, "_", .$group)) %>%
+  group_by(group, cluster) %>%
+  top_n(-30, p_val) %>% 
+  top_n(20, avg_log2FC)
+
+# Identify marker genes to seperate clusters
+DATA <- DATA  %>%
+    mutate(., feature = paste0(.$Clusters, "_", .$groups))
+ord <- niceRplots::getcluster(DATA, unique(top20$gene), "feature")
+
+#pdf( paste0("./DGE_subset_INF_vs_NONINF.pdf"),width = 20,height = length(ord)/6+2)
+par(mfrow=c(1,1), mar=c(7,6,1,5))
+plot_dots(DATA, names(sort(ord)), clustering = "feature", show_grid = T,main = "top cluster markers",cex.main=1,font.main=1,cex.col = 1,srt = 90,cex.row = 1.1)
+abline(v=cumsum(c(table(sub( "_.*","",names(table(DATA$feature))))))+0.5)
+#dev.off()
+```
+
+```{r Paulos_DGE_code, eval=FALSE, include=FALSE}
+# Paulo's code to calculate differential gene expression between conditions for each cluster group
+
+# calculating how many spots per sample per cluster that we want to have in the differential gene expression
+# in order to balance the amount of spots per group in order to avoid p-value inflation
+groups <- paste0(DATA$RNA_snn_res.1.5, '_', as.character(DATA$orig.ident) )
+DATA$subgroups <- factor(groups)
+sample_size <- table(DATA$subgroups)
+sample_size[ sample_size > 50 ] <- 50
+
+# Now we can randomly select the amount we just calculated of spots per sample. 
+DGE_cells <- lapply(names(sample_size), function(x){ 
+  set.seed(1)
+  sample( colnames(DATA) [ DATA$subgroups == x ] , size = sample_size[x])
+  })
+DGE_cells <- unlist(DGE_cells)
+# creating a subseted object with all the spots we selected above
+DGE_DATA <- DATA[, DGE_cells]
+# DGE_DATA <- SetIdent( DGE_DATA , value = "patient_groups")
+
+detable_pat <- lapply(unique(DGE_DATA$RNA_snn_res.1.5),DGE_DATA=DGE_DATA, function(x,DGE_DATA){ 
+  temp <- DGE_DATA[,DGE_DATA$RNA_snn_res.1.5 == x]
+  temp <- SetIdent( temp , value = "sp_annot")
+  detable <- FindAllMarkers( temp, only.pos = T,max.cells.per.ident = 50,
+                          logfc.threshold = .1,assay = "RNA",
+                          min.pct = 0.05)
+  return( cbind(detable,cell_cluster= x) )
+})
+detable <- do.call(rbind,detable_pat)
+
+# filtering by non-significant p-values
+detable <- detable[ detable$p_val < 0.05,  ]
+detable$pct.diff <- detable$pct.1 - detable$pct.2
+detable$log.pct.diff <- log2( (detable$pct.1+1) / (detable$pct.2+1) )
+detable$groups <- paste0(detable$cell_cluster,detable$cluster)
+# saving table to file
+write.csv2(detable,"results/detable_for_each_cluster_across_conditions.csv")
+
+feature <- paste0(DATA$RNA_snn_res.1.5, '_', as.character(DATA$sp_annot) )
+DATA$feature <- factor(feature)
+
+# need to change to more suitable for bulk data
+detable %>% group_by(groups)  %>% top_n(-30, p_val) %>% top_n(20, avg_log2FC)  -> top20
+#detable %>% group_by(groups)  %>% top_n(-60, p_val) %>% top_n(40, pct.diff) %>% top_n(20, log.pct.diff) -> top5
+ord <- niceRplots::getcluster(DATA, unique(top20$gene), "feature")
+ord
+
+pdf( paste0("./DGE_subset_INF_vs_NONINF.pdf"),width = 20,height = length(ord)/6+2)
+par(mfrow=c(1,1), mar=c(7,6,1,5))
+plot_dots(DATA, names(sort(ord)), clustering = "feature", show_grid = T,main = "top cluster markers",cex.main=1,font.main=1,cex.col = 1,srt = 90,cex.row = 1.1)
+abline(v=cumsum(c(table(sub( "_.*","",names(table(DATA$feature))))))+0.5)
+dev.off()
+
+
+```
+
+## Identify marker genes to seperate clusters
+
+```{r Get_best_markrs}
+# Get difference in expression between one cluster and the rest
+markers_genes <- DEGs_table %>%
+  mutate(pct.diff = -.$pct.2-.$pct.1) %>%
+  mutate(log.pct.diff = -log2(.$pct.2/.$pct.1))
+
+# Identify the top genes that have a high difference in expression
+top25 <- markers_genes %>%
+  group_by(cluster) %>%
+  top_n(-40, p_val_adj) %>%
+  top_n(20, pct.diff) %>%
+  top_n(10, log.pct.diff) 
+
+# remove all VDJ-genes from list of HVG
+remove <- str_subset(top25$gene, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
+top25_gr <- top25 %>%
+  ungroup() %>%
+  filter(., !(.$gene %in% remove)) %>%
+  group_by(cluster) %>%
+  group_split() %>%
+  set_names(., seq(0, length(.)-1) )
+  
+
+top25 <- top25 %>%
+  arrange(cluster)
+# top25[grep("NCR1",top25$gene),]
+```
+
+
+```{r 04a_barplot_top25, fig.width=10, , fig.height=6}
+pdf(paste0(marker_dir,"top_DEG.pdf"), #width = 4*10*300, height = 30*4*300#, res = 300
+    )
+par(mfrow=c(2, 5), mar = c(4, 6, 3, 1))
+for (i in unique(top25$cluster)) {
+    barplot(sort(setNames(top25$avg_log2FC, top25$gene)[top25$cluster == i], F),
+        horiz = T, las = 1, main = paste0(i, " vs. rest"), border = "white", yaxs = "i")
+    abline(v = c(0, 0.25), lty = c(1, 2))
+}
+dev.off()
+
+par(mfrow=c(2, 5), mar = c(4, 6, 3, 1))
+for (i in unique(top25$cluster)[1:10]) {
+    barplot(sort(setNames(top25$avg_log2FC, top25$gene)[top25$cluster == i], F),
+        horiz = T, las = 1, main = paste0(i, " vs. rest"), border = "white", yaxs = "i")
+    abline(v = c(0, 0.25), lty = c(1, 2))
+}
+```
+
+```{r graph_plot_top25, fig.width=10, fig.height=10}
+col=c("grey90","grey80","grey60","navy","black")
+
+clus_plot <- plot_clusters.fun(DATA, cluster="Clusters") + theme_void() + NoLegend()
+
+grid_genes <- function(plot_list, title){
+  title <- ggdraw() + draw_label(paste0("Top 10 Markers for Cluster ", title), fontface='bold')
+  g <- plot_grid(plotlist = plot_list,
+            ncol = 4)
+  g_ <- plot_grid(title, g, ncol=1, rel_heights=c(0.1, 1))
+  return(g_)
+}
+
+plots <- imap(top25_gr[1:5], "gene") %>%
+  map(., map, ~plot_genes.fun(DATA, .x, lable = "Clusters"))
+
+cluster_markers <- plots %>%
+  map(., ~c("Clusters"=list(clus_plot), .x)) %>%
+  imap(., ~grid_genes(.x, .y ))
+
+cluster_markers[[1]]
+
+imap(cluster_markers, ~ggsave(paste0(marker_dir,"Marker_genes_cluster_", .y, ".jpg"), plot=.x))
+# ggsave("multipage.pdf", gridExtra::marrangeGrob(grobs=cluster_markers, ncol=1, nrow=1))
+```
+
+# Paulos Code
+```{r eval=FALSE, include=FALSE}
+library(niceRplots)
+#pdf("out.pdf", width = 4*10, height = 27*4, useDingbats = F)
+
+for(df in top25_gr){
+  for(gene in df){
+    png(paste0(name,"out_gr.png"), width = 4*10*300, height = 30*4*300, res = 300)
+  #par(mfrow=c(30,10), mar=c(1,1,1,1))
+    par(mfrow=c(6,4), mar=c(1,1,1,1))
+    plot_feat(DATA, 
+              red = "umap_harmony", 
+              feat = gene, cex = 0.5, 
+              label = "RNA_snn_res.1.5"
+              #, add_legend=T
+            )
+  }
+}
+dev.off()
+
+plot_feat(DATA, 
+              red = "umap_harmony", 
+              feat = "CTSK", cex = 0.5, 
+              label = "RNA_snn_res.1.5"
+              #, add_legend=T
+            )
+```
+
+```{r eval=FALSE, include=FALSE}
+g <- c("CCL2", "COL1A1", "SYTL3", "IGFBP4", "PTGDS", "LTB")
+genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4", "JCHAIN", "KRT13")
+Fibroblast <- c("APOD", "DCN")
+NK <- c()
+
+library(niceRplots)
+#pdf("out.pdf", width = 4*10, height = 27*4, useDingbats = F)
+png("out_.png", width = 4*10*300, height = 30*4*300, res = 300)
+par(mfrow=c(30,10), mar=c(1,1,1,1))
+#par(mfrow=c(2,4), mar=c(1,1,1,1))
+for(i in top25$gene[1:200]){
+  plot_feat(DATA, red = "umap_harmony", feat = i, cex = 0.5, label = "RNA_snn_res.1.5"#, add_legend=T
+            )
+}
+dev.off()
+
+annot <- c(FIB_DCN = "DCN",
+           NK_cell = "NCR1",
+           )
+
+markers_genes[grep("NCR1",rownames(markers_genes)),]
+```
+
+## Session info
+```{r}
+sessionInfo()
+```
