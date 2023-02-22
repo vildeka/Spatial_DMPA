@@ -10,8 +10,8 @@ my_theme <-
       theme(
         panel.border = element_blank(),
         axis.line = element_line(),
-        panel.grid.major = element_line(size = 0.2),
-        panel.grid.minor = element_line(size = 0.1),
+        panel.grid.major = element_line(linewidth = 0.2),
+        panel.grid.minor = element_line(linewidth = 0.1),
         text = element_text(size = 12),
         plot.title = element_text(hjust = 0.5),
         #legend.position = "bottom",
@@ -94,7 +94,7 @@ plot_clusters.fun <- function(obj, cluster,
 #######################
 # obj <- seuratObj
 # gene <- sym("CTSK")
-plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony", lable = TRUE){
+plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red="umap_harmony", col=c("grey90","grey80","grey60","navy","black") ,lable = TRUE){
   gene <- sym(gene)
   obj <- obj %>%
     mutate(lab = obj@active.ident) %>%
@@ -162,35 +162,43 @@ revlog_trans <- function(base = exp(1)){
   }
   ## Creates the transformation
   scales::trans_new(paste("revlog-", base, sep = ""),
-            trans, ## The transformation function (can be defined using anonymous functions)
-            inv,  ## The reverse of the transformation
-            scales::log_breaks(base = base), ## default way to define the scale breaks
-            domain = c(1e-100, Inf) ## The domain over which the transformation is valued
+                    trans, ## The transformation function (can be defined using anonymous functions)
+                    inv,  ## The reverse of the transformation
+                    scales::log_breaks(base = base), ## default way to define the scale breaks
+                    domain = c(1e-100, Inf) ## The domain over which the transformation is valued
   )
 }
-Volcano.fun <- function(DEGs_table, y.axis, up=c(1, 0.001), down = c(-1, 0.001)){
-  
+
+
+Volcano.fun_logFC <- function(DEGs_table, group, y.axis, up=c(1, 0.001), down = c(-1, 0.001)){
   tt <- DEGs_table %>% 
-    mutate('0.05 threshold' = ifelse(avg_log2FC >= 0 & p_val <= 0.05 ,"Up", 
-                                     ifelse(avg_log2FC <= -0 & p_val_adj  <= 0.05, "Down", 'NotSig'))) %>%
-    mutate('Lable' = ifelse(avg_log2FC >= up[1] & p_val <= up[2] | avg_log2FC <= down[1] & p_val <= down[2],.$gene,NA))
+    mutate('p-value treshold' = ifelse(avg_log2FC >= 0 & p_val_adj <= 0.05 ,"Up", 
+                                       ifelse(avg_log2FC <= -0 & p_val_adj  <= 0.05, "Down", 'NotSig'))) %>%
+    mutate('Lable' = ifelse(avg_log2FC >= up[1] & p_val_adj <= up[2] | avg_log2FC <= down[1] & p_val_adj <= down[2],.$gene,NA)) %>%
+    arrange(desc(p_val))
   
   if(y.axis == 'p-value') {
-    plot <- ggplot(tt, aes(x = group, y = avg_log2FC, colour = `0.05 threshold`)) +
+    plot <- ggplot(tt, aes(x = .data[[group]], y = avg_log2FC, colour = `p-value treshold`)) +
       #scale_x_continuous(trans = revlog_trans(), expand = c(0.005, 0.05)) +
       #expand_limits(x = c(0.001, 1)) +
       #geom_point(data = tt, alpha = 0.5, lable = tt$Lable) +
       geom_jitter(width = 0.3, alpha = 0.3, size=.1) +
+      geom_text_repel(data = tt, label= tt$Lable, colour = "black", size=2, #vjust = -0.6,
+                      show.legend=FALSE, segment.color = NA,
+                      #check_overlap = TRUE 
+                      #,point.padding = NA, segment.color = NA,
+      )+
       geom_hline(yintercept = 0, linetype = "solid") +
       #geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
       theme_minimal() + 
       theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
-      scale_colour_manual(values = c("Up"= "red", "NotSig"= "grey90", "Down"="red")) #+
-      #facet_wrap(~cluster, nrow = 1)
+      scale_colour_manual(values = c("Up"= "red", "NotSig"= "grey90", "Down"="blue"),
+                          name = paste0("FDR < ",up[2])) #+
+    #facet_wrap(~cluster, nrow = 1)
     
   } else {
     pos <- which(abs(TopTable$FDR-0.05)==min(abs(TopTable$FDR-0.05)))
-    plot <- ggplot(tt, aes(x = logFC, y = -log10(P.Value), colour = `0.05 threshold`)) +
+    plot <- ggplot(tt, aes(x = logFC, y = -log10(P.Value), colour = `p-value treshold`)) +
       geom_point(data = tt, alpha = 0.5, size=3) +
       geom_text(data = tt, label= tt$Lable, colour = "black", size=4, vjust = -0.6,
                 show.legend=FALSE, 
