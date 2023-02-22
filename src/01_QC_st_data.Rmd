@@ -14,9 +14,9 @@ editor_options:
 ```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(
   fig.path    = params$fig.path,
-  fig.align   = "center",
   dev         = c("png"),
   dpi         = 300,
+  fig.align   = "center",
   warning     = FALSE, 
   message     = FALSE,
   fig.process = function(filename){
@@ -88,7 +88,6 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
 friendly_cols <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#F8D0A4", "#E3E6AD", "#be6a7d", "#f1a6b1", "#A8EDFC", "#7fe2e9", "#c4ce96", "#9aacce", "#e7b993", "#ffc8d9")
 ```
 
-
 ```{r 01a_Feature_and_counts}
 ###########################################
 # QUALITY CONTROLL FEATURE & COUNTS PLOTS #
@@ -117,9 +116,11 @@ plot_grid(ncol = 1,
 ```
 
 # Quality control
-***
+
+------------------------------------------------------------------------
 
 ## QC violin plots
+
 ```{r 01b_QC_plots, fig.height=15}
 ################################
 # CALC. % MITO/RIBO/HEMO-GENES #
@@ -208,7 +209,7 @@ combined
 #       )
 ```
 
-```{r 01d_sp_feat_plot, fig.height=8, fig.width=7}
+```{r 01d_sp_feat_plot, fig.height=8, fig.width=6}
 # number of genes per spot
 plots_f <- DATA %>%
   mutate(group = orig.ident) %>%
@@ -246,7 +247,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-As you can see, the spots with low number of counts/features and high mitochondrial content is mainly towards the edges of the tissue. It is quite likely that these regions are damaged tissue. You may also see regions within a tissue with low quality if you have tears or folds in your section. 
+As you can see, the spots with low number of counts/features and high mitochondrial content is mainly towards the edges of the tissue. It is quite likely that these regions are damaged tissue. You may also see regions within a tissue with low quality if you have tears or folds in your section.
 
 But remember, for some tissue types, the amount of genes expressed and proportion mitochondria may also be a biological features, so bear in mind what tissue you are working on and what these features mean.
 
@@ -255,6 +256,7 @@ But remember, for some tissue types, the amount of genes expressed and proportio
 Select all spots with less than 25% mitocondrial reads, less than 20% hb-reads and 1000 detected genes. You must judge for yourself based on your knowledge of the tissue what are appropriate filtering criteria for your dataset.
 
 ## Filtering
+
 ```{r filtering}
 ##########################
 # FILTER GENES AND CELLS #
@@ -292,6 +294,7 @@ DATA %>%
 ```
 
 ### Replotting QC after filtering
+
 ```{r 01f_QC_plot_filtered, fig.height=15}
 ############################
 # GGPLOT PLOT FILTERED OBJ #
@@ -301,6 +304,7 @@ DATA %>%
 ```
 
 ### And replot onto tissue section:
+
 ```{r 01g_filtered_spots, fig.height=8, fig.width=7}
 plots <- temp %>%
   mutate(group = orig.ident) %>%
@@ -320,6 +324,7 @@ combined
 ```
 
 ### Plot top expressed genes
+
 ```{r 01h_top_abundante_genes}
 #############################
 # GET TOP 20 ABUNDANT GENES #
@@ -364,6 +369,7 @@ col = (scales::hue_pal())(20)[20:1]
 ```
 
 ## Save seurat object
+
 ```{r save_SeuratObject}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
@@ -374,6 +380,7 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
 ```
 
 ### Session info
+
 ```{r}
 sessionInfo()
 ```
