@@ -46,6 +46,7 @@ knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/02/")
 ```
 
 ## Load data and libraries
+
 ```{r Load_Library_and_data}
 ##################
 # LOAD LIBRARIES #
@@ -67,8 +68,8 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-DATA <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
-#DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
+#DATA <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
 
 ```
 
@@ -96,6 +97,7 @@ my_theme <-
 ```
 
 ## Identify Highly Variable Genes (HVG) across samples
+
 ```{r Find_HVG}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
@@ -134,11 +136,13 @@ hig_var <- setdiff(hig_var, remove)
 ```
 
 ## Heatmap of HVG in all samples
+
 ```{r 02a_HVG_heatmap, fig.width=10}
 pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
 ```
 
 ## Integration
+
 ```{r Integration}
 ############
 # HARMONY #
@@ -169,6 +173,7 @@ DATA <- DATA %>%
 ```
 
 ## Plot before and after integration
+
 ```{r 02b_Plot_dim_reduction, fig.width=10, fig.height=6}
 plot_clusters.fun <- function(obj, cluster="sample_name", red = "umap_harmony", color = "Brew_all", lable = TRUE, title = NULL){
   if(color == "Brew_all"){
@@ -216,6 +221,7 @@ plot_grid(ncol = 2,
 ```
 
 ## Plot marker genes
+
 ```{r 02c_plot_marker_genes, fig.width=10}
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
@@ -273,6 +279,7 @@ plot_grid(ncol = 3,
 ```
 
 # Paulos base R code
+
 ```{r Paulos_HVG, eval=FALSE, include=FALSE}
 DATA.list <- SplitObject(DATA, split.by = "sample_name")
 
@@ -364,6 +371,7 @@ plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, label =
 ```
 
 ## Save seurat object
+
 ```{r save_SeuratObj}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
@@ -374,6 +382,7 @@ saveRDS(DATA, paste0(result_dir,"SeuratObj_harmony_filt.RDS"))
 ```
 
 ### Session info
+
 ```{r}
 sessionInfo()
 ```
