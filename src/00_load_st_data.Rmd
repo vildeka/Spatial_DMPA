@@ -280,11 +280,12 @@ meta <- meta %>%
   mutate(groups = ifelse(.$groups=="no HC", "ctrl", .$groups))
 
 DATA <-  DATA %>%
-  rename(sp_annot2="sp_annot") %>%
-  mutate(sp_annot = ifelse(grepl("epi_1|epi_2|epi_3", .$sp_annot2), "epi", .$sp_annot2 )) %>%
-  mutate(sp_annot = ifelse(grepl("SubMuc_1|SubMuc_2|SubMuc_3", .$sp_annot2), "SubMuc", .$sp_annot2 )) %>%
+  mutate(sp_annot2 = .$sp_annot) %>%
+  mutate(sp_annot = ifelse(grepl("epi", .$sp_annot2), "epi", 
+                           ifelse(grepl("SubMuc", .$sp_annot2), "SubMuc", .$sp_annot2 ))) %>%
   left_join(., meta, by="orig.ident") %>%
   select(groups, sp_annot, everything())
+
 ```
 
 ```{r Paulos_manual_annot, eval=FALSE, include=FALSE}
@@ -354,16 +355,30 @@ plot_spatial_meta(
     plot_tissue = T)
 ```
 
-```{r plot_spots_to_remove}
+```{r plot_sp_annot, fig.height=8, fig.width=7}
+DATA %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "sp_annot",
+          zoom = "zoom",
+          ncol = 2,
+          annot_line = .1,
+          img_alpha = 0,
+          point_size = 0.8
+        )
+```
+
+```{r plot_spots_to_remove, fig.height=8, fig.width=7}
 DATA %>%
   mutate(filt = ifelse(is.na(.$sp_annot),"filt","keep")) %>%
   plot_st_meta.fun(.,  
           assay="RNA",
           feat = "filt",
           zoom = "zoom",
+          ncol = 2,
           annot_line = .1,
           img_alpha = 0,
-          point_size = 0.5
+          point_size = 0.8
         )
 ```
 
