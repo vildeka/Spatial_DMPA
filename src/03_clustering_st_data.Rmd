@@ -1,5 +1,5 @@
 ---
-title: "Clustering reference data"
+title: "Clustering filtered ST data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 format:
   html:
@@ -14,9 +14,9 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(#fig.width = 6.6929133858,
     fig.path    = params$fig.path,
+    dev         = c("png", "pdf"),
+    #dpi         = 300,
     fig.align   = "center",
-    dev         = c("png"),
-    dpi         = 300,
     message     = FALSE,
     warning     = FALSE,
     fig.process = function(filename){
@@ -42,10 +42,11 @@ file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
 render_git_with_job(fig_path = "../Figures/03/")
 
 # kniter
-knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/03/")
+knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/03_filt/")
 ```
 
 ## Load data and libraries
+
 ```{r Load_Library_and_data}
 ##################
 # LOAD LIBRARIES #
@@ -70,6 +71,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 # LODA DATA #
 #############
 DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
+#DATA <- readRDS(paste0(input_dir,"seuratObj_harmony.RDS"))
 
 #################
 # COLOUR PALLET #
@@ -106,6 +108,7 @@ my_theme <-
 ```
 
 ## Clustering
+
 ```{r Clustering_resolution}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
@@ -177,7 +180,8 @@ DATA <- DATA %>%
 ```
 
 ### Plot clusters on tissue section:
-```{r 03b_sp_mt_plot_filt, fig.height=10}
+
+```{r 03b_sp_mt_plot_filt, fig.height=10, eval=FALSE, include=FALSE}
 plot_fun <- function(obj){
 p <- SpatialPlot(obj, 
             group.by = "Clusters", cols = clus,
@@ -219,10 +223,23 @@ legend <- get_legend(plots[[1]] + theme(legend.position="right"))
 combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
 combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
 combined
+
+############################
+# PLOT FACET WRAP CLUSTERS #
+############################
+plot_st_meta.fun( DATA,  # filter(spe, decon_columns[[..1]]=="1"), # removes spots with no % of given cell type
+        feat = "Clusters",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+        zoom = "zoom",
+        colors = clus,
+        #annot_col = "#dbd9d9",
+        annot_line = .1,
+        img_alpha = 0,
+        point_size = 0.5)
+      
 ```
 
+# Paulos Code
 
-# Paulos Code 
 ```{r Clustering, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
@@ -246,21 +263,24 @@ DATA <- SetIdent(DATA, value = "RNA_snn_res.1.5")
 ```
 
 ## Save seurat object
+
 ```{r save_SeuratObject}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
+ saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
+# saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 # DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
 ```
 
 ## Session info
+
 ```{r}
 sessionInfo()
 ```
 
-
 ### Paulo section
+
 ```{r eval=FALSE, include=FALSE}
 sample_names
 niceRplots::plot_spatial_feat(DATA, red = "P107", assay = "RNA", feat = "RNA_snn_res.1.5", plot_tissue = F)
