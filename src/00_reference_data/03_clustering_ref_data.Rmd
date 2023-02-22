@@ -38,7 +38,7 @@ library(harmony)
 # PATHS #
 #########
 input_dir <- "../../results/02_integrate_ref_data/"
-result_dir <- "../../results/03_integrate_ref_data/"
+result_dir <- "../../results/03_clustering_ref_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 
 #############
@@ -86,8 +86,6 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 # each time you run clustering, the data is stored in meta data columns:
 # seurat_clusters - lastest results only CCA_snn_res.XX - for each different
 # resolution you test.
-
-seuratObj <- SetIdent(seuratObj, value = "RNA_snn_res.1.5")
 
 ```
 
@@ -141,6 +139,42 @@ p <- map(res, ~plot_clusters.fun(seuratObj, cluster=.x))
 plot_grid(ncol = 2, 
          plotlist = p)
 
+
+seuratObj <- seuratObj %>%
+  rename(Clusters="RNA_snn_res.1.5") %>%
+  SetIdent(., value = "Clusters") %>%
+  select(-starts_with("RNA_snn_res."))
+
+```
+
+```{r Convert_to_anndata, eval=FALSE, include=FALSE}
+library(SeuratDisk)
+# seuratObj <- readRDS(paste0(result_dir,"seuratObj_Li_Y_harmony.RDS"))
+SaveH5Seurat(seuratObj, filename = paste0(result_dir,"Li_Y_integrated.h5Seurat"))
+Convert(paste0(result_dir,"Li_Y_integrated.h5Seurat"), dest = "h5ad")
+```
+
+# Paulos Code 
+```{r Clustering, eval=FALSE, include=FALSE}
+##################################
+# EVALUATE CLUSTERING RESOLUTION #
+##################################
+seuratObj <- FindNeighbors(seuratObj, reduction = "harmony", dims = 1:30, k.param = 20, prune.SNN = 1/15) 
+
+for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+    seuratObj <- FindClusters(seuratObj, graph.name = "RNA_snn", resolution = res, algorithm = 1)
+}
+
+library(niceRplots)
+plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.1.5", cex = 0.5, label = T)
+plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.2", cex = 0.5, label = T)
+
+# plot_grid(ncol = 3, DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.0.5") +
+#     ggtitle("leiden_0.5"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.1") +
+#     ggtitle("leiden_1"), DimPlot(seuratObj, reduction = "umap", group.by = "RNA_snn_res.2") +
+#     ggtitle("leiden_2"))
+
+seuratObj <- SetIdent(seuratObj, value = "RNA_snn_res.1.5")
 ```
 
 ## Save seurat object
@@ -150,13 +184,6 @@ plot_grid(ncol = 2,
 ##################################
 saveRDS(seuratObj, paste0(result_dir,"seuratObj_clustered.RDS"))
 # seuratObj<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
-```
-
-```{r Convert_to_anndata, eval=FALSE, include=FALSE}
-library(SeuratDisk)
-# seuratObj <- readRDS(paste0(result_dir,"seuratObj_Li_Y_harmony.RDS"))
-SaveH5Seurat(seuratObj, filename = paste0(result_dir,"Li_Y_integrated.h5Seurat"))
-Convert(paste0(result_dir,"Li_Y_integrated.h5Seurat"), dest = "h5ad")
 ```
 
 ## Session info

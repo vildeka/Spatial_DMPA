@@ -15,7 +15,7 @@ knitr::opts_chunk$set(#fig.width = 6.6929133858,
                       fig.align="center",
                       message    = FALSE,
                       warning    = FALSE)
-# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data/")
 ```
 
 ## Load data and libraries
@@ -34,14 +34,14 @@ library(cowplot)
 #########
 input_dir <- "../../results/03_clustering_ref_data/"
 result_dir <- "../../results/04_DGE_ref_data/"
-marker_dir <- "./Marker_genes/"
+marker_dir <- "./marker_genes/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) }
 
 #############
 # LODA DATA #
 #############
-seuratObj <- readRDS(paste0(input_dir,"seuratObj_clustered.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_clustered.RDS"))
 
 ```
 
@@ -49,7 +49,7 @@ seuratObj <- readRDS(paste0(input_dir,"seuratObj_clustered.RDS"))
 #######################
 # PLOT GENES FUNCTION #
 #######################
-# obj <- seuratObj
+# obj <- DATA
  # gene <- sym("CTSK")
 plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony", lable = TRUE){
   gene <- sym(gene)
@@ -108,7 +108,7 @@ plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony"
 ##########################
 # PLOT CLUSTERS FUNCTION #
 ##########################
-# obj <- seuratObj
+# obj <- DATA
 # cluster <- sym("RNA_snn_res.0.1")
 plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
   if(color == "Brew_all"){
@@ -177,7 +177,7 @@ my_theme <-
 ## Identify marker genes to seperate clusters
 ```{r Find_marker_genes}
 # Compute differential expression one clusters against rest 
-markers_genes <- seuratObj %>%
+markers_genes <- DATA %>%
   FindAllMarkers(.,
     log2FC.threshold = 0.1, 
     test.use = "wilcox",
@@ -192,15 +192,6 @@ markers_genes <- seuratObj %>%
 #markers_genes$log.pct.diff <- -log2(markers_genes$pct.2/markers_genes$pct.1)
 ```
 
-## Save seurat object
-```{r save_SeuratObject}
-###########################
-# SAVE INTERMEDIATE OJECT #
-###########################
-# saveRDS(markers_genes, paste0(result_dir,"markers_genes.RDS"))
-# markers_genes <- readRDS(paste0(result_dir,"markers_genes.RDS"))
-```
-
 ```{r Get_best_markrs}
 # Get difference in expression between one cluster and the rest
 markers_genes <- markers_genes %>%
@@ -211,8 +202,14 @@ markers_genes <- markers_genes %>%
 top25 <- markers_genes %>%
   group_by(cluster) %>%
   top_n(-40, p_val_adj) %>%
-  top_n(20, pct.diff) %>%
-  top_n(10, log.pct.diff) 
+  top_n(20, pct.diff) #%>%
+  #top_n(10, log.pct.diff) 
+
+top25 <- markers_genes %>%
+  group_by(cluster) %>%
+  top_n(-40, p_val_adj) %>%
+  top_n(30, pct.diff) %>%
+  top_n(20, log.pct.diff) 
 
 # remove all VDJ-genes from list of HVG
 remove <- str_subset(top25$gene, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
@@ -229,6 +226,23 @@ top25 <- top25 %>%
 # top25[grep("NCR1",top25$gene),]
 ```
 
+## Save Marker genes object
+```{r save_SeuratObject}
+###########################
+# SAVE MARKER GENES TABLE #
+###########################
+# saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
+# saveRDS(markers_genes, paste0(result_dir,"markers_genes.RDS"))
+# markers_genes <- readRDS(paste0(result_dir,"markers_genes.RDS"))
+```
+
+```{r}
+p <- DotPlot(DATA, features = rev(as.character(unique(top25$gene))), 
+        group.by = "Clusters",
+    assay = "RNA") + coord_flip()
+
+ggsave("./dotplot_.pdf", p, height = 90, width = 10, limitsize = FALSE)
+```
 
 ```{r 04a_barplot_top25, fig.width=10, , fig.height=6}
 pdf(paste0(marker_dir,"top_DEG.pdf"), #width = 4*10*300, height = 30*4*300#, res = 300
@@ -252,7 +266,7 @@ for (i in unique(top25$cluster)[1:10]) {
 ```{r graph_plot_top25, fig.width=10, fig.height=10}
 col=c("grey90","grey80","grey60","navy","black")
 
-clus_plot <- plot_clusters.fun(seuratObj, cluster="RNA_snn_res.1.5") + theme_void() + NoLegend()
+clus_plot <- plot_clusters.fun(DATA, cluster="Clusters") + theme_void() + NoLegend()
 
 grid_genes <- function(plot_list, title){
   title <- ggdraw() + draw_label(paste0("Top 10 Markers for Cluster ", title), fontface='bold')
@@ -263,7 +277,7 @@ grid_genes <- function(plot_list, title){
 }
 
 plots <- imap(top25_gr, "gene") %>%
-  map(., map, ~plot_genes.fun(seuratObj, .x, lable = "RNA_snn_res.1.5"))
+  map(., map, ~plot_genes.fun(DATA, .x, lable = "Clusters"))
 
 cluster_markers <- plots %>%
   map(., ~c("Clusters"=list(clus_plot), .x)) %>%
@@ -285,7 +299,7 @@ for(df in top25_gr){
     png(paste0(name,"out_gr.png"), width = 4*10*300, height = 30*4*300, res = 300)
   #par(mfrow=c(30,10), mar=c(1,1,1,1))
     par(mfrow=c(6,4), mar=c(1,1,1,1))
-    plot_feat(seuratObj, 
+    plot_feat(DATA, 
               red = "umap_harmony", 
               feat = gene, cex = 0.5, 
               label = "RNA_snn_res.1.5"
@@ -295,7 +309,7 @@ for(df in top25_gr){
 }
 dev.off()
 
-plot_feat(seuratObj, 
+plot_feat(DATA, 
               red = "umap_harmony", 
               feat = "CTSK", cex = 0.5, 
               label = "RNA_snn_res.1.5"
@@ -315,7 +329,7 @@ png("out_.png", width = 4*10*300, height = 30*4*300, res = 300)
 par(mfrow=c(30,10), mar=c(1,1,1,1))
 #par(mfrow=c(2,4), mar=c(1,1,1,1))
 for(i in top25$gene[1:200]){
-  plot_feat(seuratObj, red = "umap_harmony", feat = i, cex = 0.5, label = "RNA_snn_res.1.5"#, add_legend=T
+  plot_feat(DATA, red = "umap_harmony", feat = i, cex = 0.5, label = "Clusters"#, add_legend=T
             )
 }
 dev.off()

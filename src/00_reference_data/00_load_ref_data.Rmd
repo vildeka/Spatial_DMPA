@@ -182,7 +182,7 @@ merged_Seurat <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratOb
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
 saveRDS(merged_Seurat, paste0(result_dir,"seuratObj_merged.RDS"))
-# merged_Seurat <- readRDS(paste0(result_dir,"seuratObj_list_not_modified.RDS"))
+# merged_Seurat <- readRDS(paste0(result_dir,"seuratObj_merged.RDS"))
 ```
 
 ### Session info
