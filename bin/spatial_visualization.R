@@ -52,19 +52,19 @@ geom_spatial <-  function(mapping = NULL,
 # sampleid = c("P105")
 
 plot_spatial.fun <- function(
-  spe,
-  assay="RNA",
-  sp_annot = TRUE,
-  sampleid = c("P080"),
-  geneid = "CDH1", #"LINC01135",# "nFeature_RNA"
-  title = " ",
-  image_id = "hires",
-  alpha = 1,
-  spectral = TRUE,
-  colors = NULL, # lightgray
-  point_size = 1.75,
-  img_alpha = .5,
-  zoom = NULL ) {
+    spe,
+    assay="RNA",
+    sp_annot = TRUE,
+    sampleid = c("P080"),
+    geneid = "CDH1", #"LINC01135",# "nFeature_RNA"
+    title = " ",
+    image_id = "hires",
+    alpha = 1,
+    spectral = TRUE,
+    colors = NULL, # lightgray
+    point_size = 1.75,
+    img_alpha = .5,
+    zoom = NULL ) {
   
   # Set default assay
   DefaultAssay(spe) <- assay
@@ -96,7 +96,7 @@ plot_spatial.fun <- function(
                        RColorBrewer::brewer.pal(8,"Accent"),
                        
                        RColorBrewer::brewer.pal(8,"Pastel2") )
-      }else{disc_colors <- colors}
+    }else{disc_colors <- colors}
     colour_pallet <- scale_fill_manual(values = disc_colors)
     guides <- guides(fill = guide_legend(override.aes = list(size=3), keyheight = .7))
   }
@@ -268,6 +268,7 @@ my_theme <-
 ################
 # VIOLIN PLOT #
 ################
+# https://stackoverflow.com/questions/35717353/split-violin-plot-with-ggplot2
 violin.fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, n=2){
   m <- max(obj[[feature]])/n
   obj %>%
@@ -368,7 +369,8 @@ plot_st_meta.fun <- function(
     rownames_to_column(var = "barcode") %>%
     as_tibble() 
   
-  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID)
+  gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
+  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
   
   # select viewframe:
   if (!(is.null(zoom))){
@@ -390,7 +392,7 @@ plot_st_meta.fun <- function(
     # set image alpha:
     im <- map(ID, ~pluck(spe@images, .x, "image")) 
     im <- map(im, ~ matrix(
-        rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
     
     img <- map(im, ~as.raster(.x))
     img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
@@ -400,7 +402,7 @@ plot_st_meta.fun <- function(
     images_tibble <- tibble(sample=factor(ID), grob=grob, orig.ident = ID)
     
     spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)
-    }
+  }
   
   
   else{spatial_image <- NULL}
@@ -411,7 +413,7 @@ plot_st_meta.fun <- function(
       filter(.$colour == "black")
     spatial_annotation <- geom_path(
       data=tools, 
-      show.legend = FALSE, size = annot_line,
+      show.legend = FALSE, linewidth = annot_line,
       aes(x=x, y=y, #colour=colour,
           group=interaction(elem_idx)),colour=annot_col)
   }
@@ -428,9 +430,10 @@ plot_st_meta.fun <- function(
     coord_cartesian(expand=FALSE ) + #theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F) + # sample ID
+    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0) + # sample ID
+    geom_text(aes(label = gr, x=x, y=y+55), data = text_annot, inherit.aes = F, hjust = 0, size = 3) + # condition
     facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
-    #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
+  #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
   #Hexagon shape:
   # p <- p +
@@ -444,8 +447,8 @@ plot_st_meta.fun <- function(
   p <- p +
     xlab("") +
     ylab("") +
-
-    theme_set(theme_bw(base_size = 10))+
+    
+    theme_set(theme_bw(base_size = 8))+
     guides+
     theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
           #rect = element_rect(fill = "transparent"),
@@ -461,9 +464,9 @@ plot_st_meta.fun <- function(
           plot.background = element_rect(fill = "transparent", colour = NA),
           strip.background = element_blank(),
           strip.text.x = element_blank()
-          ) 
-    #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
-    
+    ) 
+  #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
+  
   return(p)
 }
 
@@ -472,9 +475,9 @@ plot_st_meta.fun <- function(
 ##################################
 # orig.ident = sym("orig.ident")
 # spe <- DATA_st
-# geneid <- sym("CDH1")
+# geneid <- sym("IGKC")
 # zoom <- sym("zoom")
-# assay="SCDC"
+# assay="RNA"
 # img_alpha = 0
 # colors=c("grey90","grey80","grey60","navy","black")
 
@@ -530,13 +533,13 @@ plot_st_feat.fun <- function(
     #select(1:3, feat, !!(gene)) %>%
     mutate(feat_val = !!(gene)) %>%
     mutate(!!(gene) := round(.$feat*98)+1) #%>%
-    #mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) 
-    
-
+  #mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) 
+  
+  
   # get scale factor:
   scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
   # get all spot coordinates:
-  df_ <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
+  df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
     map2(., scale_fact, ~mutate(.x, scale_fact = .y)) %>%
     bind_rows() %>%
     mutate(imagecol = .$imagecol * .$scale_fact) %>%
@@ -552,7 +555,9 @@ plot_st_feat.fun <- function(
     as_tibble() %>%
     arrange(feat_val) 
   
-  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, )
+  gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
+  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
+  #text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, )
   
   # select viewframe:
   if (!(is.null(zoom))){
@@ -591,11 +596,13 @@ plot_st_feat.fun <- function(
   
   ## Spatial annotation:
   if(sp_annot){
-    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(.) %>%
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% 
+      bind_rows(., .id = "orig.ident") %>%
+      #bind_rows(.) %>%
       filter(.$colour == "black")
     spatial_annotation <- geom_path(
       data=tools, 
-      show.legend = FALSE, size = annot_line,
+      show.legend = FALSE, linewidth = annot_line,
       aes(x=x, y=y, #colour=colour,
           group=interaction(elem_idx)),colour=annot_col)
   }
@@ -615,7 +622,8 @@ plot_st_feat.fun <- function(
     coord_cartesian(expand=FALSE ) + #theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F) + # sample ID
+    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0) + # sample ID
+    geom_text(aes(label = gr, x=x, y=y+55), data = text_annot, inherit.aes = F, hjust = 0, size = 3) + # condition
     facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
   #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
