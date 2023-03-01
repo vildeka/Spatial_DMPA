@@ -1,5 +1,5 @@
-# Clustering filtered ST data
-
+Clustering filtered ST data
+================
 3/1/23
 
 ## Load data and libraries
@@ -143,13 +143,12 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
 p <- map(res, ~plot_clusters.fun(DATA, cluster=.x))
 plot_grid(ncol = 2, 
-         plotlist = p)
+          plotlist = p)
 ```
 
-```{=html}
 <img src="../Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
-```
+
 ``` r
 DATA <- DATA %>%
   rename(Clusters="RNA_snn_res.1.5") %>%
@@ -192,10 +191,10 @@ plot_st_meta.fun( DATA,  # filter(spe, decon_columns[[..1]]=="1"), # removes spo
         #annot_col = "#dbd9d9",
         annot_line = .1,
         img_alpha = 0,
-        point_size = 0.5)
+        point_size = 1.4)
 ```
 
-<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center"/>
+<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
