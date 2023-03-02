@@ -30,7 +30,7 @@ knitr::opts_chunk$set(
 
 ```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
-file_name <- "./03_cluster_st_data.md"
+file_name <- "./03_clustering_st_data.md"
 lab_dir <- "../lab_book/03_cluster_st_data"
 
 file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
@@ -44,7 +44,7 @@ render_git_with_job(fig_path = "./Figures/03/")
 # Change the figure path from ./Figures/03/ to ../Figures/03/:
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0(dirname(rmd_path),"/md_files/",out_file)))
+                 paste0("./md_files/", basename(file_name))))
 
 # kniter
 knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/03_filt/")
