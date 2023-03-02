@@ -328,31 +328,19 @@ plot_st_meta.fun <- function(
   }
   
   ## Colour pallets:
-  # This is old part where dicrete and continuous was in the same function. 
-  # I might change this later
-  if (is.numeric(pull(spe, feat))){
-    if (is.null(colors)){
-      #cont_colors <- c("grey90", "mistyrose", "red", "dark red", "black")
-      myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
-      cont_colors <- myPalette(100)
-    }else{cont_colors <- colors}
-    colour_pallet <- list(scale_fill_gradientn(colours = cont_colors), 
-                          scale_color_gradientn(colours = cont_colors))
-    guides <- NULL
-  }else{
-    if (is.null(colors)){
-      # scales::show_col(disc_colors)
-      disc_colors <- c(RColorBrewer::brewer.pal(9,"Pastel1"),
-                       RColorBrewer::brewer.pal(9,"Set1"),
-                       scales::hue_pal()(8),
-                       RColorBrewer::brewer.pal(8,"Set2"),
-                       RColorBrewer::brewer.pal(8,"Accent"),
-                       
-                       RColorBrewer::brewer.pal(8,"Pastel2") )
-    }else{disc_colors <- colors}
-    colour_pallet <- scale_fill_manual(values = disc_colors)
-    guides <- guides(fill = guide_legend(override.aes = list(size=3), keyheight = .7))
-  }
+  if (is.null(colors)){
+    # scales::show_col(disc_colors)
+    disc_colors <- c(RColorBrewer::brewer.pal(9,"Pastel1"),
+                     RColorBrewer::brewer.pal(9,"Set1"),
+                     scales::hue_pal()(8),
+                     RColorBrewer::brewer.pal(8,"Set2"),
+                     RColorBrewer::brewer.pal(8,"Accent"),
+                     
+                     RColorBrewer::brewer.pal(8,"Pastel2") )
+  }else{disc_colors <- colors}
+  colour_pallet <- scale_fill_manual(values = disc_colors, aesthetics = c("colour"))
+  guides <- guides(#fill = guide_legend(override.aes = list(size=2), keyheight = .5),
+                   colour = guide_legend(override.aes = list(size=2), keyheight = .5))
   
   # get all spot coordinates:
   scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
@@ -414,15 +402,14 @@ plot_st_meta.fun <- function(
     spatial_annotation <- geom_path(
       data=tools, 
       show.legend = FALSE, linewidth = annot_line,
-      aes(x=x, y=y, #colour=colour,
-          group=interaction(elem_idx)),colour=annot_col)
+      aes(x=x, y=y, group=interaction(elem_idx)), colour=annot_col)
   }
   else{spatial_annotation <- NULL}
   #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
   
   p <- ggplot() +
-    geom_point(data=df, aes(x=imagecol,y=imagerow, fill=.data[[feat]], colour=.data[[feat]]),
-               shape = 21, stroke = 0, size = point_size, alpha = alpha) + 
+    geom_point(data=df, aes(x=imagecol,y=imagerow, colour = .data[[feat]]), #fill=.data[[feat]], 
+               shape = 16, size = point_size, alpha = alpha) + #stroke = 0, 
     colour_pallet +
     spatial_image + 
     spatial_annotation + 
@@ -430,8 +417,8 @@ plot_st_meta.fun <- function(
     coord_cartesian(expand=FALSE ) + #theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+55), data = text_annot, inherit.aes = F, hjust = 0, size = 3) + # condition
+    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
+    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
     facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
   #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
@@ -622,8 +609,8 @@ plot_st_feat.fun <- function(
     coord_cartesian(expand=FALSE ) + #theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+55), data = text_annot, inherit.aes = F, hjust = 0, size = 3) + # condition
+    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
+    geom_text(aes(label = gr, x=x, y=y+80), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
     facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
   #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
