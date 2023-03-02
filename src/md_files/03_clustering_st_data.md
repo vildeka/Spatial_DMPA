@@ -1,6 +1,6 @@
 Clustering filtered ST data
 ================
-3/1/23
+3/2/23
 
 ## Load data and libraries
 
@@ -141,12 +141,12 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 
 ``` r
 res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
-p <- map(res, ~plot_clusters.fun(DATA, cluster=.x))
+p <- map(res, ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7))
 plot_grid(ncol = 2, 
           plotlist = p)
 ```
 
-<img src="../Figures/03/03a_plot_resolution.png"
+<img src="./Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
 
 ``` r
@@ -158,6 +158,7 @@ DATA <- DATA %>%
 ### Plot clusters on tissue section:
 
 ``` r
+# fig.height=6, fig.width=13, 
 #is.character(pull(DATA, RNA_snn_res.1.5))
 
 # Old single image version of function:
@@ -181,20 +182,22 @@ DATA <- DATA %>%
 # combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
 # combined
 
+# Horizontal 
+# dev.new(width=6, height=2.6, noRStudioGD = TRUE)
 ############################
 # PLOT FACET WRAP CLUSTERS #
 ############################
-plot_st_meta.fun( DATA,  # filter(spe, decon_columns[[..1]]=="1"), # removes spots with no % of given cell type
+(p <- plot_st_meta.fun( DATA,  # filter(spe, decon_columns[[..1]]=="1"), # removes spots with no % of given cell type
         feat = "Clusters",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
         zoom = "zoom",
         colors = clus,
         #annot_col = "#dbd9d9",
         annot_line = .1,
         img_alpha = 0,
-        point_size = 1.4)
+        point_size = .25))
 ```
 
-<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
+<img src="./Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
