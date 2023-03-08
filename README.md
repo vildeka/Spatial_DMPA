@@ -1,65 +1,99 @@
-# Project template to start a new computational project
-### Our suggestion for project organisation and better reproducibility
-
-## General info
-This repository contains our idea project directory structure to make computational research projects within our group easier to work with and more reproducible. This project structure is currently our best suggestion but we are happy for suggestions and discussions.
+# Spatial_DMPA analysis and figures
 
 ## Table of contents
-* [General info](#general-info)
-* [Repo description](#repo-description)
-* [Getting started](#getting-started)
-* [Initiating your R environment (Reproducibility feature)](#init_renv)
-* [Create R markdowns from template (Reproducibility feature)](#markdown)
-* [Thoughts and Comments](#thoughs-comments)
 
+-   [General info](#general-info)
+-   [Dependencies](#dependencies)
+-   [Data Availability Statment](#data-availability-statment)
+-   [Repo description](#repo-description)
+-   [Omics integration](#omics-integration)
+-   [Setup](#setup)
 
-## Repo description
-This repository provides a template for new computational projects. It contains a pre-defined structure, as well as some features for reproducible research using an R project and version control via GitHub.
-  * Pre-defined directory structure with readme files
-  * Description on how to connect a template-based repository with rstudio
-  * Several features to help analysis reproducibility
+## General info {#general-info}
 
-<a name="getting-started"></a>
-## :technologist: Getting started
+Publication: "Name"\
+doi:
 
-### Creating a your own repository from this repository template
-1.	Create a new GitHub repository based on [this template](https://github.com/LautenbachMJ/project_template). Click on the green button (“Use this template”). Give it a appropriate name. You may want to set your repository to private if (otherwise everyone can see your code). You can make the repository available to colleagues by adding them as collaborators to the project.
+This project used multiple datasets: 
+- Spatial transcriptomics data (10x Visium)
+- Transcriptomics data (bulk mRNA-SEQ)
+- Microbiota data (16S) 
+- Protein data (bead-based affinity assay)
+- Cytokine data
 
-2. Go to your new repository and copy the url (green button “Code”). You should have copied something like `https://github.com/yourGitHubName/yourRepoName.git`.
- 
-### Connecting your GitHub Repository to your RStudio project
-3.	You can do this either in RStudio or in the terminal. When using RStudio, click on (```File/New Project..```) in the menu bar. Then select "from VersionControl" and "Git". Paste the copied URL and give the respository a name. This will connect your GitHub repository to your R project and allows version control.
+## Dependencies {#dependencies}
 
+Project is created with:
 
-**Note: From now on, everything described below will be executed in RStudio**
+- R version: 4.1.2
+- RStudio version: 1.4.1106 (use version seperate from conda env.)
+- renv version: 0.15.2
 
-<a name="init_renv"></a>
-## Initiating your R environment (Reproducibility feature)
-`src/project_init.R` Run the script to initiate the R environment and connect it to the R Project. Consent with **yes** when asked.
-  * From now, all of your used r packages and dependencies will now be recorded in the ```renv.loc``` file when you execute ```renv::snapshot()```.
-  * It is recomended to always use ```ren::hydrate()``` when installing new packages to your project enviroment. It will retrive the packages if allready installed on your computer, or install it from the CRAN r repository if missing. The packages that don't exists on CRAN have to be installed as usuall with ```install.packages()```
-## Create R markdowns from template (Reproducibility feature)
-`src/template_markdown.Rmd` Creating markdowns from this template will give you several reproducibility friendly feature:
-  * Automatic connection to your environment (renv)
-  * Automatic report generation for your lab book
-  * Automatic result organisation in date directories
+## Data Availability Statement
 
-### 1. Automatic connection to your environment (renv)
-Changes in your environment, e.g. by installing new packages, have to be capture by executing `renv::snapshot()` inside your R markdown.
+**Microbiome sequencing data** for this study has been deposited in the
+European Nucleotide Archive (ENA) at EMBL-EBI under accession number
+PRJEB50325. The raw counts table with taxonomic annotation can be
+downloaded from Suppl. Table X
 
-### 2. Automatic report generation for your lab book
-When knitting your markdown, e.g. by clicking **knitr** button, the resulting html file will be saved under ```results/labbook/``` with the markdown-file-name and the date when you knitted it.
-These reports can be append to your actual lab book or easily used to show and discuss results with your colleagues.
-To create really nice markdown reports, please see inside the template and check the [R Markdown cheat sheet](https://github.com/rstudio/cheatsheets/raw/master/rmarkdown-2.0.pdf) or interactively [here](https://markdown-it.github.io/).
+**Transcriptomics count data** files can be accessed in the Gene
+Expression Omnibus public repository, SuperSeries ID GSE217237. The raw
+transcriptomic sequencing data cannot be held in a public repository due
+to the sensitive nature of such personal data. Request for data access
+can be made to the Karolinska Institutet Research Data Office (contact
+via rdo\@ki.se), and access will be granted if the request meets the
+requirements of the data policy.
 
+**Protein data** is previously published in doi:
+[10.1371/journal.ppat.1010494](https://doi.org/10.1371/journal.ppat.1010494.s017)\
+**Cytokine data** Can be downloaded from Suppl. Table x here\
+**Sociodemographic and clinical characteristics** Can be downloaded from
+Suppl. Table x here
 
-### 3. Automatic result organisation in date directories
-In order to save your results, e.g. plots and data, in an organised way, you can specify the the path to inside your markdown to ```result.dir```. Doing so will save your results into the directory `results/date-of-analysis/`.
+## Repo description {#repo-description}
 
-  **Note:** The working directory of your markdown is located in ```src/```. To direct results into the result directory you can use:
-    `paste0("../",result.dir,"your_result.pdf")`.
+-   **src**\
+    contains all the analysis script including all preprocessing steps
+-   **manuscript**\
+    reproducible code for figures included in the manuscript
+-   **data**\
+    Contains ...
 
+<!-- -->
 
-<a name="thoughs-comments"></a>
-## :thought_balloon: Thoughts and Comments
-If you have any thoughts and comments, let us know!
+    project
+    │   README.md
+    │   renv.loc    
+    └───src
+    │   │   00_Preprocessing.Rmd
+    │   │   02_Analysis.Rmd
+    │   │   ...
+    │   └───manuscript
+    │       │   Figure01.Rmd
+    │       │   Figure02.Rmd
+    │       │   ...
+    └───bin
+    │   │   file021.txt
+    │   │   file022.txt
+    └───data
+    │   │   file021.txt
+    │   │   file022.txt
+    │
+
+## Omics integration {#omics-integration}
+
+## Setup {#setup}
+
+There are two ways to run this project:
+
+Conda + renv
+
+1.  Clone the repo
+2.  If not already installed download mini conda/conda
+3.  In the terminal navigate to the project directory
+4.  create a new enviroment:<br/>
+    `conda env create -n Spatial_DMPA -f environment.yml`
+5.  Activate the enviroment:<br/> `conda activate Spatial_DMPA`
+6.  Open Rstudio:<br/> `rstudio& Spatial DMPA`
+7.  Install all packages specified by the lockfile:<br/>
+    `renv::restore()`
