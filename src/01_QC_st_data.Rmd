@@ -277,13 +277,6 @@ sapply(DATA@meta.data[feature], summary) %>%
   knitr::kable(digits = 1)
 ```
 
-### filtered spots
-```{r filtered-spots}
-temp %>%
-  filter(filt == "filt") %>%
-  arrange(nFeature_RNA)
-```
-
 ### Plotting QC after filtering
 ```{r 01e_QC_plot_filtered, fig.height=15}
 # dev.new(width=8, height=10, noRStudioGD = TRUE)
@@ -307,6 +300,16 @@ p_ <-  map(feature, ~violin.fun(temp, .x, fill="orig.ident", col_pal=friendly_co
 ################################
 p <-  map(feature, ~violin.fun(DATA, .x, fill="orig.ident", col_pal=friendly_cols, n=1))
 plot_grid(plotlist=c(p_, p), nrow = 5, byrow = F)
+```
+
+### filtered spots
+```{r filtered-spots}
+temp %>%
+  filter(filt == "filt") %>%
+  arrange(nFeature_RNA) %>%
+  as_tibble() %>%
+  select(-sp_annot2) %>%
+  knitr::kable(digits = 1)
 ```
 
 ### Plot filtered spots
