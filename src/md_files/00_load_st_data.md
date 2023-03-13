@@ -1,6 +1,6 @@
 Load Spatial data
 ================
-3/9/23
+3/13/23
 
 ### Load packages
 
@@ -20,17 +20,27 @@ library(sp)
 source("../bin/help_functions.R")
 source("../bin/spatial_visualization.R")
 
+#################
+# COLOR PALETTS #
+#################
+pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
+         RColorBrewer::brewer.pal(9,"Pastel1"),
+         RColorBrewer::brewer.pal(8,"Accent"),
+         RColorBrewer::brewer.pal(8,"Set2"),
+         RColorBrewer::brewer.pal(8,"Pastel2") ,
+         scales::hue_pal()(8)),99)
+```
+
+### Load ST data
+
+``` r
 #########
 # PATHS #
 #########
 input_dir <- "../data/spatial_data"
 result_dir <- "../results/00_load_st_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
-```
 
-### Load ST data
-
-``` r
 #############
 # LODA DATA #
 #############
@@ -59,16 +69,6 @@ seuratObj_list <- pmap(list(h5_files, image, names(h5_files)),
 
 sample_id <- c("P031", "P080", "P097", "P105", "P107", "P108", "P114", 
 "P118") %>% set_names()
-
-#################
-# COLOR PALETTS #
-#################
-pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
-         RColorBrewer::brewer.pal(9,"Pastel1"),
-         RColorBrewer::brewer.pal(8,"Accent"),
-         RColorBrewer::brewer.pal(8,"Set2"),
-         RColorBrewer::brewer.pal(8,"Pastel2") ,
-         scales::hue_pal()(8)),99)
 ```
 
 ``` r
@@ -175,7 +175,7 @@ DATA
 ```
 
     # A Seurat-tibble abstraction: 6,700 × 5
-    # [90mFeatures=36601 | Cells=6700 | Active assay=RNA | Assays=RNA[0m
+    # [90mFeatures=36601 | Cells=6700 | Active assay=RNA | Assays=RNA[0m
        .cell                 orig.ident nCount_RNA nFeature_RNA sp_annot
        <chr>                 <chr>           <dbl>        <int> <chr>   
      1 P031_AAACGAGACGGTTGAT P031              463          356 SubMuc  
@@ -289,8 +289,7 @@ DATA %>%
         )
 ```
 
-<img src="../Figures/00/add-missing-sp-annot.png"
-data-fig-align="center" />
+<img src="../Figures/00/plot_new_sp_annot.png" data-fig-align="center" />
 
 ## Plot spots to be removed
 
@@ -336,7 +335,7 @@ DATA
 ```
 
     # A Seurat-tibble abstraction: 6,612 × 7
-    # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
+    # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
        .cell                 groups sp_annot orig.ident nCount_RNA nFeatur…¹ sp_an…²
        <chr>                 <chr>  <chr>    <chr>           <dbl>     <int> <chr>  
      1 P031_AAACGAGACGGTTGAT ctrl   SubMuc   P031              463       356 SubMuc 

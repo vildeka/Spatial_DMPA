@@ -54,7 +54,7 @@ knitr::opts_chunk$set(
 
 ### Load packages
 
-```{r Load data, message=FALSE, warning=FALSE}
+```{r Load-libraries, message=FALSE, warning=FALSE}
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -70,15 +70,18 @@ library(sp)
 source("../bin/help_functions.R")
 source("../bin/spatial_visualization.R")
 
-#########
-# PATHS #
-#########
-input_dir <- "../data/spatial_data"
-result_dir <- "../results/00_load_st_data/"
-if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+#################
+# COLOR PALETTS #
+#################
+pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
+         RColorBrewer::brewer.pal(9,"Pastel1"),
+         RColorBrewer::brewer.pal(8,"Accent"),
+         RColorBrewer::brewer.pal(8,"Set2"),
+         RColorBrewer::brewer.pal(8,"Pastel2") ,
+         scales::hue_pal()(8)),99)
 ```
 
-```{r Paulos_read_data, eval=FALSE, include=FALSE}
+```{r Paulos-read-data, eval=FALSE, include=FALSE}
 Read10X_Image2 <- function (image.dir, filter.matrix = TRUE, ...) { 
   image <- png::readPNG(source = file.path(image.dir, "tissue_hires_image.png"))
     scale.factors <- jsonlite::fromJSON(txt = file.path(image.dir, "scalefactors_json.json"))
@@ -132,7 +135,14 @@ rm(image)
 
 ### Load ST data
 
-```{r Load_data}
+```{r Load-data}
+#########
+# PATHS #
+#########
+input_dir <- "../data/spatial_data"
+result_dir <- "../results/00_load_st_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
 #############
 # LODA DATA #
 #############
@@ -162,15 +172,6 @@ seuratObj_list <- pmap(list(h5_files, image, names(h5_files)),
 sample_id <- c("P031", "P080", "P097", "P105", "P107", "P108", "P114", 
 "P118") %>% set_names()
 
-#################
-# COLOR PALETTS #
-#################
-pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
-         RColorBrewer::brewer.pal(9,"Pastel1"),
-         RColorBrewer::brewer.pal(8,"Accent"),
-         RColorBrewer::brewer.pal(8,"Set2"),
-         RColorBrewer::brewer.pal(8,"Pastel2") ,
-         scales::hue_pal()(8)),99)
 ```
 
 ```{r, Clean_SeuratObj}
@@ -194,7 +195,7 @@ DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)]
 ```
 
 # Load morphology annotation
-```{r Manual_annot}
+```{r Manual-annot}
 ##########################
 # ADD MANUAL ANNOTATION #
 #########################
@@ -277,7 +278,7 @@ DATA
 
 ## add meta info
 
-```{r add_groups}
+```{r add-groups}
 meta <- meta %>%
   select(orig.ident="ID", groups=Contraception) %>%
   mutate(groups = ifelse(.$groups=="no HC", "ctrl", .$groups))
@@ -291,7 +292,7 @@ DATA <-  DATA %>%
 
 ```
 
-```{r Paulos_manual_annot, eval=FALSE, include=FALSE}
+```{r Paulos-manual-annot, eval=FALSE, include=FALSE}
 ##########################
 # ADD MANUAL ANNOTATION #
 #########################
@@ -372,7 +373,7 @@ DATA %>%
 ```
 
 ### Identify spots with missing morphology annotation
-```{r Manuall-annotation, }
+```{r Manuall-annotation }
 ##########################
 # SP MANUAL ANNOTATION #
 #########################
@@ -419,7 +420,7 @@ f <- df %>%
 ```
 
 ### Add missing morphology annotation
-```{r add-missing-sp-annot, fig.height=8, fig.width=7}
+```{r plot_new_sp_annot, fig.height=8, fig.width=7}
 # dev.new(width=10, height=10, noRStudioGD = TRUE)
 DATA <-  DATA %>%
   mutate(sp_annot = case_when(colnames(DATA) %in% keep_epi ~ 'epi',
@@ -458,7 +459,7 @@ DATA %>%
 
 ```
 
-```{r remove_other_spots}
+```{r remove-NA-spots}
 dim(DATA)
 # Filter spots outside manual annotation
 DATA <- DATA[, !(is.na(DATA$sp_annot))]
@@ -469,8 +470,7 @@ DATA
 ```
 
 ## Save seurat object
-
-```{r save_SeuratObject}
+```{r save-SeuratObject}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
@@ -479,7 +479,6 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_merged.RDS"))
 ```
 
 ### Session info
-
 ```{r}
 sessionInfo()
 ```
