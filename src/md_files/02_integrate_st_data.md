@@ -74,7 +74,7 @@ hig_var <- setdiff(hig_var, remove)
 pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
 ```
 
-<img src=".../Figures/02/02a_HVG_heatmap.png" data-fig-align="center" />
+<img src="../Figures/02/02a_HVG_heatmap.png" data-fig-align="center" />
 
 ## Integration
 
@@ -118,7 +118,7 @@ plot_grid(ncol = 2,
          plotlist = p)
 ```
 
-<img src=".../Figures/02/02b_Plot_dim_reduction.png"
+<img src="../Figures/02/02b_Plot_dim_reduction.png"
 data-fig-align="center" />
 
 ## Plot marker genes
@@ -139,7 +139,7 @@ plot_grid(ncol = 3,
           plotlist = p)
 ```
 
-<img src=".../Figures/02/02c_plot_marker_genes.png"
+<img src="../Figures/02/02c_plot_marker_genes.png"
 data-fig-align="center" />
 
 # Paulos base R code

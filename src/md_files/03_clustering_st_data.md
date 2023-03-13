@@ -146,7 +146,7 @@ plot_grid(ncol = 2,
           plotlist = p)
 ```
 
-<img src="./Figures/03/03a_plot_resolution.png"
+<img src="../Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
 
 ``` r
@@ -198,7 +198,7 @@ DATA <- DATA %>%
         point_size = .25))
 ```
 
-<img src="./Figures/03/03c_clust_plot.png" data-fig-align="center" />
+<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
