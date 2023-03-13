@@ -1,24 +1,6 @@
 Load Spatial data
 ================
-12/13/22
-
-``` r
-source("../bin/render_with_jobs.R")
-file_name <- "./00_plotting_st_data.md"
-lab_dir <- "../lab_book/00_load_st_data/"
-
-file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
-
-# quarto
-# render_html_with_job(out_dir = lab_dir)
-# fs::file_move(path = file, new_path = paste0(lab_dir, file))
-
-# currently using quarto for github and kniter for html du to source code option 
-render_git_with_job(fig_path = "./Figures/00/")
-
-# kniter
-knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/00/")
-```
+3/9/23
 
 ### Load packages
 
@@ -109,6 +91,8 @@ seuratObj_list <- seuratObj_list %>%
 DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
 ```
 
+# Load morphology annotation
+
 ``` r
 ##########################
 # ADD MANUAL ANNOTATION #
@@ -191,7 +175,7 @@ DATA
 ```
 
     # A Seurat-tibble abstraction: 6,700 × 5
-    # [90mFeatures=36601 | Cells=6700 | Active assay=RNA | Assays=RNA[0m
+    # [90mFeatures=36601 | Cells=6700 | Active assay=RNA | Assays=RNA[0m
        .cell                 orig.ident nCount_RNA nFeature_RNA sp_annot
        <chr>                 <chr>           <dbl>        <int> <chr>   
      1 P031_AAACGAGACGGTTGAT P031              463          356 SubMuc  
@@ -214,37 +198,145 @@ meta <- meta %>%
   mutate(groups = ifelse(.$groups=="no HC", "ctrl", .$groups))
 
 DATA <-  DATA %>%
-  rename(sp_annot2="sp_annot") %>%
-  mutate(sp_annot = ifelse(grepl("epi_1|epi_2|epi_3", .$sp_annot2), "epi", .$sp_annot2 )) %>%
-  mutate(sp_annot = ifelse(grepl("SubMuc_1|SubMuc_2|SubMuc_3", .$sp_annot2), "SubMuc", .$sp_annot2 )) %>%
+  mutate(sp_annot2 = .$sp_annot) %>%
+  mutate(sp_annot = ifelse(grepl("epi", .$sp_annot2), "epi", 
+                           ifelse(grepl("SubMuc", .$sp_annot2), "SubMuc", .$sp_annot2 ))) %>%
   left_join(., meta, by="orig.ident") %>%
   select(groups, sp_annot, everything())
 ```
 
 ``` r
 DATA %>%
-  mutate(filt = ifelse(is.na(.$sp_annot),"filt","keep")) %>%
   plot_st_meta.fun(.,  
           assay="RNA",
-          feat = "filt",
+          feat = "sp_annot",
           zoom = "zoom",
+          ncol = 2,
           annot_line = .1,
           img_alpha = 0,
-          point_size = 0.5
+          point_size = 0.8
         )
 ```
 
-<img src="../Figures/00/plot_spots_to_remove.png"
+<img src="./Figures/00/plot_sp_annot.png" data-fig-align="center" />
+
+### Identify spots with missing morphology annotation
+
+``` r
+##########################
+# SP MANUAL ANNOTATION #
+#########################
+keep_epi <- c("P097_CTATTTGCTTGGAGGA", "P031_ATAGAGTTATCAACTT", "P031_GCGGAGAGGGAGAACG", "P031_CCTATCTATATCGGAA", "P031_GGATCTTGACTCAACC","P031_GCCCTAGCCGTCGCGA", "P031_AGCTCTTTACTCAGTT", "P031_AGTCAACACCACCATC", "P031_CGAACCCGCATGCGTC", "P080_TCGAGCCAGGCAGGCC", "P080_AACCCGACAACCCGTG","P080_GGCCGTTTGGGTTTCA","P080_CATTTGAGTGGTACGT", "P080_TTGGTCACACTCGTAA", "P080_CGAACCCGCATGCGTC", "P080_TTGCTGATCATGTTCG", "P080_CGAGACCCTAGAGTGT", "P080_CCAGCCTGGACCAATA", "P080_CGCATGGTGCGATGCT", "P080_ATAGACAACGGGACCT", "P080_CTCATTAACGTTGCCC", "P097_CGAGTTCTGTCCCACC", "P097_GTATGAAATTTCACTC", "P097_AGCAACCGAAAGTAAT", "P097_GAAGCCACTGATTATG", "P097_GCACTGCCTACCTTTA", "P097_CACAGCACCCACGGCA", "P097_AGTTTGGCCAGACCTA", "P097_ACAGAACTGAGAACAA", "P097_GCTTTCAGAGGAGGTG", "P107_ACATCCCGGCCATACG", "P107_ACGCAAACTAATAGAT","P107_ACTTGACTCCCTCTTT", "P107_GATCTTGGAGGGCATA", "P105_AAGACTGCAAGCTACT", "P105_ACACGGGAACTTAGGG", "P105_CACATTCTTTCGATGG", "P105_CCCGACCATAGTCCGC", "P105_CCTATGGGTTACCGTC", "P105_CCTCTAATCTGCCAAG", "P105_CGAGGCTAAATATGGC", "P105_CGTTTCACTTCGGGCG", "P105_GCGCTAATTGAATAGA", "P105_GATATGCGGTAGCCAA", "P105_GGCTCTGCTCCAACGC", "P105_GGGCTGCCTAGGGCGA", "P105_GGCTCTGCTCCAACGC", "P105_GGGCTGCCTAGGGCGA", "P105_GGTTTACAATCTCAAT", "P105_TGTGGCGGGCTTCTGG", "P105_TTAATCAGTACGTCAG", "P105_TTCATGGCGCAACAGG", "P105_TTGGGACACTGCCCGC", "P114_ACCTGCGTGTCATGTT", "P114_CAAGGATCGCATGTTC", "P114_AATGTTGTCGTGAGAC", "P108_ATACGCCGGCGAAACC", "P108_CACGTCGGCAACCTCT", "P108_TCGCCGAAGTTGCGTC", "P108_TTGATTAGCTGTTTCT", "P118_AACCCGACAACCCGTG", "P118_TGAGCCATACAGTCTC", "P118_ATGGGACCTGCTGAAC", "P118_AGCTAACAAGCAATGT", "P118_TTGATTAGCTGTTTCT", "P118_CGTGTCTCGTTACGAC", "P118_GATCAACATAAAGGGA", "P118_TAACAGCGTTTGTGCT", "P118_TGAGCCATACAGTCTC", "P118_GATTACTGAATTTGGG", "P118_TCCAACTTTAAATTCT", "P118_CGATCCTCGCAACATA", "P118_AACCCGACAACCCGTG", "P118_TCTCTTACCGCGAACC", "P118_TATGTAAAGTGCTTAA", "P118_GAAGTTTCCACTCAAT", "P118_TAGTCCCGGAGACCAC", "P118_CGGCCAGAGCGACCAT", "P118_ATAAAGGCTCGGTCGT", "P118_TATTCGTGCCAGAATA", "P118_GGGAGTTAATGAGGCG", "P118_CCGGGCGGTCTCGTCA") 
+keep_SubMuc <- c("P105_TGACATCGAGCGGACC", "P118_GTATCAAACGTTAGCT", "P097_AGGTGGTGACCTTCGC", "P097_AGCCCGGCATTAGAGG", "P031_CTAGTTGGGCCCGGTA","P031_TCTACCGTCCACAAGC", "P031_AAATGGCCCGTGCCCT", "P031_AATCTGGCTTTCTAGT", "P031_AAATGGCCCGTGCCCT", "P031_AATCTGGCTTTCTAGT", "P080_AGGCATTGTCGTAGGG", "P097_GGCAGCAAACCTATGC", "P097_ACAAAGCATGACCTAG", "P097_CCTCCTGTTGTGTCGT", "P097_CGTCGGATAGTGTTGA", "P107_TCTTGATGCGTAGCGA", "P105_ACGATCATCTTGTAAA", "P105_AGATATAATACGACTA", "P105_CTAGGTCTGAAGGAAT", "P114_AAGGGTTTGATTTCAG", "P114_GCACGTGGTTTACTTA", "P114_TAGGCCTATATAGTCT", "P107_TCTTCGATACCAATAA", "P108_GTGCGAAATCGAACAC", "P118_TCGAGACCAACACCGT", "P118_TCGGAGTACATGAGTA", "P118_TATTCAATTCTAATCC", "P118_AGGAGGCCTTCGCGCG") 
+
+###############################
+# IDENTIFY MISSING ANNOTATION #
+###############################
+df <- map(sample_id, ~pluck(DATA@images, .x, "coordinates")) %>%
+  bind_rows() %>%
+  #cbind(.,as_tibble(select(DATA, filt))) %>%
+  cbind(.,as_tibble(select(DATA, orig.ident))) %>%
+  cbind(.,as_tibble(select(DATA, nCount_RNA))) %>%
+  cbind(.,as_tibble(select(DATA, nFeature_RNA))) %>%
+  cbind(.,as_tibble(select(DATA, sp_annot))) %>%
+  rownames_to_column(var = "barcode") %>%
+  as_tibble() %>%
+  select(-starts_with(c("epi_", "SubMuc_")))
+
+f <- df %>% 
+  filter(orig.ident == "P097" & is.na(.$sp_annot)) #%>%
+  #filter(orig.ident == "P118" & filt == "keep")
+
+# dev.new(width=10, height=10, noRStudioGD = TRUE)
+# dev.new(width=5, height=3, noRStudioGD = TRUE)
+# DATA %>%
+#   mutate(sp_annot = case_when(colnames(DATA) %in% keep_epi ~ 'epi',
+#                               colnames(DATA) %in% keep_SubMuc ~ 'SubMuc',
+#                               TRUE ~ .$sp_annot)) %>%
+#   mutate(filt = case_when(is.na(.$sp_annot) & nCount_RNA < 500 ~ 'filt',
+#                           colnames(DATA) %in% filt ~ 'filt',
+#                           TRUE ~ 'keep')) %>%
+#   filter(grepl("P097_TAGAATAGCCGATGAA", `.cell`)) %>%
+#   plot_st_meta.fun(.,  
+#           assay="RNA",
+#           feat = "filt",
+#           zoom = "full_image",
+#           ncol = 2,
+#           annot_line = .1,
+#           img_alpha = 0,
+#           point_size = 1
+#         )
+```
+
+### Add missing morphology annotation
+
+``` r
+# dev.new(width=10, height=10, noRStudioGD = TRUE)
+DATA <-  DATA %>%
+  mutate(sp_annot = case_when(colnames(DATA) %in% keep_epi ~ 'epi',
+                              colnames(DATA) %in% keep_SubMuc ~ 'SubMuc',
+                              TRUE ~ .$sp_annot))
+
+DATA %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "sp_annot",
+          zoom = "zoom",
+          ncol = 2,
+          annot_line = .1,
+          img_alpha = 0,
+          point_size = 0.8
+        )
+```
+
+<img src="./Figures/00/add-missing-sp-annot.png"
 data-fig-align="center" />
+
+## Plot spots to be removed
+
+``` r
+# dev.new(width=10, height=10, noRStudioGD = TRUE)
+
+DATA <-  DATA %>%
+  mutate(filt = case_when(is.na(.$sp_annot)  ~ 'filt',
+                          TRUE ~ 'keep')) 
+DATA %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "filt",
+          zoom = "full_image",
+          ncol = 2,
+          annot_line = .1,
+          img_alpha = 0,
+          point_size = 1
+        )
+```
+
+<img src="./Figures/00/plot_spots_to_remove.png"
+data-fig-align="center" />
+
+``` r
+dim(DATA)
+```
+
+    [1] 36601  6700
 
 ``` r
 # Filter spots outside manual annotation
 DATA <- DATA[, !(is.na(DATA$sp_annot))]
+DATA$filt <- NULL
+
+dim(DATA)
+```
+
+    [1] 36601  6612
+
+``` r
 DATA
 ```
 
-    # A Seurat-tibble abstraction: 6,508 × 7
-    # [90mFeatures=36601 | Cells=6508 | Active assay=RNA | Assays=RNA[0m
+    # A Seurat-tibble abstraction: 6,612 × 7
+    # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
        .cell                 groups sp_annot orig.ident nCount_RNA nFeatur…¹ sp_an…²
        <chr>                 <chr>  <chr>    <chr>           <dbl>     <int> <chr>  
      1 P031_AAACGAGACGGTTGAT ctrl   SubMuc   P031              463       356 SubMuc 
@@ -254,10 +346,10 @@ DATA
      5 P031_AAAGTTGACTCCCGTA ctrl   epi      P031             4617      2270 epi    
      6 P031_AAATACCTATAAGCAT ctrl   epi      P031             5538      2507 epi    
      7 P031_AAATCGTGTACCACAA ctrl   SubMuc   P031             1765      1084 SubMuc 
-     8 P031_AAATTAACGGGTAGCT ctrl   SubMuc   P031              639       465 SubMuc 
-     9 P031_AAATTTGCGGGTGTGG ctrl   SubMuc   P031             3570      1948 SubMuc 
-    10 P031_AACCCTACTGTCAATA ctrl   SubMuc   P031             1438       940 SubMuc 
-    # … with 6,498 more rows, and abbreviated variable names ¹​nFeature_RNA,
+     8 P031_AAATGGCCCGTGCCCT ctrl   SubMuc   P031              789       477 <NA>   
+     9 P031_AAATTAACGGGTAGCT ctrl   SubMuc   P031              639       465 SubMuc 
+    10 P031_AAATTTGCGGGTGTGG ctrl   SubMuc   P031             3570      1948 SubMuc 
+    # … with 6,602 more rows, and abbreviated variable names ¹​nFeature_RNA,
     #   ²​sp_annot2
 
 ## Save seurat object
@@ -281,7 +373,7 @@ sessionInfo()
     Running under: macOS Big Sur 10.16
 
     Matrix products: default
-    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.18.dylib
+    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.21.dylib
 
     locale:
     [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
@@ -290,51 +382,52 @@ sessionInfo()
     [1] stats     graphics  grDevices utils     datasets  methods   base     
 
     other attached packages:
-     [1] sp_1.5-0           xml2_1.3.3         niceRplots_0.1.0   hdf5r_1.3.5       
-     [5] Seurat_4.1.0       tidyseurat_0.5.3   SeuratObject_4.0.4 ttservice_0.1.2   
-     [9] forcats_0.5.1      stringr_1.4.1      dplyr_1.0.7        purrr_0.3.4       
-    [13] readr_2.1.2        tidyr_1.2.0        tibble_3.1.8       ggplot2_3.3.6     
-    [17] tidyverse_1.3.1   
+     [1] xml2_1.3.3         niceRplots_0.1.0   hdf5r_1.3.8        Seurat_4.3.0      
+     [5] tidyseurat_0.5.3   SeuratObject_4.1.3 sp_1.5-1           ttservice_0.2.2   
+     [9] forcats_0.5.2      stringr_1.5.0      dplyr_1.0.10       purrr_1.0.1       
+    [13] readr_2.1.3        tidyr_1.2.1        tibble_3.1.8       ggplot2_3.4.0     
+    [17] tidyverse_1.3.2   
 
     loaded via a namespace (and not attached):
-      [1] readxl_1.3.1          backports_1.4.1       plyr_1.8.7           
-      [4] igraph_1.3.0          lazyeval_0.2.2        splines_4.1.2        
-      [7] listenv_0.8.0         scattermore_0.8       digest_0.6.30        
-     [10] htmltools_0.5.3       fansi_1.0.3           magrittr_2.0.3       
-     [13] tensor_1.5            cluster_2.1.4         ROCR_1.0-11          
-     [16] tzdb_0.2.0            globals_0.14.0        modelr_0.1.8         
-     [19] matrixStats_0.61.0    vroom_1.5.7           spatstat.sparse_2.1-0
-     [22] colorspace_2.0-3      rvest_1.0.2           ggrepel_0.9.1        
-     [25] haven_2.4.3           xfun_0.33             crayon_1.5.2         
-     [28] jsonlite_1.8.2        spatstat.data_2.1-4   survival_3.4-0       
-     [31] zoo_1.8-9             glue_1.6.2            polyclip_1.10-0      
-     [34] gtable_0.3.1          leiden_0.3.9          future.apply_1.8.1   
-     [37] abind_1.4-5           scales_1.2.1          DBI_1.1.2            
-     [40] spatstat.random_2.2-0 miniUI_0.1.1.1        Rcpp_1.0.9           
-     [43] viridisLite_0.4.1     xtable_1.8-4          reticulate_1.24      
-     [46] spatstat.core_2.4-2   bit_4.0.4             htmlwidgets_1.5.4    
-     [49] httr_1.4.4            RColorBrewer_1.1-3    ellipsis_0.3.2       
-     [52] ica_1.0-2             pkgconfig_2.0.3       farver_2.1.1         
-     [55] uwot_0.1.11           dbplyr_2.1.1          deldir_1.0-6         
-     [58] utf8_1.2.2            labeling_0.4.2        tidyselect_1.2.0     
-     [61] rlang_1.0.6           reshape2_1.4.4        later_1.3.0          
-     [64] munsell_0.5.0         cellranger_1.1.0      tools_4.1.2          
-     [67] cli_3.4.1             generics_0.1.3        broom_0.7.12         
-     [70] ggridges_0.5.3        evaluate_0.18         fastmap_1.1.0        
-     [73] yaml_2.3.5            goftest_1.2-3         knitr_1.40           
-     [76] bit64_4.0.5           fs_1.5.2              fitdistrplus_1.1-8   
-     [79] RANN_2.6.1            pbapply_1.5-0         future_1.24.0        
-     [82] nlme_3.1-160          mime_0.12             compiler_4.1.2       
-     [85] rstudioapi_0.13       plotly_4.10.0         png_0.1-7            
-     [88] spatstat.utils_2.3-0  reprex_2.0.1          stringi_1.7.8        
-     [91] lattice_0.20-45       Matrix_1.5-3          vctrs_0.4.2          
-     [94] pillar_1.8.1          lifecycle_1.0.3       spatstat.geom_2.4-0  
-     [97] lmtest_0.9-40         RcppAnnoy_0.0.19      data.table_1.14.2    
-    [100] cowplot_1.1.1         irlba_2.3.5           httpuv_1.6.5         
-    [103] patchwork_1.1.1       R6_2.5.1              promises_1.2.0.1     
-    [106] KernSmooth_2.23-20    gridExtra_2.3         parallelly_1.31.0    
-    [109] codetools_0.2-18      MASS_7.3-58.1         assertthat_0.2.1     
-    [112] withr_2.5.0           sctransform_0.3.3     mgcv_1.8-40          
-    [115] parallel_4.1.2        hms_1.1.1             grid_4.1.2           
-    [118] rpart_4.1.16          rmarkdown_2.18        Rtsne_0.15           
-    [121] shiny_1.7.1           lubridate_1.8.0      
+      [1] readxl_1.4.1           backports_1.4.1        plyr_1.8.8            
+      [4] igraph_1.3.5           lazyeval_0.2.2         splines_4.1.2         
+      [7] listenv_0.9.0          scattermore_0.8        digest_0.6.31         
+     [10] htmltools_0.5.4        fansi_1.0.3            magrittr_2.0.3        
+     [13] tensor_1.5             googlesheets4_1.0.1    cluster_2.1.4         
+     [16] ROCR_1.0-11            tzdb_0.3.0             globals_0.16.2        
+     [19] modelr_0.1.10          matrixStats_0.63.0     vroom_1.6.0           
+     [22] timechange_0.2.0       spatstat.sparse_3.0-0  colorspace_2.0-3      
+     [25] rvest_1.0.3            ggrepel_0.9.2          haven_2.5.1           
+     [28] xfun_0.36              crayon_1.5.2           jsonlite_1.8.4        
+     [31] progressr_0.13.0       spatstat.data_3.0-0    survival_3.5-0        
+     [34] zoo_1.8-11             glue_1.6.2             polyclip_1.10-4       
+     [37] gtable_0.3.1           gargle_1.2.1           leiden_0.4.3          
+     [40] future.apply_1.10.0    abind_1.4-5            scales_1.2.1          
+     [43] DBI_1.1.3              spatstat.random_3.0-1  miniUI_0.1.1.1        
+     [46] Rcpp_1.0.9             viridisLite_0.4.1      xtable_1.8-4          
+     [49] reticulate_1.27        bit_4.0.5              htmlwidgets_1.6.1     
+     [52] httr_1.4.4             RColorBrewer_1.1-3     ellipsis_0.3.2        
+     [55] ica_1.0-3              farver_2.1.1           pkgconfig_2.0.3       
+     [58] uwot_0.1.14            dbplyr_2.2.1           deldir_1.0-6          
+     [61] utf8_1.2.2             labeling_0.4.2         tidyselect_1.2.0      
+     [64] rlang_1.0.6            reshape2_1.4.4         later_1.3.0           
+     [67] munsell_0.5.0          cellranger_1.1.0       tools_4.1.2           
+     [70] cli_3.6.0              generics_0.1.3         broom_1.0.2           
+     [73] ggridges_0.5.4         evaluate_0.19          fastmap_1.1.0         
+     [76] yaml_2.3.6             goftest_1.2-3          knitr_1.41            
+     [79] bit64_4.0.5            fs_1.5.2               fitdistrplus_1.1-8    
+     [82] RANN_2.6.1             pbapply_1.6-0          future_1.30.0         
+     [85] nlme_3.1-161           mime_0.12              compiler_4.1.2        
+     [88] rstudioapi_0.14        plotly_4.10.1          png_0.1-8             
+     [91] spatstat.utils_3.0-1   reprex_2.0.2           stringi_1.7.12        
+     [94] lattice_0.20-45        Matrix_1.5-3           vctrs_0.5.1           
+     [97] pillar_1.8.1           lifecycle_1.0.3        spatstat.geom_3.0-3   
+    [100] lmtest_0.9-40          RcppAnnoy_0.0.20       data.table_1.14.6     
+    [103] cowplot_1.1.1          irlba_2.3.5.1          httpuv_1.6.8          
+    [106] patchwork_1.1.2        R6_2.5.1               promises_1.2.0.1      
+    [109] KernSmooth_2.23-20     gridExtra_2.3          parallelly_1.33.0     
+    [112] codetools_0.2-18       MASS_7.3-58.1          assertthat_0.2.1      
+    [115] withr_2.5.0            sctransform_0.3.5      parallel_4.1.2        
+    [118] hms_1.1.2              grid_4.1.2             rmarkdown_2.20        
+    [121] googledrive_2.0.0      Rtsne_0.16             spatstat.explore_3.0-5
+    [124] shiny_1.7.4            lubridate_1.9.0       
