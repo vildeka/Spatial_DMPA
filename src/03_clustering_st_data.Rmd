@@ -6,27 +6,10 @@ format:
     embed-resources: true
     code-fold: show
 params:
-  fig.path: "./Figures/03/"
+  fig.path: "./Figures/03_filt/"
 editor_options: 
   chunk_output_type: console
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-    fig.width   = 6.6929133858,
-    fig.path    = params$fig.path,
-    dev         = c("png", "pdf"),
-    dpi         = 300,
-    fig.align   = "center",
-    message     = FALSE,
-    warning     = FALSE,
-    fig.process = function(filename){
-      new_filename <- stringr::str_remove(string = filename, 
-                                        pattern = "-1")
-      fs::file_move(path = filename, new_path = new_filename)
-      ifelse(fs::file_exists(new_filename), new_filename, filename)}) # fix this so that it always move the file into figure folder?
-# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
-```
 
 ```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
@@ -48,6 +31,23 @@ system2(command = "sed", stdout = TRUE,
 
 # kniter
 knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/03_filt/")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    fig.width   = 6.6929133858,
+    fig.path    = params$fig.path,
+    dev         = c("png", "pdf"),
+    dpi         = 300,
+    fig.align   = "center",
+    message     = FALSE,
+    warning     = FALSE,
+    fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)}) # fix this so that it always move the file into figure folder?
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 ```
 
 ## Load data and libraries
@@ -140,7 +140,8 @@ plot_grid(ncol = 2,
 
 ```{r set_resolution}
 DATA <- DATA %>%
-  rename(Clusters="RNA_snn_res.1.5") %>%
+  #rename(Clusters="RNA_snn_res.1.5") %>%
+  rename(Clusters="RNA_snn_res.1") %>%
   SetIdent(., value = "Clusters")
 ```
 
