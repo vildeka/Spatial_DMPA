@@ -1,6 +1,6 @@
 Clustering filtered ST data
 ================
-3/2/23
+3/13/23
 
 ## Load data and libraries
 
@@ -81,56 +81,56 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6508
-    Number of edges: 244213
+    Number of edges: 245149
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.9412
+    Maximum modularity in 10 random starts: 0.9415
     Number of communities: 3
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6508
-    Number of edges: 244213
+    Number of edges: 245149
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8947
+    Maximum modularity in 10 random starts: 0.8939
     Number of communities: 4
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6508
-    Number of edges: 244213
+    Number of edges: 245149
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8470
-    Number of communities: 8
+    Maximum modularity in 10 random starts: 0.8486
+    Number of communities: 7
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6508
-    Number of edges: 244213
+    Number of edges: 245149
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7844
-    Number of communities: 13
+    Maximum modularity in 10 random starts: 0.7826
+    Number of communities: 12
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6508
-    Number of edges: 244213
+    Number of edges: 245149
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7414
-    Number of communities: 15
+    Maximum modularity in 10 random starts: 0.7410
+    Number of communities: 16
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6508
-    Number of edges: 244213
+    Number of edges: 245149
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7044
-    Number of communities: 19
+    Maximum modularity in 10 random starts: 0.7037
+    Number of communities: 18
     Elapsed time: 0 seconds
 
 ``` r
@@ -146,12 +146,13 @@ plot_grid(ncol = 2,
           plotlist = p)
 ```
 
-<img src="../Figures/03/03a_plot_resolution.png"
+<img src="./Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
 
 ``` r
 DATA <- DATA %>%
-  rename(Clusters="RNA_snn_res.1.5") %>%
+  #rename(Clusters="RNA_snn_res.1.5") %>%
+  rename(Clusters="RNA_snn_res.1") %>%
   SetIdent(., value = "Clusters")
 ```
 
@@ -197,7 +198,7 @@ DATA <- DATA %>%
         point_size = .25))
 ```
 
-<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
+<img src="./Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
