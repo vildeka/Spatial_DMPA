@@ -11,7 +11,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r background_job, eval=FALSE, include=FALSE}
+```{r background-job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
 file_name <- "./02_integrate_st_data.md"
 lab_dir <- "../lab_book/02_QC_integrate_st_data/"
@@ -23,21 +23,26 @@ file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html du to source code option 
-render_git_with_job(fig_path = "../Figures/02/")
+render_git_with_job(fig_path = "./Figures/02/")
+# Change the figure path from ./Figures/03/ to ../Figures/03/:
+system2(command = "sed", stdout = TRUE,
+        args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
+                 paste0("./md_files/", basename(file_name))))
 
 # kniter
 knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/02/")
 ```
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(#fig.width = 6.6929133858,
-    fig.path    = params$fig.path,
-    dev         = c("png"),
-    dpi         = 300,
-    fig.align   = "center",
-    message     = FALSE,
-    warning     = FALSE,
-    fig.process = function(filename){
+knitr::opts_chunk$set(
+  fig.width = 6.6929133858,
+  fig.path    = params$fig.path,
+  dev         = c("png"),
+  dpi         = 300,
+  fig.align   = "center",
+  message     = FALSE,
+  warning     = FALSE,
+  fig.process = function(filename){
       new_filename <- stringr::str_remove(string = filename, 
                                         pattern = "-1")
       fs::file_move(path = filename, new_path = new_filename)
@@ -46,8 +51,7 @@ knitr::opts_chunk$set(#fig.width = 6.6929133858,
 ```
 
 ## Load data and libraries
-
-```{r Load_Library_and_data}
+```{r Load-Library-and-data}
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -56,6 +60,7 @@ library(Seurat)
 library(tidyseurat)
 library(cowplot)
 library(harmony)
+source("../bin/plotting_functions.R")
 
 #########
 # PATHS #
@@ -68,37 +73,12 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-#DATA <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
-DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
 
-```
-
-```{r ggplot_theme}
-my_theme <-
-  list(
-    #scale_fill_manual(values = friendly_cols),
-    #scale_color_manual(values = friendly_cols),
-    theme_bw() +
-      #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
-      theme(
-        panel.border = element_blank(),
-        axis.line = element_line(),
-        panel.grid.major = element_line(size = 0.2),
-        panel.grid.minor = element_line(size = 0.1),
-        text = element_text(size = 12),
-        plot.title = element_text(hjust = 0.5),
-        #legend.position = "bottom",
-        #aspect.ratio = 1,
-        strip.background = element_blank(),
-        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
-        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
-      )
-  )
 ```
 
 ## Identify Highly Variable Genes (HVG) across samples
-
-```{r Find_HVG}
+```{r Find-HVG}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
 ################################
@@ -136,19 +116,16 @@ hig_var <- setdiff(hig_var, remove)
 ```
 
 ## Heatmap of HVG in all samples
-
 ```{r 02a_HVG_heatmap, fig.width=10}
 pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
 ```
 
 ## Integration
-
 ```{r Integration}
 ############
 # HARMONY #
 ###########
 DATA <- DATA %>%
-  #filter(sample_name == "CX3" | sample_name == "CX1") %>%
   NormalizeData(verbose = FALSE) %>%
   FindVariableFeatures(selection.method = "vst",
                       nfeatures = 4000,
@@ -162,125 +139,46 @@ DATA <- DATA %>%
              reduction = "pca", 
              dims.use = 1:20, 
              assay.use = "RNA") #%>%
- DATA <-   DATA %>%
+
+DATA <-   DATA %>%
   RunUMAP(dims = 1:10, 
           n.neighbors = 10,
           reduction = "harmony",
           reduction.name = "umap_harmony")
-
-
-
 ```
 
 ## Plot before and after integration
-
-```{r 02b_Plot_dim_reduction, fig.width=10, fig.height=6}
-plot_clusters.fun <- function(obj, cluster="sample_name", red = "umap_harmony", color = "Brew_all", lable = TRUE, title = NULL){
-  if(color == "Brew_all"){
-    pal <- c(scales::hue_pal()(8),
-             RColorBrewer::brewer.pal(9,"Set1"),
-             RColorBrewer::brewer.pal(8,"Set2"),
-             RColorBrewer::brewer.pal(8,"Accent"),
-             RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )}
-  
-  cluster <- sym(cluster)
-  feat <- obj %>%
-    select(.cell, !!(cluster), orig.ident, nCount_RNA, nFeature_RNA) %>%
-    group_by(!!(cluster)) %>%
-    add_tally() %>%
-    arrange(nFeature_RNA) %>%
-    arrange(desc(n))
-    
-  lable_df <- feat %>%
-    select(!!(cluster), contains(red)) %>% 
-    summarize_all(mean)
-  
-  if(lable == TRUE){
-    text <- geom_text(data = lable_df, aes(label = !!cluster), col="black") +
-      NoLegend() + labs(color= "Clusters")}
-  else{text <- labs(color= "")}
-  
-  red_1 <- sym(paste0(red, "_1"))
-  red_2 <- sym(paste0(red, "_2"))
-  
-  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
-                        color = !!cluster), label = lable) + 
-    geom_point(alpha = 0.5, size=.5) + ggtitle(title) + text +
-    #ggrepel::geom_label_repel(data = lable, aes(label = !!cluster)) +
-    scale_colour_manual(values = pal)  +
-    my_theme 
-  return(p)
-}
-
+```{r 02b_Plot_dim_reduction, fig.height=6}
+#  dev.new(height=6, width=6.6929133858, noRStudioGD = TRUE)
 res <- c("PC", "harmony", "UMAP", "umap_harmony")
 title <- c("PCA raw data", "PCA Harmony integrated", "UMAP raw data", "UMAP Harmony integrated")
-p <- map2(res, title, ~plot_clusters.fun(DATA, cluster="orig.ident", red=.x, lable=FALSE, title=.y))
+p <- map2(res, title, 
+          ~plot_clusters.fun(DATA, 
+                             cluster="orig.ident", txt_size = 9,
+                             red=.x, lable=FALSE, title=.y))
 plot_grid(ncol = 2, 
          plotlist = p)
 ```
 
 ## Plot marker genes
-
-```{r 02c_plot_marker_genes, fig.width=10}
+```{r 02c_plot_marker_genes, fig.height=3, fig.width=8}
+#  dev.new(height=3, width=8, noRStudioGD = TRUE)
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
 ################################
-#library(viridis)
-col=c("grey90","grey80","grey60","navy","black")
+# col <- c("grey90","grey80","grey60","navy","black")
+col <- c("lightgray", "mistyrose", "red", "dark red", "black")
 genes <- c("KRT1", "KRT15", "CDH1")
 # genes <- c("CD8A", "SFRP2", "CD3E")
 # genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
-DATA <- DATA %>%
-  mutate(., FetchData(., vars = genes) )
 
-# obj <- DATA       
-# gene <- sym("SFRP2")
-plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red = "umap_harmony"){
-  gene <- sym(gene)
-  feat <- pull(obj, gene)
-  
-  # Colour pal:
-  if(is.null(mins)){mins <- min(c(feat,0),na.rm = T)}
-  if(is.null(maxs)){
-    maxs <- quantile(feat,0.99,na.rm = T)
-    if(maxs==0){maxs <- max(feat,na.rm = T)}
-  }
-  if(max(feat,na.rm = T) != 0){
-    feat <- (feat - mins) / ( maxs - mins)
-    feat[feat > 1] <- 1}
-  
-  red_1 <- sym(paste0(red, "_1"))
-  red_2 <- sym(paste0(red, "_2"))
-  
-  myPalette <-  colorRampPalette(col[-1])
-  obj <- arrange(obj,nCount_RNA)
-  
-  p <- ggplot(obj, aes(!!(red_1), !!(red_2), color = !!(gene)) ) + 
-    
-    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
-    #scale_color_viridis(option = "D", na.value="#EBECF0") +
-    scale_colour_gradientn(colours = c( col[1], myPalette(99)), limits=c(mins, maxs))  +
-    my_theme + theme_void() + 
-    theme(legend.position = "bottom",
-          plot.title = element_text(hjust = 0.5)) #+ NoLegend()
-  return(p)
-}
-
-# get approximate max value for among all features (genes)
-red <- DATA@reductions[["umap_harmony"]]@cell.embeddings
-max <- quantile(red,0.99,na.rm = T)
-
-#p <- map(genes, ~plot_genes.fun(DATA, .x, maxs = max))
-p <- map(genes, ~plot_genes.fun(DATA, .x))
+p <- map(genes, ~plot_genes.fun(DATA, .x, col = col, lable = FALSE))
 plot_grid(ncol = 3, 
           plotlist = p)
-
 ```
 
 # Paulos base R code
-
-```{r Paulos_HVG, eval=FALSE, include=FALSE}
+```{r Paulos-HVG, eval=FALSE, include=FALSE}
 DATA.list <- SplitObject(DATA, split.by = "sample_name")
 
 for (i in 1:length(DATA.list)) {
@@ -303,7 +201,7 @@ rownames(overlap) <- temp
 pheatmap::pheatmap(t(overlap * 1), cluster_rows = F, color = c("grey90", "grey20"))
 ```
 
-```{r Paulos_harmony, eval=FALSE, include=FALSE}
+```{r Paulos-harmony, eval=FALSE, include=FALSE}
 hig_var <- rownames(overlap)[rowSums(overlap)>2]
 DATA <- DATA %>%
   NormalizeData(verbose = FALSE) %>%
@@ -327,14 +225,10 @@ plot_grid(ncol = 2,
   
   DimPlot(DATA, reduction = "harmony", group.by = "orig.ident")+NoAxes()+ggtitle("harmony integrated"),
   DimPlot(DATA, reduction = "umap_harmony", group.by = "orig.ident")+NoAxes()+ggtitle("UMAP harmony integrated")
-  
-  # DimPlot(DATA_int_log, reduction = "pca", group.by = "sample_name")+NoAxes()+ggtitle("PCA integrated"),
-  # DimPlot(DATA_int_log, reduction = "tsne", group.by = "sample_name")+NoAxes()+ggtitle("tSNE integrated"),
-  # DimPlot(DATA_int_log, reduction = "umap", group.by = "sample_name")+NoAxes()+ggtitle("UMAP integrated")
-)
+
 ```
 
-```{r Paulos_plot, eval=FALSE, include=FALSE}
+```{r Paulos-plot, eval=FALSE, include=FALSE}
 library(niceRplots)
 genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
 genes <- c("CDH1")
@@ -348,7 +242,7 @@ for(i in genes){
 grep("MYO", rownames(DATA), value = T)
 ```
 
-```{r Paulos_code, eval=FALSE, include=FALSE}
+```{r Paulos-code, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
@@ -371,8 +265,7 @@ plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, label =
 ```
 
 ## Save seurat object
-
-```{r save_SeuratObj}
+```{r save-SeuratObj}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
@@ -382,7 +275,6 @@ saveRDS(DATA, paste0(result_dir,"SeuratObj_harmony_filt.RDS"))
 ```
 
 ### Session info
-
 ```{r}
 sessionInfo()
 ```
