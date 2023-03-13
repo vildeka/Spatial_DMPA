@@ -84,7 +84,8 @@ plot_spatial.fun <- function(
       myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
       cont_colors <- myPalette(100)
     }else{cont_colors <- colors}
-    colour_pallet <- scale_fill_gradientn(colours = cont_colors)
+    colour_pallet <- scale_color_gradientn(colours = cont_colors,
+                                           na.value = "#FFFFFF")
     guides <- NULL
   }else{
     if (is.null(colors)){
@@ -97,8 +98,8 @@ plot_spatial.fun <- function(
                        
                        RColorBrewer::brewer.pal(8,"Pastel2") )
     }else{disc_colors <- colors}
-    colour_pallet <- scale_fill_manual(values = disc_colors)
-    guides <- guides(fill = guide_legend(override.aes = list(size=3), keyheight = .7))
+    colour_pallet <- scale_fill_manual(values = disc_colors, aesthetics = c("colour"))
+    guides <- guides(colour = guide_legend(override.aes = list(size=2), keyheight = .5))
   }
   
   # get scale factor:
@@ -147,19 +148,19 @@ plot_spatial.fun <- function(
   if(sp_annot){
     spatial_annotation <- geom_path(
       data=spe@tools[[sampleid]], 
-      show.legend = FALSE, size = .3,
-      aes(x=x, y=y, colour=colour, 
-          group=interaction(elem_idx)))
+      show.legend = FALSE, linewidth = .3,
+      aes(x=x, y=y,group=interaction(elem_idx)), colour="#808080")
   }
   else{spatial_annotation <- NULL}
   
   p <- ggplot()+
-    geom_point(data=df, aes(x=imagecol,y=imagerow,fill=.data[[geneid]]),
-               shape = 21, colour = "transparent",
-               size = point_size, stroke = 0.5, alpha = alpha) +
+    geom_point(data=df, aes(x=imagecol,y=imagerow, colour=.data[[geneid]]), #fill=.data[[geneid]]
+               shape = 16, #colour = "transparent", stroke = 0.5,
+               size = point_size, alpha = alpha) +
     spatial_image +
     spatial_annotation + 
-    scale_color_manual(values=c("#808080", "transparent")) + colour_pallet +
+    #scale_color_manual(values=c("#808080", "transparent")) + 
+    colour_pallet +
     coord_cartesian(expand=FALSE ) + theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row)
@@ -269,17 +270,18 @@ my_theme <-
 # VIOLIN PLOT #
 ################
 # https://stackoverflow.com/questions/35717353/split-violin-plot-with-ggplot2
-violin.fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, n=2){
-  m <- max(obj[[feature]])/n
+violin.fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, n=1){
+  m <- max(obj[[feature]])/n # try e.g 2
   obj %>%
     tidyseurat::ggplot(aes(orig.ident, .data[[feature]], fill=.data[[fill]])) +
-    geom_violin() + ylim(c(0, m)) + ggtitle(feature) +
-    geom_jitter(width = 0.3, alpha = 0.3, size=.1) +
+    geom_violin() + ggtitle(feature) +
+    geom_jitter(width = 0.3, alpha = 0.2, size=.1) +
     scale_fill_manual(values = col_pal) +
-    my_theme + NoLegend() +
+    my_theme + NoLegend() + ylim(c(0, m)) +
     theme(axis.text.x = element_text(angle = 30, hjust=1),
           plot.title = element_text(hjust = 0.5),
-          axis.title.y = element_blank()) 
+          axis.title.y = element_blank(),
+          axis.title.x = element_blank()) 
 }
 
 ##############################
@@ -590,8 +592,7 @@ plot_st_feat.fun <- function(
     spatial_annotation <- geom_path(
       data=tools, 
       show.legend = FALSE, linewidth = annot_line,
-      aes(x=x, y=y, #colour=colour,
-          group=interaction(elem_idx)),colour=annot_col)
+      aes(x=x, y=y, group=interaction(elem_idx)),colour=annot_col)
   }
   else{spatial_annotation <- NULL}
   #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
