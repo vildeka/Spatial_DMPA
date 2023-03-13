@@ -1,6 +1,7 @@
 #################
 # GGPLOT THEME #
 #################
+txt_size = 7
 my_theme <-
   list(
     #scale_fill_manual(values = friendly_cols),
@@ -12,7 +13,7 @@ my_theme <-
         axis.line = element_line(),
         panel.grid.major = element_line(linewidth = 0.2),
         panel.grid.minor = element_line(linewidth = 0.1),
-        text = element_text(size = 12),
+        text = element_text(size = txt_size),
         plot.title = element_text(hjust = 0.5),
         #legend.position = "bottom",
         #aspect.ratio = 1,
@@ -31,8 +32,9 @@ plot_clusters.fun <- function(obj, cluster,
                               red = "umap_harmony", 
                               color = "Brew_all", 
                               lable = TRUE, 
-                              txt_size = 5,
+                              txt_size = 7,
                               dot_size = 0.5,
+                              title = "colname",
                               assay="RNA"){
   if(color[[1]] == "Brew_all"){
     pal <- c(scales::hue_pal()(8),
@@ -43,6 +45,7 @@ plot_clusters.fun <- function(obj, cluster,
              RColorBrewer::brewer.pal(8,"Pastel2") )}else{pal=color}
   
   cluster <- sym(cluster)
+  if(title == "colname"){title <- as_label(cluster)}else{title <- title}
   
   if(lable == TRUE){ lab <- cluster
   l=T
@@ -77,14 +80,14 @@ plot_clusters.fun <- function(obj, cluster,
   
   p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
                         color = !!cluster), label=l) + 
-    geom_point(alpha=.5, size=dot_size) + ggtitle(as_label(cluster), ) +
+    geom_point(alpha=.5, size=dot_size) + ggtitle(title) +
     #if(!(lable == FALSE)){geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5)} +
     #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
     text +
     scale_color_manual(values = pal)  +
     my_theme + t +
     theme(axis.title = element_text(size=txt_size, margin=margin(t=10, r=10, b=10, l=10)),
-          axis.text=element_text(size=txt_size),
+          axis.text = element_text(size=txt_size),
           plot.title = element_text(size=txt_size))
   return(p)
 }
@@ -94,7 +97,12 @@ plot_clusters.fun <- function(obj, cluster,
 #######################
 # obj <- seuratObj
 # gene <- sym("CTSK")
-plot_genes.fun <- function(obj, gene, mins=NULL, maxs=NULL, red="umap_harmony", col=c("grey90","grey80","grey60","navy","black") ,lable = TRUE){
+plot_genes.fun <- function(obj, 
+                           gene, 
+                           mins=NULL, maxs=NULL, 
+                           red="umap_harmony", 
+                           col=c("grey90","grey80","grey60","navy","black") ,
+                           lable = TRUE){
   gene <- sym(gene)
   obj <- obj %>%
     mutate(lab = obj@active.ident) %>%
