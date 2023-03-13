@@ -11,22 +11,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(#fig.width = 6.6929133858,
-    fig.path    = params$fig.path,
-    dev         = c("png"),
-    dpi         = 300,
-    fig.align   = "center",
-    message     = FALSE,
-    warning     = FALSE,
-    fig.process = function(filename){
-      new_filename <- stringr::str_remove(string = filename, 
-                                        pattern = "-1")
-      fs::file_move(path = filename, new_path = new_filename)
-      ifelse(fs::file_exists(new_filename), new_filename, filename)})
-# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
-```
-
 ```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
 file_name <- "./02_integrate_st_data.md"
@@ -43,6 +27,22 @@ render_git_with_job(fig_path = "../Figures/02/")
 
 # kniter
 knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/02/")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(#fig.width = 6.6929133858,
+    fig.path    = params$fig.path,
+    dev         = c("png"),
+    dpi         = 300,
+    fig.align   = "center",
+    message     = FALSE,
+    warning     = FALSE,
+    fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)})
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 ```
 
 ## Load data and libraries
@@ -226,7 +226,7 @@ plot_grid(ncol = 2,
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
 ################################
-library(viridis)
+#library(viridis)
 col=c("grey90","grey80","grey60","navy","black")
 genes <- c("KRT1", "KRT15", "CDH1")
 # genes <- c("CD8A", "SFRP2", "CD3E")
