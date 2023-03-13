@@ -11,30 +11,9 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(#fig.width = 6.6929133858,
-  fig.path      = params$fig.path,#"../Figures/",
-  fig.align     = "center",
-  message       = FALSE,
-  warning       = FALSE,
-  dev           = c("png"),
-  dpi           = 300,
-  fig.process = function(filename){
-    new_filename <- stringr::str_remove(string = filename,
-                                        pattern = "-1")
-    fs::file_move(path = filename, new_path = new_filename)
-    ifelse(fs::file_exists(new_filename), new_filename, filename)
-  })
-
-# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/")
-#.libPaths("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/lib/R/library")
-# reticulate::use_python("/Users/vilkal/Applications/miniconda3/envs/scRNAseq2022/bin/python", required = TRUE)
-# reticulate::py_config()
-```
-
 ```{r background_job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
-file_name <- "./00_plotting_st_data.md"
+file_name <- "./00_load_st_data.md"
 lab_dir <- "../lab_book/00_load_st_data/"
 
 file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
@@ -44,10 +23,33 @@ file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html du to source code option 
-render_git_with_job(fig_path = "../Figures/00/")
+render_git_with_job(fig_path = "./Figures/00/")
+# Change the figure path from ./Figures/ to ../Figures/:
+system2(command = "sed", stdout = TRUE,
+        args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
+                 paste0("./md_files/", basename(file_name))))
 
 # kniter
 knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/00/")
+```
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  fig.width   = 6.6929133858,
+  fig.path    = params$fig.path,#"../Figures/",
+  fig.align   = "center",
+  message     = FALSE,
+  warning     = FALSE,
+  dev         = c("png"),
+  dpi         = 300,
+  fig.process = function(filename){
+    new_filename <- stringr::str_remove(string = filename,
+                                        pattern = "-1")
+    fs::file_move(path = filename, new_path = new_filename)
+    ifelse(fs::file_exists(new_filename), new_filename, filename)
+  })
+
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/")
 ```
 
 ### Load packages
@@ -191,6 +193,7 @@ seuratObj_list <- seuratObj_list %>%
 DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
 ```
 
+# Load morphology annotation
 ```{r Manual_annot}
 ##########################
 # ADD MANUAL ANNOTATION #
@@ -368,12 +371,65 @@ DATA %>%
         )
 ```
 
-```{r plot_spots_to_remove, fig.height=8, fig.width=7}
+### Identify spots with missing morphology annotation
+```{r Manuall-annotation, }
+##########################
+# SP MANUAL ANNOTATION #
+#########################
+keep_epi <- c("P097_CTATTTGCTTGGAGGA", "P031_ATAGAGTTATCAACTT", "P031_GCGGAGAGGGAGAACG", "P031_CCTATCTATATCGGAA", "P031_GGATCTTGACTCAACC","P031_GCCCTAGCCGTCGCGA", "P031_AGCTCTTTACTCAGTT", "P031_AGTCAACACCACCATC", "P031_CGAACCCGCATGCGTC", "P080_TCGAGCCAGGCAGGCC", "P080_AACCCGACAACCCGTG","P080_GGCCGTTTGGGTTTCA","P080_CATTTGAGTGGTACGT", "P080_TTGGTCACACTCGTAA", "P080_CGAACCCGCATGCGTC", "P080_TTGCTGATCATGTTCG", "P080_CGAGACCCTAGAGTGT", "P080_CCAGCCTGGACCAATA", "P080_CGCATGGTGCGATGCT", "P080_ATAGACAACGGGACCT", "P080_CTCATTAACGTTGCCC", "P097_CGAGTTCTGTCCCACC", "P097_GTATGAAATTTCACTC", "P097_AGCAACCGAAAGTAAT", "P097_GAAGCCACTGATTATG", "P097_GCACTGCCTACCTTTA", "P097_CACAGCACCCACGGCA", "P097_AGTTTGGCCAGACCTA", "P097_ACAGAACTGAGAACAA", "P097_GCTTTCAGAGGAGGTG", "P107_ACATCCCGGCCATACG", "P107_ACGCAAACTAATAGAT","P107_ACTTGACTCCCTCTTT", "P107_GATCTTGGAGGGCATA", "P105_AAGACTGCAAGCTACT", "P105_ACACGGGAACTTAGGG", "P105_CACATTCTTTCGATGG", "P105_CCCGACCATAGTCCGC", "P105_CCTATGGGTTACCGTC", "P105_CCTCTAATCTGCCAAG", "P105_CGAGGCTAAATATGGC", "P105_CGTTTCACTTCGGGCG", "P105_GCGCTAATTGAATAGA", "P105_GATATGCGGTAGCCAA", "P105_GGCTCTGCTCCAACGC", "P105_GGGCTGCCTAGGGCGA", "P105_GGCTCTGCTCCAACGC", "P105_GGGCTGCCTAGGGCGA", "P105_GGTTTACAATCTCAAT", "P105_TGTGGCGGGCTTCTGG", "P105_TTAATCAGTACGTCAG", "P105_TTCATGGCGCAACAGG", "P105_TTGGGACACTGCCCGC", "P114_ACCTGCGTGTCATGTT", "P114_CAAGGATCGCATGTTC", "P114_AATGTTGTCGTGAGAC", "P108_ATACGCCGGCGAAACC", "P108_CACGTCGGCAACCTCT", "P108_TCGCCGAAGTTGCGTC", "P108_TTGATTAGCTGTTTCT", "P118_AACCCGACAACCCGTG", "P118_TGAGCCATACAGTCTC", "P118_ATGGGACCTGCTGAAC", "P118_AGCTAACAAGCAATGT", "P118_TTGATTAGCTGTTTCT", "P118_CGTGTCTCGTTACGAC", "P118_GATCAACATAAAGGGA", "P118_TAACAGCGTTTGTGCT", "P118_TGAGCCATACAGTCTC", "P118_GATTACTGAATTTGGG", "P118_TCCAACTTTAAATTCT", "P118_CGATCCTCGCAACATA", "P118_AACCCGACAACCCGTG", "P118_TCTCTTACCGCGAACC", "P118_TATGTAAAGTGCTTAA", "P118_GAAGTTTCCACTCAAT", "P118_TAGTCCCGGAGACCAC", "P118_CGGCCAGAGCGACCAT", "P118_ATAAAGGCTCGGTCGT", "P118_TATTCGTGCCAGAATA", "P118_GGGAGTTAATGAGGCG", "P118_CCGGGCGGTCTCGTCA") 
+keep_SubMuc <- c("P105_TGACATCGAGCGGACC", "P118_GTATCAAACGTTAGCT", "P097_AGGTGGTGACCTTCGC", "P097_AGCCCGGCATTAGAGG", "P031_CTAGTTGGGCCCGGTA","P031_TCTACCGTCCACAAGC", "P031_AAATGGCCCGTGCCCT", "P031_AATCTGGCTTTCTAGT", "P031_AAATGGCCCGTGCCCT", "P031_AATCTGGCTTTCTAGT", "P080_AGGCATTGTCGTAGGG", "P097_GGCAGCAAACCTATGC", "P097_ACAAAGCATGACCTAG", "P097_CCTCCTGTTGTGTCGT", "P097_CGTCGGATAGTGTTGA", "P107_TCTTGATGCGTAGCGA", "P105_ACGATCATCTTGTAAA", "P105_AGATATAATACGACTA", "P105_CTAGGTCTGAAGGAAT", "P114_AAGGGTTTGATTTCAG", "P114_GCACGTGGTTTACTTA", "P114_TAGGCCTATATAGTCT", "P107_TCTTCGATACCAATAA", "P108_GTGCGAAATCGAACAC", "P118_TCGAGACCAACACCGT", "P118_TCGGAGTACATGAGTA", "P118_TATTCAATTCTAATCC", "P118_AGGAGGCCTTCGCGCG") 
+
+###############################
+# IDENTIFY MISSING ANNOTATION #
+###############################
+df <- map(sample_id, ~pluck(DATA@images, .x, "coordinates")) %>%
+  bind_rows() %>%
+  #cbind(.,as_tibble(select(DATA, filt))) %>%
+  cbind(.,as_tibble(select(DATA, orig.ident))) %>%
+  cbind(.,as_tibble(select(DATA, nCount_RNA))) %>%
+  cbind(.,as_tibble(select(DATA, nFeature_RNA))) %>%
+  cbind(.,as_tibble(select(DATA, sp_annot))) %>%
+  rownames_to_column(var = "barcode") %>%
+  as_tibble() %>%
+  select(-starts_with(c("epi_", "SubMuc_")))
+
+f <- df %>% 
+  filter(orig.ident == "P097" & is.na(.$sp_annot)) #%>%
+  #filter(orig.ident == "P118" & filt == "keep")
+
+# dev.new(width=10, height=10, noRStudioGD = TRUE)
+# dev.new(width=5, height=3, noRStudioGD = TRUE)
+# DATA %>%
+#   mutate(sp_annot = case_when(colnames(DATA) %in% keep_epi ~ 'epi',
+#                               colnames(DATA) %in% keep_SubMuc ~ 'SubMuc',
+#                               TRUE ~ .$sp_annot)) %>%
+#   mutate(filt = case_when(is.na(.$sp_annot) & nCount_RNA < 500 ~ 'filt',
+#                           colnames(DATA) %in% filt ~ 'filt',
+#                           TRUE ~ 'keep')) %>%
+#   filter(grepl("P097_TAGAATAGCCGATGAA", `.cell`)) %>%
+#   plot_st_meta.fun(.,  
+#           assay="RNA",
+#           feat = "filt",
+#           zoom = "full_image",
+#           ncol = 2,
+#           annot_line = .1,
+#           img_alpha = 0,
+#           point_size = 1
+#         )
+```
+
+### Add missing morphology annotation
+```{r add-missing-sp-annot, fig.height=8, fig.width=7}
+# dev.new(width=10, height=10, noRStudioGD = TRUE)
+DATA <-  DATA %>%
+  mutate(sp_annot = case_when(colnames(DATA) %in% keep_epi ~ 'epi',
+                              colnames(DATA) %in% keep_SubMuc ~ 'SubMuc',
+                              TRUE ~ .$sp_annot))
+
 DATA %>%
-  mutate(filt = ifelse(is.na(.$sp_annot),"filt","keep")) %>%
   plot_st_meta.fun(.,  
           assay="RNA",
-          feat = "filt",
+          feat = "sp_annot",
           zoom = "zoom",
           ncol = 2,
           annot_line = .1,
@@ -382,9 +438,33 @@ DATA %>%
         )
 ```
 
+## Plot spots to be removed
+```{r plot_spots_to_remove, fig.height=8, fig.width=7}
+# dev.new(width=10, height=10, noRStudioGD = TRUE)
+
+DATA <-  DATA %>%
+  mutate(filt = case_when(is.na(.$sp_annot)  ~ 'filt',
+                          TRUE ~ 'keep')) 
+DATA %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "filt",
+          zoom = "full_image",
+          ncol = 2,
+          annot_line = .1,
+          img_alpha = 0,
+          point_size = 1
+        )
+
+```
+
 ```{r remove_other_spots}
+dim(DATA)
 # Filter spots outside manual annotation
 DATA <- DATA[, !(is.na(DATA$sp_annot))]
+DATA$filt <- NULL
+
+dim(DATA)
 DATA
 ```
 
