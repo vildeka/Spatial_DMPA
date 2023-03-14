@@ -269,9 +269,9 @@ plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, label =
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-#saveRDS(DATA, paste0(result_dir,"SeuratObj_harmony.RDS"))
-saveRDS(DATA, paste0(result_dir,"SeuratObj_harmony_filt.RDS"))
-#DATA <- readRDS(paste0(result_dir,"SeuratObj_harmony.RDS"))
+#saveRDS(DATA, paste0(result_dir,"seuratObj_harmony.RDS"))
+saveRDS(DATA, paste0(result_dir,"seuratObj_harmony_filt.RDS"))
+#DATA <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
 ```
 
 ### Session info
