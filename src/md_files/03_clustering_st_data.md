@@ -128,7 +128,7 @@ plot_grid(ncol = 2,
           plotlist = p)
 ```
 
-<img src="./Figures/03/03a_plot_resolution.png"
+<img src="../Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
 
 ### Cluster resolutions on tissue
@@ -153,7 +153,7 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2))
 combined
 ```
 
-<img src="./Figures/03/03b_plot_resolutions_on_tissue.png"
+<img src="../Figures/03/03b_plot_resolutions_on_tissue.png"
 data-fig-align="center" />
 
 ### Set cluster resolution
@@ -248,7 +248,7 @@ Distribution of submucosal spots per cluster per subject
         point_size = .35))
 ```
 
-<img src="./Figures/03/03c_clust_plot.png" data-fig-align="center" />
+<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
