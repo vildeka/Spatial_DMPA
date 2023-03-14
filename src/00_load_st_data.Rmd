@@ -11,7 +11,7 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r background_job, eval=FALSE, include=FALSE}
+```{r background-job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
 file_name <- "./00_load_st_data.md"
 lab_dir <- "../lab_book/00_load_st_data/"
@@ -52,8 +52,7 @@ knitr::opts_chunk$set(
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/")
 ```
 
-### Load packages
-
+### Load libraries
 ```{r Load-libraries, message=FALSE, warning=FALSE}
 ##################
 # LOAD LIBRARIES #
@@ -133,8 +132,7 @@ rm(DATA_list)
 rm(image)
 ```
 
-### Load ST data
-
+### Load Visium data
 ```{r Load-data}
 #########
 # PATHS #
@@ -174,7 +172,8 @@ sample_id <- c("P031", "P080", "P097", "P105", "P107", "P108", "P114",
 
 ```
 
-```{r, Clean_SeuratObj}
+### Tidy up the seurat object
+```{r, Clean-SeuratObj}
 ####################################
 # RENAME SAMPLES, SPOTS AND IMAGES #
 ####################################
@@ -194,7 +193,7 @@ seuratObj_list <- seuratObj_list %>%
 DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
 ```
 
-# Load morphology annotation
+### Load morphology annotation
 ```{r Manual-annot}
 ##########################
 # ADD MANUAL ANNOTATION #
@@ -276,8 +275,7 @@ DATA <- left_join( DATA, sp, by=c(".cell"="barcodes"))
 DATA 
 ```
 
-## add meta info
-
+## Add meta data
 ```{r add-groups}
 meta <- meta %>%
   select(orig.ident="ID", groups=Contraception) %>%

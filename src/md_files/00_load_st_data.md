@@ -1,8 +1,8 @@
 Load Spatial data
 ================
-3/13/23
+3/14/23
 
-### Load packages
+### Load libraries
 
 ``` r
 ##################
@@ -31,7 +31,7 @@ pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
          scales::hue_pal()(8)),99)
 ```
 
-### Load ST data
+### Load Visium data
 
 ``` r
 #########
@@ -71,6 +71,8 @@ sample_id <- c("P031", "P080", "P097", "P105", "P107", "P108", "P114",
 "P118") %>% set_names()
 ```
 
+### Tidy up the seurat object
+
 ``` r
 ####################################
 # RENAME SAMPLES, SPOTS AND IMAGES #
@@ -91,7 +93,7 @@ seuratObj_list <- seuratObj_list %>%
 DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
 ```
 
-# Load morphology annotation
+### Load morphology annotation
 
 ``` r
 ##########################
@@ -190,7 +192,7 @@ DATA
     10 P031_AAATTTGCGGGTGTGG P031             3570         1948 SubMuc  
     # … with 6,690 more rows
 
-## add meta info
+## Add meta data
 
 ``` r
 meta <- meta %>%
