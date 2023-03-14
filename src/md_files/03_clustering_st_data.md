@@ -1,6 +1,6 @@
 Clustering filtered ST data
 ================
-3/13/23
+3/14/23
 
 ## Load data and libraries
 
@@ -27,41 +27,21 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-DATA <- readRDS(paste0(input_dir,"SeuratObj_harmony_filt.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
 #DATA <- readRDS(paste0(input_dir,"seuratObj_harmony.RDS"))
 
 #################
 # COLOUR PALLET #
 #################
-clus <- c(scales::hue_pal()(8),
-             RColorBrewer::brewer.pal(9,"Set1"),
-             RColorBrewer::brewer.pal(8,"Set2"),
-             RColorBrewer::brewer.pal(8,"Accent"),
-             RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )
-```
+clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77CFF", "#FF7F00","#E41A1C",  "#FF61CC", "#FFFF33","#F8766D", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
 
-``` r
-my_theme <-
-  list(
-    #scale_fill_manual(values = friendly_cols),
-    #scale_color_manual(values = friendly_cols),
-    theme_bw() +
-      #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
-      theme(
-        panel.border = element_blank(),
-        axis.line = element_line(),
-        panel.grid.major = element_line(size = 0.2),
-        panel.grid.minor = element_line(size = 0.1),
-        text = element_text(size = 12),
-        plot.title = element_text(hjust = 0.5),
-        #legend.position = "bottom",
-        #aspect.ratio = 1,
-        strip.background = element_blank(),
-        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
-        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
-      )
-  )
+# clus <- c(scales::hue_pal()(8),
+#              RColorBrewer::brewer.pal(9,"Set1"),
+#              RColorBrewer::brewer.pal(8,"Set2"),
+#              RColorBrewer::brewer.pal(8,"Accent"),
+#              RColorBrewer::brewer.pal(9,"Pastel1"),
+#              RColorBrewer::brewer.pal(8,"Pastel2") )
+# scales::show_col(clus)
 ```
 
 ## Clustering
@@ -73,15 +53,15 @@ my_theme <-
 DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
 
 # Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
+for (res in c(0.1, 0.5, 0.8, 1, 1.5, 2)) {
     DATA <- FindClusters(DATA, resolution = res, algorithm = 1)
 }
 ```
 
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6508
-    Number of edges: 245149
+    Number of nodes: 6598
+    Number of edges: 248366
 
     Running Louvain algorithm...
     Maximum modularity in 10 random starts: 0.9415
@@ -89,48 +69,48 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6508
-    Number of edges: 245149
+    Number of nodes: 6598
+    Number of edges: 248366
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8939
-    Number of communities: 4
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 6508
-    Number of edges: 245149
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8486
+    Maximum modularity in 10 random starts: 0.8499
     Number of communities: 7
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6508
-    Number of edges: 245149
+    Number of nodes: 6598
+    Number of edges: 248366
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7826
-    Number of communities: 12
+    Maximum modularity in 10 random starts: 0.8079
+    Number of communities: 11
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6508
-    Number of edges: 245149
+    Number of nodes: 6598
+    Number of edges: 248366
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7410
-    Number of communities: 16
+    Maximum modularity in 10 random starts: 0.7866
+    Number of communities: 14
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
-    Number of nodes: 6508
-    Number of edges: 245149
+    Number of nodes: 6598
+    Number of edges: 248366
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7037
-    Number of communities: 18
+    Maximum modularity in 10 random starts: 0.7437
+    Number of communities: 14
+    Elapsed time: 0 seconds
+    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
+
+    Number of nodes: 6598
+    Number of edges: 248366
+
+    Running Louvain algorithm...
+    Maximum modularity in 10 random starts: 0.7052
+    Number of communities: 17
     Elapsed time: 0 seconds
 
 ``` r
@@ -139,66 +119,136 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 # resolution you test.
 ```
 
+### UMAP of cluster resolutions
+
 ``` r
-res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
+res <- c("RNA_snn_res.0.8", "RNA_snn_res.1")
 p <- map(res, ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7))
 plot_grid(ncol = 2, 
           plotlist = p)
 ```
 
-<img src="../Figures/03/03a_plot_resolution.png"
+<img src="./Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
+
+### Cluster resolutions on tissue
+
+``` r
+# dev.new(width=7, height=14, noRStudioGD = TRUE)
+plots <- DATA %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  mutate( "res_0.8" = pmap(., 
+    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.8", 
+                      point_size = 0.8, zoom="zoom", colors = clus))) %>%
+  mutate( "res_1.0" = pmap(., 
+    ~plot_spatial.fun(..2, sampleid=..1,geneid="RNA_snn_res.1",
+                      point_size = 0.8, zoom="zoom", colors = clus)))
+
+legend_1 <- get_legend(plots$res_0.8[[2]] + theme(legend.position="right"))
+legend_2 <- get_legend(plots$res_1.0[[1]] + theme(legend.position="right"))
+legend <- plot_grid( legend_1, legend_2, ncol = 1)
+combined <- wrap_plots(plotlist=c(plots$res_0.8, plots$res_1.0), nrow = 8, byrow = F) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined
+```
+
+<img src="./Figures/03/03b_plot_resolutions_on_tissue.png"
+data-fig-align="center" />
+
+### Set cluster resolution
 
 ``` r
 DATA <- DATA %>%
-  #rename(Clusters="RNA_snn_res.1.5") %>%
-  rename(Clusters="RNA_snn_res.1") %>%
+  rename(Clusters="RNA_snn_res.0.8") %>%
   SetIdent(., value = "Clusters")
 ```
 
-### Plot clusters on tissue section:
+### Spot distribution by clusters
 
 ``` r
-# fig.height=6, fig.width=13, 
-#is.character(pull(DATA, RNA_snn_res.1.5))
+DATA_sub <- DATA %>%
+  mutate(gr = .$groups) %>%
+  mutate(ID = .$orig.ident) %>%
+  nest(., data=-c(gr, orig.ident)) %>%
+  mutate(epi =  map(data, ~filter(.x, !(sp_annot == "SubMuc"))),
+         subMuc =  map(data, ~filter(.x, sp_annot == "SubMuc"))) %>%
+  mutate(across(c("epi", "subMuc"), ~map(., ~table(.x$Clusters)), .names = "{.col}_n_before")) %>%
+  mutate(across(contains("_n_"), ~set_names(.x, paste0(.data[["gr"]],"_",.data[["orig.ident"]]))))
+      
+table(DATA$Clusters)
 
-# Old single image version of function:
-# plots <- DATA %>%
-#   mutate(group = orig.ident) %>%
-#   nest(., data = -group) %>%
-#   pmap(., 
-#     ~plot_spatial.fun(..2,
-#       sampleid = ..1,
-#       colors = clus,
-#       geneid = "Clusters",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
-#       zoom = "zoom",
-#       img_alpha = 0,
-#       point_size = 1)
-#     )
-# 
-# 
-# 
-# legend <- get_legend(plots[[1]] + theme(legend.position="right"))
-# combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
-# combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
-# combined
+bind_cols(DATA_sub$epi_n_before, "Clus" = paste0("**",names(table(DATA$Clusters)),"**")) %>%
+  rowwise() %>% 
+  mutate(DMPA_sum = sum(c_across(starts_with("DMPA_"))),
+         ctrl_sum = sum(c_across(starts_with("ctrl_")))) %>%
+  select(sort(colnames(.)[1:8]), everything()) %>%
+  knitr::kable(., caption = "Distribution of epithelial spots per cluster per subject")
 
+bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Clusters)),"**")) %>%
+  rowwise() %>% 
+  mutate(DMPA_sum = sum(c_across(starts_with("DMPA_"))),
+         ctrl_sum = sum(c_across(starts_with("ctrl_")))) %>%
+  select(sort(colnames(.)[1:8]), everything()) %>%
+  knitr::kable(., caption = "Distribution of submucosal spots per cluster per subject")
+```
+
+
+       0    1    2    3    4    5    6    7    8    9   10 
+    1572 1143  681  678  657  495  411  394  354  175   38 
+
+| ctrl_P031 | ctrl_P080 | ctrl_P105 | ctrl_P118 | DMPA_P097 | DMPA_P107 | DMPA_P108 | DMPA_P114 | Clus   | DMPA_sum | ctrl_sum |
+|----------:|----------:|----------:|----------:|----------:|----------:|----------:|----------:|:-------|---------:|---------:|
+|         1 |         0 |         0 |         0 |         0 |         1 |         0 |         1 | **0**  |        2 |        1 |
+|         1 |         0 |         1 |         0 |         0 |         0 |         0 |         0 | **1**  |        0 |        2 |
+|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **2**  |        0 |        0 |
+|        98 |        89 |        54 |        91 |        76 |        45 |        43 |        89 | **3**  |      253 |      332 |
+|         2 |         0 |         3 |         0 |         0 |         1 |         0 |         1 | **4**  |        2 |        5 |
+|        13 |         8 |         2 |         6 |         4 |         8 |         3 |         1 | **5**  |       16 |       29 |
+|        74 |        49 |        29 |        63 |        40 |        40 |        33 |        44 | **6**  |      157 |      215 |
+|        84 |        64 |        31 |        52 |        48 |        44 |        21 |        50 | **7**  |      163 |      231 |
+|        55 |        51 |        20 |        54 |        28 |        50 |        33 |        63 | **8**  |      174 |      180 |
+|         8 |        17 |        23 |        16 |         5 |        29 |         0 |        51 | **9**  |       85 |       64 |
+|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **10** |        0 |        0 |
+
+Distribution of epithelial spots per cluster per subject
+
+| ctrl_P031 | ctrl_P080 | ctrl_P105 | ctrl_P118 | DMPA_P097 | DMPA_P107 | DMPA_P108 | DMPA_P114 | Clus   | DMPA_sum | ctrl_sum |
+|----------:|----------:|----------:|----------:|----------:|----------:|----------:|----------:|:-------|---------:|---------:|
+|       178 |       331 |       185 |       211 |       377 |        42 |        43 |       202 | **0**  |      664 |      905 |
+|       140 |       200 |       123 |       206 |       240 |        22 |        40 |       170 | **1**  |      472 |      669 |
+|        23 |        83 |        77 |       192 |       147 |        37 |        19 |       103 | **2**  |      306 |      375 |
+|         1 |         7 |         8 |        21 |        44 |         1 |         1 |        10 | **3**  |       56 |       37 |
+|        47 |       112 |        77 |       120 |       131 |        24 |        39 |       100 | **4**  |      294 |      356 |
+|        24 |        46 |        62 |        90 |       110 |        15 |        22 |        81 | **5**  |      228 |      222 |
+|         1 |        32 |         1 |         2 |         3 |         0 |         0 |         0 | **6**  |        3 |       36 |
+|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **7**  |        0 |        0 |
+|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **8**  |        0 |        0 |
+|         0 |         3 |         0 |         0 |         4 |        19 |         0 |         0 | **9**  |       23 |        3 |
+|         1 |         2 |         0 |         0 |         5 |        30 |         0 |         0 | **10** |       35 |        3 |
+
+Distribution of submucosal spots per cluster per subject
+
+### Plot final clusters on tissue section:
+
+``` r
 # Horizontal 
-# dev.new(width=6, height=2.6, noRStudioGD = TRUE)
+# dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 ############################
 # PLOT FACET WRAP CLUSTERS #
 ############################
-(p <- plot_st_meta.fun( DATA,  # filter(spe, decon_columns[[..1]]=="1"), # removes spots with no % of given cell type
-        feat = "Clusters",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+(p <- plot_st_meta.fun( DATA,
+        feat =  "Clusters",
         zoom = "zoom",
         colors = clus,
+        alpha = .9,
         #annot_col = "#dbd9d9",
         annot_line = .1,
         img_alpha = 0,
-        point_size = .25))
+        point_size = .35))
 ```
 
-<img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
+<img src="./Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
 # Paulos Code
 
@@ -269,16 +319,16 @@ sessionInfo()
      [82] future_1.30.0          nlme_3.1-161           mime_0.12             
      [85] xml2_1.3.3             compiler_4.1.2         rstudioapi_0.14       
      [88] plotly_4.10.1          png_0.1-8              spatstat.utils_3.0-1  
-     [91] reprex_2.0.2           stringi_1.7.12         lattice_0.20-45       
-     [94] Matrix_1.5-3           vctrs_0.5.1            pillar_1.8.1          
-     [97] lifecycle_1.0.3        spatstat.geom_3.0-3    lmtest_0.9-40         
-    [100] RcppAnnoy_0.0.20       data.table_1.14.6      irlba_2.3.5.1         
-    [103] httpuv_1.6.8           R6_2.5.1               promises_1.2.0.1      
-    [106] KernSmooth_2.23-20     gridExtra_2.3          parallelly_1.33.0     
-    [109] codetools_0.2-18       MASS_7.3-58.1          assertthat_0.2.1      
-    [112] withr_2.5.0            sctransform_0.3.5      parallel_4.1.2        
-    [115] hms_1.1.2              grid_4.1.2             rmarkdown_2.20        
-    [118] googledrive_2.0.0      Rtsne_0.16             spatstat.explore_3.0-5
-    [121] shiny_1.7.4            lubridate_1.9.0       
+     [91] reprex_2.0.2           stringi_1.7.12         highr_0.10            
+     [94] lattice_0.20-45        Matrix_1.5-3           vctrs_0.5.1           
+     [97] pillar_1.8.1           lifecycle_1.0.3        spatstat.geom_3.0-3   
+    [100] lmtest_0.9-40          RcppAnnoy_0.0.20       data.table_1.14.6     
+    [103] irlba_2.3.5.1          httpuv_1.6.8           R6_2.5.1              
+    [106] promises_1.2.0.1       KernSmooth_2.23-20     gridExtra_2.3         
+    [109] parallelly_1.33.0      codetools_0.2-18       MASS_7.3-58.1         
+    [112] assertthat_0.2.1       withr_2.5.0            sctransform_0.3.5     
+    [115] parallel_4.1.2         hms_1.1.2              grid_4.1.2            
+    [118] rmarkdown_2.20         googledrive_2.0.0      Rtsne_0.16            
+    [121] spatstat.explore_3.0-5 shiny_1.7.4            lubridate_1.9.0       
 
 ### Paulo section
