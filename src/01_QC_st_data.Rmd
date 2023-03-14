@@ -239,10 +239,8 @@ combined
 ```
 
 ## Filtering
-
-Select all spots with less than 15% mitochondrial reads, less than 10% hb-reads and 100 detected genes. 
+Select all spots with less than 15% mitochondrial reads, less than 10% hb-reads and 100 detected genes.<br/>
 Filter genes present in less than 2 spots and remove hemoglobin and MALAT1 genes.
-
 ```{r filtering}
 ##########################
 # FILTER GENES AND CELLS #
@@ -268,9 +266,8 @@ DATA <- DATA %>%
 ```
 
 ### Summary stats
-Dimension of DATA before filtering: `r dim(temp)`<br/>
-Dimension of DATA after filtering:  `r dim(DATA)`
-
+Dimension of DATA before filtering, genes: `r dim(temp)[1]`, spots: `r dim(temp)[2]`<br/>
+Dimension of DATA after  filtering, genes: `r dim(DATA)[1]`, spots: `r dim(DATA)[2]`
 ```{r summary-table-after}
 #################
 # SUMMARY STATS #
@@ -281,7 +278,7 @@ sapply(DATA@meta.data[feature], summary) %>%
   knitr::kable(digits = 1)
 ```
 
-### Plotting QC after filtering
+### Plotting QC before and after filtering
 ```{r 01e_QC_plot_filtered, fig.height=15}
 # dev.new(width=8, height=10, noRStudioGD = TRUE)
 ################
@@ -306,7 +303,7 @@ p <-  map(feature, ~violin.fun(DATA, .x, fill="orig.ident", col_pal=friendly_col
 plot_grid(plotlist=c(p_, p), nrow = 5, byrow = F)
 ```
 
-### filtered spots
+### Filtered spots
 ```{r filtered-spots}
 temp %>%
   filter(filt == "filt") %>%
@@ -317,7 +314,6 @@ temp %>%
 ```
 
 ### Plot filtered spots
-
 ```{r 01f_filtered_spots, fig.height=8, fig.width=7}
 # dev.new(width=7, height=8, noRStudioGD = TRUE)
 plots <- temp %>%
@@ -339,7 +335,6 @@ combined
 ```
 
 ### Plot top expressed genes
-
 ```{r 01g_top_abundante_genes}
 #############################
 # GET TOP 20 ABUNDANT GENES #
@@ -371,9 +366,9 @@ col = (scales::hue_pal())(20)[20:1]
 (genes_plot <- DATA %>%
    join_features(features = names(top_genes) ) %>%
    mutate(.feature = factor(.feature, levels = rev(names(top_genes)))) %>%
-   mutate("% total count per cell" = percent.fun(., .cell, .feature, .abundance_RNA),
+   mutate("% total count per spot" = percent.fun(., .cell, .feature, .abundance_RNA),
           .after=.abundance_RNA) %>%
-   ggplot(aes(y=`% total count per cell`, x=.feature, fill=.feature)) +
+   ggplot(aes(y=`% total count per spot`, x=.feature, fill=.feature)) +
    stat_boxplot(geom = "errorbar", width = 0.2) +
    geom_boxplot(outlier.alpha = 0.1, outlier.size = .5) +
    scale_fill_manual(values = col) + my_theme +
@@ -384,7 +379,6 @@ col = (scales::hue_pal())(20)[20:1]
 ```
 
 ## Save seurat object
-
 ```{r save-SeuratObject}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
@@ -394,7 +388,6 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
 ```
 
 ### Session info
-
 ```{r}
 sessionInfo()
 ```
