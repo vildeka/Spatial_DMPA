@@ -1,6 +1,6 @@
 Quality Control Spatial data
 ================
-3/10/23
+3/14/23
 
 ### Load packages
 
@@ -169,14 +169,13 @@ combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .15))
 combined
 ```
 
-<img src="../Figures/01/01d_sp_count_plot.png"
-data-fig-align="center" />
+<img src="../Figures/01/01d_sp_count_plot.png" data-fig-align="center" />
 
 ## Filtering
 
 Select all spots with less than 15% mitochondrial reads, less than 10%
-hb-reads and 100 detected genes. Filter genes present in less than 2
-spots and remove hemoglobin and MALAT1 genes.
+hb-reads and 100 detected genes.<br/> Filter genes present in less than
+2 spots and remove hemoglobin and MALAT1 genes.
 
 ``` r
 ##########################
@@ -204,8 +203,8 @@ DATA <- DATA %>%
 
 ### Summary stats
 
-Dimension of DATA before filtering: 36601, 6612<br/> Dimension of DATA
-after filtering: 22026, 6598
+Dimension of DATA before filtering, genes: 36601, spots: 6612<br/>
+Dimension of DATA after filtering, genes: 22026, spots: 6598
 
 ``` r
 #################
@@ -226,7 +225,7 @@ sapply(DATA@meta.data[feature], summary) %>%
 | 3rd Qu. |     6181.0 |       2429.0 |          4.6 |        0.0 |         13.9 |
 | Max.    |    50999.0 |       7860.0 |         14.1 |        8.3 |         31.2 |
 
-### Plotting QC after filtering
+### Plotting QC before and after filtering
 
 ``` r
 # dev.new(width=8, height=10, noRStudioGD = TRUE)
@@ -255,7 +254,7 @@ plot_grid(plotlist=c(p_, p), nrow = 5, byrow = F)
 <img src="../Figures/01/01e_QC_plot_filtered.png"
 data-fig-align="center" />
 
-### filtered spots
+### Filtered spots
 
 ``` r
 temp %>%
@@ -340,9 +339,9 @@ col = (scales::hue_pal())(20)[20:1]
 (genes_plot <- DATA %>%
    join_features(features = names(top_genes) ) %>%
    mutate(.feature = factor(.feature, levels = rev(names(top_genes)))) %>%
-   mutate("% total count per cell" = percent.fun(., .cell, .feature, .abundance_RNA),
+   mutate("% total count per spot" = percent.fun(., .cell, .feature, .abundance_RNA),
           .after=.abundance_RNA) %>%
-   ggplot(aes(y=`% total count per cell`, x=.feature, fill=.feature)) +
+   ggplot(aes(y=`% total count per spot`, x=.feature, fill=.feature)) +
    stat_boxplot(geom = "errorbar", width = 0.2) +
    geom_boxplot(outlier.alpha = 0.1, outlier.size = .5) +
    scale_fill_manual(values = col) + my_theme +
@@ -360,7 +359,6 @@ data-fig-align="center" />
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-#saveRDS(DATA_, paste0(result_dir,"seuratObj_merged.RDS"))
 saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
 #DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
 ```
