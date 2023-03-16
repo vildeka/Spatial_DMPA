@@ -1,52 +1,10 @@
----
-title: "Deconvolut spatial and bulk data"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
-format:
-  html:
-    embed-resources: true
-    code-fold: show
-params:
-  fig.path: "./Figures/04/"
-editor_options: 
-  chunk_output_type: console
----
-
-```{r background-job, eval=FALSE, include=FALSE}
-source("../bin/render_with_jobs.R")
-# file_name <- "./04_deconvolute_st_data.md"
-# file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
-lab_dir <- "../lab_book/04_deconvolute_st_data"
-
-# quarto
-# render_html_with_job(out_dir = lab_dir)
-# fs::file_move(path = file, new_path = paste0(lab_dir, file))
-
-# currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "../Figures/04/")
-
-# kniter
-knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/04/")
-```
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(
-    fig.width   = 6.6929133858,
-    fig.path    = params$fig.path,
-    dev         = c("png"),
-    dpi         = 300,
-    fig.align   = "center",
-    message     = FALSE,
-    warning     = FALSE,
-    fig.process = function(filename){
-      new_filename <- stringr::str_remove(string = filename, 
-                                        pattern = "-1")
-      fs::file_move(path = filename, new_path = new_filename)
-      ifelse(fs::file_exists(new_filename), new_filename, filename)}) 
-# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
-```
+Deconvolut spatial and bulk data
+================
+3/16/23
 
 ### Load data and libraries
-```{r Load-data}
+
+``` r
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -96,25 +54,36 @@ markers_genes <- readRDS(paste0(input_dir_r,"markers_genes.RDS"))
 
 Bulk_data <- read_csv(bulk_path)
 bulk_meta <- read_csv("/Users/vilkal/Raw_data/Clinincal_data/Clinical_visit_3_updateOct2022_wSampleInfo.csv")
-
 ```
 
 ### SCDC deconcolution steps
 
-1.  subset the reference dataset to get more equal number of cells for each cluster
+1.  subset the reference dataset to get more equal number of cells for
+    each cluster
 2.  Normalize the data and run UMAP
 3.  select top marker genes
 4.  Create expression set
 5.  run deconvolution
 
 ### Subset scRNA reference dataset
-```{r subset-and-filter-ref-data}
+
+``` r
 # filter spots with too few reads
 DATA_st_filt <- DATA_st  %>%
   filter(., nFeature_RNA > 200)
 
 dim(DATA_st@assays$RNA@counts)
+```
+
+    [1] 22026  6598
+
+``` r
 dim(DATA_st_filt@assays$RNA@counts)
+```
+
+    [1] 22026  6578
+
+``` r
 #sum(DATA_st_filt@assays$RNA@counts[,"P031_TGCCTTGCCCTTACGG"])
 
 # creating a subseted object with 200 spots selected from each cluster
@@ -123,8 +92,25 @@ DATA_sub <- DATA_r %>%
     SetIdent(., value = "Clusters")
       
 table(DATA_r$Clusters)
-table(DATA_sub$Clusters)
+```
 
+
+       0    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15 
+    1952 1920 1763 1712 1619 1466 1454 1450  864  808  684  596  587  548  462  445 
+      16   17   18   19   20   21   22   23   24   25   26   27   28 
+     407  334  317  251  197  160  121   98   87   78   66   54   39 
+
+``` r
+table(DATA_sub$Clusters)
+```
+
+
+      0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18  19 
+    200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 200 
+     20  21  22  23  24  25  26  27  28 
+    197 160 121  98  87  78  66  54  39 
+
+``` r
 # run normalization and dimensionality reduction
 # only necessary to get new subseted UMAP
 DATA_sub <- DATA_sub %>%
@@ -134,14 +120,19 @@ DATA_sub <- DATA_sub %>%
 ```
 
 ### Plot UMAP of subseted reference data
-```{r 04a_reference_UMAP_plot, fig.height=6}
+
+``` r
 # dev.new(width=6.6929133858, height=6.6929133858, noRStudioGD = TRUE)
 p <- plot_clusters.fun(DATA_sub, cluster="Clusters", red = "UMAP", txt_size = 11)
 p
 ```
 
+<img src="../Figures/04/04a_reference_UMAP_plot.png"
+data-fig-align="center" />
+
 ### Select genes for deconvolution
-```{r Get-best-markers}
+
+``` r
 # Identify the top genes that have a high difference in expression
 top30 <- markers_genes %>%
   filter(.$gene %in% rownames(DATA_st@assays$RNA@counts)) %>%
@@ -163,7 +154,8 @@ m_feats <- unique(as.character(top30$gene))
 ```
 
 ### Create ExpressionSet
-```{r ExpressionSet}
+
+``` r
 # Create Expression Sets
 eset_SC <- ExpressionSet(assayData = as.matrix(DATA_r@assays$RNA@counts[m_feats,
     ]), phenoData = AnnotatedDataFrame(DATA_r@meta.data))
@@ -182,7 +174,8 @@ eset_B <- ExpressionSet(assayData = as.matrix(bulk[m_feats,]))
 ```
 
 ## Deconvolution
-```{r deconvolution, include=TRUE, eval=FALSE}
+
+``` r
 ################
 # BULK DECONV. #
 #################
@@ -206,7 +199,8 @@ head(deconvolution$prop.est.mvw)
 ```
 
 ### Add single cell deconvolution matrix to seurat object
-```{r merge-decon-with-seuratobj, include=TRUE, eval=TRUE}
+
+``` r
 deconvolution <- readRDS(paste0(result_dir,"deconvolution_scdc.RDS"))
 all_spots <- c(rownames(deconvolution$prop.est.mvw), colnames(DATA_st)) %>% unique(.)
 
@@ -225,7 +219,8 @@ DATA_st@assays$SCDC@key <- "scdc_"
 ```
 
 ### Add cell annotation to seurat object
-```{r Add-ST-cell-annotation}
+
+``` r
 # This annotation will duplicate the spots it cannot be added directly to the SeuratObject
 cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., as.character(0:28))
 
@@ -275,7 +270,8 @@ DATA_st@assays[["misc"]] <- list(cell_annot = df)
 ```
 
 ### Save the cell annotation for the bulk data
-```{r Save-bulk-cell-annotation}
+
+``` r
 deconvolution <- readRDS(paste0(result_dir,"deconvolution_bulk.RDS"))
 gr <- set_names(bulk_meta$Contraception, bulk_meta$ID) 
 
@@ -298,14 +294,16 @@ decon_column_bulk <- deconvolution$prop.est.mvw %>%
 ```
 
 ## Save seurat object
-```{r Save-SeuratObj}
+
+``` r
 saveRDS(DATA_st, paste0(result_dir,"seuratObj_deconvolution_scdc_filt.RDS"))
 # DATA_st <- readRDS(paste0(result_dir,"seuratObj_deconvolution.RDS"))
 # DATA_st <- readRDS(paste0(result_dir,"seuratObj_deconvolution_scdc_filt.RDS"))
 ```
 
 ## Plotting deconvolution data
-```{r 04b_celltype_by_clusters}
+
+``` r
 #################
 # COLOUR PALLET #
 #################
@@ -331,8 +329,12 @@ ggplot(decon_column_st, aes(fill=annot, y=values, x=Clusters)) +
   guides(fill = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7))
 ```
 
+<img src="../Figures/04/04b_celltype_by_clusters.png"
+data-fig-align="center" />
+
 ### Keratins per cluster
-```{r 04c_keratins_per_clusters, fig.width=6, fig.height=4}
+
+``` r
 # dev.new(height=4, width=6, noRStudioGD = TRUE)
 ######################
 # GET KERATIN COUNTS #
@@ -362,7 +364,10 @@ ggplot(ker, aes(fill=Genes, y=values, x=Clusters)) +
   guides(fill = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7))
 ```
 
-```{r subseted-colour-pallet}
+<img src="../Figures/04/04c_keratins_per_clusters.png"
+data-fig-align="center" />
+
+``` r
 cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., 0:28)
 
 df <- tibble(cell_id =rep(0:28, 30)) %>%
@@ -390,7 +395,8 @@ ColourPalleteMulti <- function(df, group, subgroup){
 ```
 
 ### Barplot of cell composition for bulk dataset
-```{r 04d_bulk_decon_bar_plot, fig.width=7, fig.height=5}
+
+``` r
 # dev.new(height=5, width=7, noRStudioGD = TRUE)
 ##################
 # PLOT FUNCTIONS #
@@ -469,8 +475,16 @@ l <- plot_grid(plotlist = c$legend, nrow =3 , byrow = T ,
 plot_grid(bar, l ,rel_widths = c(1,.35))
 ```
 
+<img src="../Figures/04/04d_bulk_decon_bar_plot.png"
+data-fig-align="center" />
+
+``` r
+  #axis = "tblr",
+```
+
 ### Barplot of cell composition for st dataset
-```{r 04e_st_decon_bar_plot, fig.width=6, fig.height=5}
+
+``` r
 # dev.new(height=5, width=6, noRStudioGD = TRUE)
 decon_column_st <- DATA_st@assays[["misc"]][["cell_annot"]] %>%
   mutate(., cell_type_2 = case_when(is.na(.$cell_type_2) ~ .$cell_type,
@@ -516,8 +530,12 @@ l <- plot_grid(plotlist = c$legend, nrow =3 , byrow = T , rel_heights = c(1,1,3)
 plot_grid(bar, l ,rel_widths = c(1,.7))
 ```
 
+<img src="../Figures/04/04e_st_decon_bar_plot.png"
+data-fig-align="center" />
+
 ### Heatmap of bulk deconvolution
-```{r 04f_Heatmap, fig.width = 3, fig.height = 3, fig.dim = c(33, 33), eval=FALSE}
+
+``` r
 #install_github("jokergoo/ComplexHeatmap")
 library(ComplexHeatmap)
 #################
@@ -604,7 +622,8 @@ draw(H, merge_legend = TRUE)
 ```
 
 ### Cell types plotted on tissue
-```{r 04f_celltypes_on_tissue, fig.height=5.5, fig.width=9, dev.args = list(bg = 'transparent')}
+
+``` r
 # dev.new(height=5.5, width=9, noRStudioGD = TRUE)
 ######################
 # FACET WRAP CLUSTER #
@@ -686,361 +705,134 @@ ggsave(paste0("./Figures/04/", "clus_plots.pdf"),
 plot_grid( CLUS_PLOTS$eg[[1]][[1]], CLUS_PLOTS$eg[[2]][[1]], ncol=1) 
 ```
 
+<img src="../Figures/04/04f_celltypes_on_tissue.png"
+data-fig-align="center" />
+
 ## Session info
-```{r}
+
+``` r
 sessionInfo()
 ```
 
+    R version 4.1.2 (2021-11-01)
+    Platform: x86_64-apple-darwin13.4.0 (64-bit)
+    Running under: macOS Big Sur 10.16
+
+    Matrix products: default
+    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.21.dylib
+
+    locale:
+    [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
+
+    attached base packages:
+    [1] stats4    stats     graphics  grDevices utils     datasets  methods  
+    [8] base     
+
+    other attached packages:
+     [1] SCDC_0.0.0.9000             BiocParallel_1.28.3        
+     [3] gplots_3.1.3                NMF_0.25                   
+     [5] cluster_2.1.4               rngtools_1.5.2             
+     [7] registry_0.5-1              scran_1.22.1               
+     [9] scuttle_1.4.0               SingleCellExperiment_1.16.0
+    [11] SummarizedExperiment_1.24.0 Biobase_2.54.0             
+    [13] GenomicRanges_1.46.1        GenomeInfoDb_1.30.1        
+    [15] IRanges_2.28.0              S4Vectors_0.32.4           
+    [17] BiocGenerics_0.40.0         MatrixGenerics_1.6.0       
+    [19] matrixStats_0.63.0          snowfall_1.84-6.2          
+    [21] snow_0.4-4                  patchwork_1.1.2            
+    [23] cowplot_1.1.1               RColorBrewer_1.1-3         
+    [25] openxlsx_4.2.5.1            tidyseurat_0.5.3           
+    [27] ttservice_0.2.2             SeuratObject_4.1.3         
+    [29] Seurat_4.3.0                forcats_0.5.2              
+    [31] stringr_1.5.0               dplyr_1.0.10               
+    [33] purrr_1.0.1                 readr_2.1.3                
+    [35] tidyr_1.2.1                 tibble_3.1.8               
+    [37] ggplot2_3.4.0               tidyverse_1.3.2            
+
+    loaded via a namespace (and not attached):
+      [1] scattermore_0.8           pkgmaker_0.32.7          
+      [3] bit64_4.0.5               knitr_1.41               
+      [5] irlba_2.3.5.1             DelayedArray_0.20.0      
+      [7] data.table_1.14.6         KEGGREST_1.34.0          
+      [9] RCurl_1.98-1.9            doParallel_1.0.17        
+     [11] generics_0.1.3            ScaledMatrix_1.2.0       
+     [13] RSQLite_2.2.20            RANN_2.6.1               
+     [15] future_1.30.0             bit_4.0.5                
+     [17] tzdb_0.3.0                spatstat.data_3.0-0      
+     [19] xml2_1.3.3                lubridate_1.9.0          
+     [21] httpuv_1.6.8              assertthat_0.2.1         
+     [23] gargle_1.2.1              xfun_0.36                
+     [25] hms_1.1.2                 evaluate_0.19            
+     [27] promises_1.2.0.1          fansi_1.0.3              
+     [29] caTools_1.18.2            dbplyr_2.2.1             
+     [31] readxl_1.4.1              igraph_1.3.5             
+     [33] DBI_1.1.3                 htmlwidgets_1.6.1        
+     [35] spatstat.geom_3.0-3       googledrive_2.0.0        
+     [37] ellipsis_0.3.2            backports_1.4.1          
+     [39] gridBase_0.4-7            deldir_1.0-6             
+     [41] sparseMatrixStats_1.6.0   vctrs_0.5.1              
+     [43] ROCR_1.0-11               abind_1.4-5              
+     [45] cachem_1.0.6              withr_2.5.0              
+     [47] progressr_0.13.0          vroom_1.6.0              
+     [49] checkmate_2.1.0           fastmatrix_0.4-1245      
+     [51] sctransform_0.3.5         goftest_1.2-3            
+     [53] lazyeval_0.2.2            crayon_1.5.2             
+     [55] spatstat.explore_3.0-5    labeling_0.4.2           
+     [57] edgeR_3.36.0              pkgconfig_2.0.3          
+     [59] nlme_3.1-161              rlang_1.0.6              
+     [61] globals_0.16.2            lifecycle_1.0.3          
+     [63] miniUI_0.1.1.1            modelr_0.1.10            
+     [65] rsvd_1.0.5                cellranger_1.1.0         
+     [67] polyclip_1.10-4           lmtest_0.9-40            
+     [69] Matrix_1.5-3              zoo_1.8-11               
+     [71] reprex_2.0.2              ggridges_0.5.4           
+     [73] googlesheets4_1.0.1       pheatmap_1.0.12          
+     [75] png_0.1-8                 viridisLite_0.4.1        
+     [77] bitops_1.0-7              KernSmooth_2.23-20       
+     [79] Biostrings_2.62.0         blob_1.2.3               
+     [81] DelayedMatrixStats_1.16.0 parallelly_1.33.0        
+     [83] spatstat.random_3.0-1     beachmat_2.10.0          
+     [85] scales_1.2.1              memoise_2.0.1            
+     [87] magrittr_2.0.3            plyr_1.8.8               
+     [89] ica_1.0-3                 zlibbioc_1.40.0          
+     [91] compiler_4.1.2            dqrng_0.3.0              
+     [93] fitdistrplus_1.1-8        cli_3.6.0                
+     [95] XVector_0.34.0            listenv_0.9.0            
+     [97] pbapply_1.6-0             MASS_7.3-58.1            
+     [99] tidyselect_1.2.0          stringi_1.7.12           
+    [101] yaml_2.3.6                BiocSingular_1.10.0      
+    [103] locfit_1.5-9.7            ggrepel_0.9.2            
+    [105] grid_4.1.2                tools_4.1.2              
+    [107] timechange_0.2.0          future.apply_1.10.0      
+    [109] parallel_4.1.2            rstudioapi_0.14          
+    [111] bluster_1.4.0             foreach_1.5.2            
+    [113] metapod_1.2.0             gridExtra_2.3            
+    [115] farver_2.1.1              Rtsne_0.16               
+    [117] digest_0.6.31             BiocManager_1.30.19      
+    [119] shiny_1.7.4               Rcpp_1.0.9               
+    [121] broom_1.0.2               later_1.3.0              
+    [123] RcppAnnoy_0.0.20          httr_1.4.4               
+    [125] AnnotationDbi_1.56.2      L1pack_0.41-2            
+    [127] colorspace_2.0-3          rvest_1.0.3              
+    [129] fs_1.5.2                  tensor_1.5               
+    [131] reticulate_1.27           splines_4.1.2            
+    [133] uwot_0.1.14               statmod_1.5.0            
+    [135] spatstat.utils_3.0-1      sp_1.5-1                 
+    [137] xbioc_0.1.19              plotly_4.10.1            
+    [139] xtable_1.8-4              jsonlite_1.8.4           
+    [141] R6_2.5.1                  pillar_1.8.1             
+    [143] htmltools_0.5.4           mime_0.12                
+    [145] nnls_1.4                  glue_1.6.2               
+    [147] fastmap_1.1.0             BiocNeighbors_1.12.0     
+    [149] codetools_0.2-18          utf8_1.2.2               
+    [151] lattice_0.20-45           spatstat.sparse_3.0-0    
+    [153] leiden_0.4.3              gtools_3.9.4             
+    [155] zip_2.2.2                 survival_3.5-0           
+    [157] limma_3.50.3              rmarkdown_2.20           
+    [159] munsell_0.5.0             GenomeInfoDbData_1.2.7   
+    [161] iterators_1.0.14          haven_2.5.1              
+    [163] reshape2_1.4.4            gtable_0.3.1             
+
 ### BayesPrism
-```{r BayesPrism, include=FALSE, eval=FALSE}
-######################
-# LOAD SPARSE MATRIX #
-######################
-# install_github("Danko-Lab/BayesPrism/BayesPrism")
-library(BayesPrism)
-data_dir <- "../data/Reference_data/GSE173231/"
-f <- c("matrix.mtx$", "genes.tsv$|features.tsv$", "barcodes.tsv$") %>% set_names()
-
-f_list <- map_df(f, ~list.files(path = data_dir, pattern = .x,
-                      full.names = T, recursive = T) ) %>%
-  mutate(sample_name = str_match(.$"matrix.mtx$", ".*\\/([^\\/]+).matrix\\.mtx$")[,2]) %>%
-  mutate(sample_id = str_extract(.$sample_name, "(?<=_).+(?=_)"), .$sample_name) 
-
-matrix_list <- pmap(f_list, ~ReadMtx(mtx = ..1, features = ..2, cells = ..3, 
-                                     feature.column = 1) ) %>% # , mtx.transpose=T
-                     set_names(., f_list$sample_id) %>% 
-  map(., ~t(.x)) %>%
-  imap(., ~`rownames<-`(., paste0(str_extract(rownames(.x), "^[ATCG]+"),"_",.y)))
-
-
-#################################
-# substitute symbols for entrez #
-#################################
-genes <- f_list$`genes.tsv$|features.tsv$` %>%
-  set_names(., f_list$sample_id) %>% 
-  map(., ~read_tsv(.x, col_names = F)) %>%
-  bind_rows(., .id = "sample_id")
-  
-genes %>% 
-  dplyr::group_by(X2) %>%
-  dplyr::summarise(n = dplyr::n(), .groups = "drop") %>%
-  dplyr::filter(n > 10) 
-
-gene_list <- set_names(genes$X2, genes$X1)
-
-
-DATA_r@assays$RNA@counts %>%
-  t() %>%
-  colnames()
-  
-t <- tibble(symbol = dimnames(DATA_r@assays$RNA@counts)[[1]]) %>%
-  left_join(., select(genes, entrez="X1", symbol="X2"), by="symbol") %>%
-  unique() %>%
-  arrange(dimnames(DATA_r@assays$RNA@counts)[[1]])
-  unique()
-  mutate(., genes = cell_type[as.character(DATA_sub$Clusters)])
-
-
-
-matrix_list %>%  
-  bind_rows()
-  
-table(DATA_r@active.ident)
-matrix_list$CX1@Dimnames[[1]]
-
-
-###################################
-# Get scRNA-seq  and filter genes #
-###################################
-sc.dat <- DATA_r %>%
-  GetAssayData(., slot = 'counts', assay = "RNA") %>%
-  # .[rownames(.) %in% Bulk_data$symbol, ] %>% # filtering is not neccesary done by BayesPrisem
-  t(.) %>%
-  as.matrix(.)
-
-################################
-# Get Cell type for scRNA-seq #
-###############################
-cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., seq_along(.))
-
-Clustering <- DATA_r@meta.data %>%
-  mutate(., cell_type = cell_type[as.character(DATA_r$Clusters)]) %>%
-  select(Clusters, cell_type) 
-
-cell.state.labels <- Clustering$Clusters
-cell.type.labels <- Clustering$cell_type
-
-table(cell.state.labels)
-table(cell.type.labels)
-
-table(cbind.data.frame(cell.state.labels, cell.type.labels))
-# Please make sure that all cell states contain a reasonable number of cells, e.g. >20 or >50, so that their profile can be represented accurately
-##############
-# BULK DATA #
-#############
-# entrez
-bk.dat <- Bulk_data %>%
-  select(symbol, contains("P")) %>%
-  # mutate(entrez = paste0("ENSG",str_pad(as.character(Bulk_data$entrez), 11, pad = "0"))) %>%
-  pivot_longer(-symbol) %>% 
-  pivot_wider(names_from=symbol, values_fn = function(x) sum(x)) %>% #aggregates the duplicates
-  column_to_rownames(var = "name")
-
-####################################
-# QC of cell type and state labels #
-####################################
-plot.cor.phi(input=sc.dat,
-                         input.labels=cell.state.labels,
-                         title="cell state correlation",
-                         #specify pdf.prefix if need to output to pdf
-                         #pdf.prefix="gbm.cor.cs", 
-                         cexRow=0.2, cexCol=0.2,
-                         margins=c(2,2))
-
-plot.cor.phi(input=sc.dat, 
-                         input.labels=cell.type.labels, 
-                         title="cell type correlation",
-                         #specify pdf.prefix if need to output to pdf
-                         #pdf.prefix="gbm.cor.ct",
-                         cexRow=0.5, cexCol=0.5,
-                         )
-
-sc.stat <- plot.scRNA.outlier(
-  input=sc.dat, #make sure the colnames are gene symbol or ENSMEBL ID 
-  cell.type.labels=cell.type.labels,
-  species="hs", #currently only human(hs) and mouse(mm) annotations are supported
-  return.raw=TRUE #return the data used for plotting. 
-  #pdf.prefix="gbm.sc.stat" specify pdf.prefix if need to output to pdf
-)
-
-bk.stat <- plot.bulk.outlier(
-  bulk.input=bk.dat,#make sure the colnames are gene symbol or ENSMEBL ID 
-    sc.input=sc.dat, #make sure the colnames are gene symbol or ENSMEBL ID 
-  cell.type.labels=cell.type.labels,
-  species="hs", #currently only human(hs) and mouse(mm) annotations are supported
-  return.raw=TRUE
-  #pdf.prefix="gbm.bk.stat" specify pdf.prefix if need to output to pdf
-)
-
-#################
-# Filter genes #
-################
-sc.dat.filtered <- cleanup.genes (input=sc.dat,
-                                  input.type="count.matrix",
-                                    species="hs", 
-                                    gene.group=c( "Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY") ,
-                                    exp.cells=5)
-setdiff(colnames(sc.dat.filtered), colnames(bk.dat))
-
-plot.bulk.vs.sc (sc.input = sc.dat.filtered,
-                            bulk.input = bk.dat
-                            #pdf.prefix="gbm.bk.vs.sc" specify pdf.prefix if need to output to pdf
-)
-# select only protein coding genes
-sc.dat.filtered.pc <-  select.gene.type (sc.dat.filtered,
-                                        gene.type = "protein_coding")
-
-############################
-# Construct a prism object #
-############################
-myPrism <- new.prism(
-  reference=sc.dat.filtered.pc, 
-  mixture=bk.dat,
-  input.type="count.matrix", 
-  cell.type.labels = cell.type.labels, 
-  cell.state.labels = cell.state.labels,
-  key=NULL,
-  outlier.cut=0.01,
-    outlier.fraction=0.1,
-)
-##################
-# RUN BAYESPRISM #
-##################
-bp.res <- run.prism(prism = myPrism, n.cores=50)
-```
 
 ### Paulos code
-```{r Paulos-facet-wrap-plotting, eval=FALSE, include=FALSE}
-start_time <- Sys.time()
-
-img_list <- names(DATA_st@images)
-clusters <- rownames(DATA_st@assays$SCDC@data)
-
-
-if(!dir.exists(result_dir)){dir.create(result_dir,recursive = T)}
-
-library(niceRplots)
-
-pdf(paste0(result_dir, "_HE.pdf"),width = (length(img_list) + 1)*3.5,height = 3.5,useDingbats = F)
-par(mfrow= c(1,length(img_list) + 1))
-plot_meta( DATA_sub , feat = "Clusters" , cex=.5,label = T, red = "umap_harmony" )
-for(i in img_list){
-  plot_spatial_feat(DATA_st, red = i,feat =  "CDH1", main="",assay="RNA", # CDH1, "ACTB"
-                    pch=16,cex=1,plot_tissue = T,
-                    transparency = "00")}
-dev.off()
-
-grid_genes <- function(plot_list, title){
-  title <- ggdraw() + draw_label(paste0("Top 10 Markers for Cluster ", title), fontface='bold')
-  g <- plot_grid(plotlist = plot_list,
-            ncol = 4)
-  g_ <- plot_grid(title, g, ncol=1, rel_heights=c(0.1, 1))
-  return(g_)
-}
-
-for(j in clusters){
-  pdf(paste0(result_dir,"cluster",j,".pdf"),
-      width = (length(img_list) + 1)*3.5,
-      height = 3.5,useDingbats = F)
-  
-  par(mfrow= c(1,length(img_list) + 1))
-  DATA_sub$temp <- (DATA_sub$Clusters == j)*1
-  plot_feat( DATA_sub, feat = "temp", red = "umap_harmony",  cex=.5, main=j )
-  
-  for(i in img_list){
-    plot_spatial_feat(DATA_st, 
-                      red = i, 
-                      feat =  j, 
-                      main=paste0(i," (",j,")"),
-                      assay="SCDC",
-                      maxs=max(DATA_st@assays$SCDC@data[j,],0.1),
-                      pch=16,cex=1, 
-                      plot_tissue = F)
-  }
-dev.off()
-}
-end_time <- Sys.time()
-time <- end_time - start_time
-```
-
-```{r old-code, include=FALSE, eval=FALSE}
-# This was an earlier version of the clus_plot function before I completely understod what to do
-# might still be interesting but could also be just crap, Plots the the gene expression of a specific gene per cell type defined by deconvolution
-###################
-# Facet wrap GENE #
-###################
-clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
-  #c <- unique( pull(spe, as_label(clusters)))
-  col=c("grey90","grey80","grey60","navy","black")
-  clus_col <- c("grey90","navy")
-  clusters <- enquo(clusters)
-  c <- unique( pull(clus_spe, !!(clusters))) %>% sort(.) %>% set_names()
-    
-  # Create Columns for induvidual clusters:
-  clus_columns <- map(c, ~(clus_spe@meta.data[["Clusters"]] == .x)*1) %>% 
-    map(.,~as.character(.x)) %>%
-    set_names(., paste0("Clus_",names(.)))
-  
-  # Add the Cluster columns to seurat obj.
-  clus_spe <- bind_cols(clus_spe, clus_columns)
-  # Plot Individal plot for each cluster
-  P <- {map(c, ~plot_clusters.fun(clus_spe, color=clus_col, paste0("Clus_",.x), 
-                                  red="umap_harmony"), txt_size=20, dot_size = 0.2, lable=F)}
-  #clus_plot <- plot_clusters.fun(spe, color=col, paste0("Clus_","2"), red="umapharmony", txt_size=20, lable=F)
-  
-  filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
-  
-  decon_columns <- spe@assays$SCDC@data %>%
-    Matrix::t() %>%
-    as_tibble(., rownames = ".cell") %>% 
-    mutate_if(is.numeric, ~1 * (. > 0)) %>%
-    filt_empty(., 0) %>%
-    mutate(across(-.cell, ~as.character(.x)))
-    
-    c <- intersect(as.character(c), colnames(decon_columns))
-  
-  PLOTS <- tibble("clus" = c) %>%
-    #sample_n(., size = 2) %>%
-    mutate(plots = pmap(.,
-      ~plot_facets.fun(filter(spe, decon_columns[[..1]]=="1"),
-        assay=assay,
-        geneid = gene,#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
-        zoom = "zoom", #"zoom"
-        colors = col,
-        #annot_col = "#dbd9d9",
-        annot_line = .1,
-        img_alpha = 0,
-        point_size = 0.5)
-      )) %>%
-    mutate(clus_plot = ifelse(.$clus %in% names(P), P[.$clus], NA)) %>%
-    mutate(., combined = pmap(.,
-      ~plot_grid( ..3, ..2, ncol=2, rel_widths=c(1.2,4)) ))
-
-  # PLOTS$combined[[1]]
-  #PLOTS$data[[1]]
-
-  combined <- plot_grid( plotlist=PLOTS$combined, ncol=1, rel_heights=rep_len(1, length(PLOTS$combined) ) )
-
-  return(combined)
-}
-```
-
-```{r waist-of-time, include=FALSE, eval=FALSE}
-DATA_st <- DATA_st %>% mutate(sp_annot2 = ifelse(.$sp_annot == "epi_1"|.$sp_annot == "epi_2"|.$sp_annot == "epi_3", "epi", .$sp_annot )) %>%
-    mutate(sp_annot2 = ifelse(.$sp_annot2 == "SubMuc_1"|.$sp_annot2 == "SubMuc_2"|.$sp_annot2 == "SubMuc_3", "SubMuc", .$sp_annot2 ))
-
-find_hull <- function(df) df[chull(df$eff, df$man), ]
-
-df_ <- df %>%
-  cbind(.,as_tibble(select(DATA_st, Clusters))) %>%
-  mutate(Clusters = as.character(.$Clusters)) %>%
-  cbind(.,as_tibble(select(spe, orig.ident))) %>%
-    #mutate(orig.ident = !!(facet)) %>%
-    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
-    #cbind(.,as_tibble(select(spe, groups))) %>%
-    rownames_to_column(var = "barcode") %>%
-    as_tibble() %>%
-    filter(orig.ident == "P118")
-
-get_chull <- function(df_){
-  chull <- df_[grDevices::chull(df_$imagecol, df_$imagerow), ][["barcode"]]
-  chull <- ifelse(df_$barcode %in% chull, "c", NA)
-  return(chull)
-}
-      
-  df_ <- df_ %>% 
-  nest(data= -Clusters) %>%
-  mutate(chull = map(.$data, ~get_chull(.x))) %>%
-  unnest(c(data, chull))
-
-
-hull <- df_ %>%
-  filter(!(is.na(.$chull)))
-
-p <- ggplot(data=df_, aes(x=imagecol,y=imagerow)) +
-      ggstar::geom_star(data=df_, aes(x=imagecol,y=imagerow, fill=Clusters, colour=Clusters),
-        starshape = "hexagon",
-        size = 2.8,
-        #stroke = 0,
-        alpha = alpha
-      )+ spatial_annotation + 
-      geom_point(aes(x=imagecol,y=imagerow, colour=Clusters),
-               stroke = 0, size = point_size, alpha = alpha) +
-      geom_polygon(data=hull, alpha =0.3, aes(group = Clusters, fill=Clusters))
-  
-      geom_voronoi_tile(aes(fill = Clusters), colour = NA, max.radius = 0.4)
-      geom_voronoi_tile(aes(fill = Clusters), colour = NA) +
-      geom_voronoi_segment() +
-      
-      
-      #scale_colour_identity() +
-      scale_color_gradientn(colours = col, 
-                            values = seq(from=0, to=1, along.with=col),
-                            na.value = "#FFFFFF") + 
-      spatial_image + 
-      spatial_annotation + 
-      #scale_color_manual(values=c(annot_col, "transparent")) +
-      coord_cartesian(expand=FALSE ) + #theme(l) +
-      xlim(l$min_col,l$max_col) +
-      ylim(l$max_row,l$min_row) +
-      geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F) + # sample ID
-      facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
-      
-ggplot(iris, aes(Sepal.Length, Sepal.Width, group = -1L)) +
-  geom_point(aes(colour=Species))
-  geom_voronoi_tile(aes(fill = Species)) +
-  geom_voronoi_segment() +
-  geom_text(aes(label = after_stat(nsides), size = after_stat(vorarea)),
-    stat = 'delvor_summary', switch.centroid = TRUE
-  )
-```
