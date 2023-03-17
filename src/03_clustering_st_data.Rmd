@@ -1,5 +1,5 @@
 ---
-title: "Clustering filtered ST data"
+title: "Clustering filtered spatial data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 format:
   html:
@@ -50,7 +50,7 @@ knitr::opts_chunk$set(
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 ```
 
-## Load data and libraries
+### Load data and libraries
 ```{r Load-Library-and-data}
 ##################
 # LOAD LIBRARIES #
@@ -80,7 +80,10 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
 #################
 # COLOUR PALLET #
 #################
-clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77CFF", "#FF7F00","#E41A1C",  "#FF61CC", "#FFFF33","#F8766D", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
+clus_1.5 <- c("#F8766D", "#7CAE00", "#CD9600", "#00A9FF", "#984EA3","#C77CFF", "#00BFC4", "#FF7F00",
+              "#FFFF33", "#E41A1C","#377EB8","#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
+clus_1 <- c( "#F8766D","#7CAE00", "#CD9600", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
+             "#00BFC4", "#FF7F00","#FFFF33", "#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
 
 # clus <- c(scales::hue_pal()(8),
 #              RColorBrewer::brewer.pal(9,"Set1"),
@@ -88,7 +91,8 @@ clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77
 #              RColorBrewer::brewer.pal(8,"Accent"),
 #              RColorBrewer::brewer.pal(9,"Pastel1"),
 #              RColorBrewer::brewer.pal(8,"Pastel2") )
-# scales::show_col(clus)
+# scales::show_col(clus_1.5)
+# scales::show_col(RColorBrewer::brewer.pal(9,"Set1"))
 ```
 
 ## Clustering
@@ -96,10 +100,10 @@ clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
-DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
+DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:30, k.param = 15, prune.SNN = 1/15) 
 
 # Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.5, 0.8, 1, 1.5, 2)) {
+for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     DATA <- FindClusters(DATA, resolution = res, algorithm = 1)
 }
 
@@ -111,8 +115,10 @@ for (res in c(0.1, 0.5, 0.8, 1, 1.5, 2)) {
 
 ### UMAP of cluster resolutions
 ```{r 03a_plot_resolution, fig.asp=5/10}
-res <- c("RNA_snn_res.0.8", "RNA_snn_res.1")
-p <- map(res, ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7))
+res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
+p <- map2(res, list(clus_1,clus_1.5),
+          ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7, 
+                             color = .y, red = "umap_harmony"))
 plot_grid(ncol = 2, 
           plotlist = p)
 ```
@@ -123,17 +129,17 @@ plot_grid(ncol = 2,
 plots <- DATA %>%
   mutate(group = orig.ident) %>%
   nest(., data = -group) %>%
-  mutate( "res_0.8" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.8", 
-                      point_size = 0.8, zoom="zoom", colors = clus))) %>%
-  mutate( "res_1.0" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1,geneid="RNA_snn_res.1",
-                      point_size = 0.8, zoom="zoom", colors = clus)))
+  mutate( "res_1" = pmap(., 
+    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1", 
+                      point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
+  mutate( "res_2" = pmap(., 
+    ~plot_spatial.fun(..2, sampleid=..1,geneid="RNA_snn_res.1.5",
+                      point_size = 0.8, zoom="zoom", colors = clus_1.5)))
 
-legend_1 <- get_legend(plots$res_0.8[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_1.0[[1]] + theme(legend.position="right"))
+legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
+legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
 legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_0.8, plots$res_1.0), nrow = 8, byrow = F) & theme(legend.position="none")
+combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
 combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
 combined
 ```
@@ -141,8 +147,9 @@ combined
 ### Set cluster resolution
 ```{r set-resolution}
 DATA <- DATA %>%
-  rename(Clusters="RNA_snn_res.0.8") %>%
-  SetIdent(., value = "Clusters")
+  rename(Clusters="RNA_snn_res.1") %>%
+  SetIdent(., value = "Clusters") %>%
+  select(-any_of(contains("RNA_snn_res")))
 ```
 
 ### Spot distribution by clusters
@@ -172,7 +179,6 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
   select(sort(colnames(.)[1:8]), everything()) %>%
   knitr::kable(., caption = "Distribution of submucosal spots per cluster per subject")
 ```
-
 
 ### Plot final clusters on tissue section:
 ```{r 03b_sp_mt_plot_filt, fig.height=10, eval=FALSE, include=FALSE}
@@ -204,7 +210,7 @@ combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
 (p <- plot_st_meta.fun( DATA,
         feat =  "Clusters",
         zoom = "zoom",
-        colors = clus,
+        colors = clus_1,
         alpha = .9,
         #annot_col = "#dbd9d9",
         annot_line = .1,
@@ -213,7 +219,22 @@ combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
       
 ```
 
-# Paulos Code
+## Save seurat object
+```{r save-SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
+# saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
+# DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
+```
+
+### Session info
+```{r}
+sessionInfo()
+```
+
+## Paulo's Code
 ```{r Clustering, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
@@ -236,23 +257,7 @@ plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.2", cex = 0.5, label =
 DATA <- SetIdent(DATA, value = "RNA_snn_res.1.5")
 ```
 
-## Save seurat object
-```{r save-SeuratObject}
-##################################
-# SAVE INTERMEDIATE SEURAT OJECT #
-##################################
- saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
-# saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
-# DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
-```
-
-## Session info
-```{r}
-sessionInfo()
-```
-
-### Paulo section
-```{r eval=FALSE, include=FALSE}
+```{r plotting, eval=FALSE, include=FALSE}
 sample_names
 niceRplots::plot_spatial_feat(DATA, red = "P107", assay = "RNA", feat = "RNA_snn_res.1.5", plot_tissue = F)
 
