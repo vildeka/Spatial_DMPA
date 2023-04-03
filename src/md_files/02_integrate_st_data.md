@@ -1,8 +1,8 @@
-Integrate ST Data
+Integrate spatial data
 ================
-3/13/23
+3/21/23
 
-## Load data and libraries
+### Load data and libraries
 
 ``` r
 ##################
@@ -29,7 +29,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 DATA <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
 ```
 
-## Identify Highly Variable Genes (HVG) across samples
+### Identify Highly Variable Genes (HVG) across samples
 
 ``` r
 ################################
@@ -68,7 +68,7 @@ remove <- str_subset(hig_var, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
 hig_var <- setdiff(hig_var, remove)
 ```
 
-## Heatmap of HVG in all samples
+### Heatmap of HVG in all samples
 
 ``` r
 pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
@@ -76,7 +76,7 @@ pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey
 
 <img src="../Figures/02/02a_HVG_heatmap.png" data-fig-align="center" />
 
-## Integration
+### Integration
 
 ``` r
 ############
@@ -89,22 +89,64 @@ DATA <- DATA %>%
                       verbose = FALSE) %>%
   ScaleData(verbose = FALSE, features = hig_var ) %>%
   RunPCA(verbose = FALSE, npcs = 50) %>%
-  RunUMAP(dims = 1:20, n.components = 2L, n.neighbors = 10) 
+  RunUMAP(dims = 1:50,
+          n.components = 2L,
+          n.neighbors = 10,
+          min.dist = .1,
+          spread = .3) 
 
 DATA <- DATA %>%
   RunHarmony(group.by.vars = "orig.ident", 
-             reduction = "pca", 
-             dims.use = 1:20, 
+             reduction = "pca",
+             dims.use = 1:50, 
              assay.use = "RNA") #%>%
 
 DATA <-   DATA %>%
-  RunUMAP(dims = 1:10, 
+  RunUMAP(dims = 1:50, 
           n.neighbors = 10,
+          min.dist = .1,
+          spread = 1,
+          repulsion.strength = 1,
+          negative.sample.rate = 10,
+          n.epochs = 100,
           reduction = "harmony",
           reduction.name = "umap_harmony")
 ```
 
-## Plot before and after integration
+### Alternative graph based UMAP
+
+``` r
+integrated <- DATA@reductions$harmony@cell.embeddings
+ann <- RcppHNSW::hnsw_build(as.matrix(integrated), distance = "cosine")
+knn <- RcppHNSW::hnsw_search(as.matrix(integrated) , ann = ann , k = 15)
+
+UU2 <- uwot::umap(X = NULL,
+                 nn_method =  knn,
+                 n_components = 2,
+                 ret_extra = c("model","fgraph"),
+                 verbose = T,
+                 min_dist = 0.1,
+                 spread = .3,
+                 repulsion_strength = 1,
+                 negative_sample_rate = 10,
+                 n_epochs = 150,
+                 n_threads = 8)
+dimnames(UU2$embedding) <- list(colnames(DATA),paste0("umap_harmony_knn_", 1:2))
+DATA@reductions[["umap_harmony_knn"]] <- CreateDimReducObject(embeddings = UU2$embedding, 
+                                                              key = "umap_harmony_knn_")
+colnames(DATA@reductions$umap_harmony_knn@cell.embeddings) <- paste0("umap_harmony_knn_", 1:2)
+```
+
+``` r
+res <- c("umap_harmony", "umap_harmony_knn")
+p <- map(res, ~plot_clusters.fun(DATA, red=.x, cluster="orig.ident", lable=FALSE, txt_size = 7))
+plot_grid(ncol = 2, 
+          plotlist = p)
+```
+
+<img src="../Figures/02/02b_UMAP_options.png" data-fig-align="center" />
+
+### Plot before and after integration
 
 ``` r
 #  dev.new(height=6, width=6.6929133858, noRStudioGD = TRUE)
@@ -118,10 +160,10 @@ plot_grid(ncol = 2,
          plotlist = p)
 ```
 
-<img src="../Figures/02/02b_Plot_dim_reduction.png"
+<img src="../Figures/02/02c_Plot_dim_reduction.png"
 data-fig-align="center" />
 
-## Plot marker genes
+### Plot marker genes
 
 ``` r
 #  dev.new(height=3, width=8, noRStudioGD = TRUE)
@@ -139,10 +181,8 @@ plot_grid(ncol = 3,
           plotlist = p)
 ```
 
-<img src="../Figures/02/02c_plot_marker_genes.png"
+<img src="../Figures/02/02d_plot_marker_genes.png"
 data-fig-align="center" />
-
-# Paulos base R code
 
 ## Save seurat object
 
@@ -150,9 +190,9 @@ data-fig-align="center" />
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-#saveRDS(DATA, paste0(result_dir,"SeuratObj_harmony.RDS"))
-saveRDS(DATA, paste0(result_dir,"SeuratObj_harmony_filt.RDS"))
-#DATA <- readRDS(paste0(result_dir,"SeuratObj_harmony.RDS"))
+#saveRDS(DATA, paste0(result_dir,"seuratObj_harmony.RDS"))
+saveRDS(DATA, paste0(result_dir,"seuratObj_harmony_filt.RDS"))
+#DATA <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
 ```
 
 ### Session info
@@ -183,42 +223,45 @@ sessionInfo()
     loaded via a namespace (and not attached):
       [1] readxl_1.4.1           backports_1.4.1        plyr_1.8.8            
       [4] igraph_1.3.5           lazyeval_0.2.2         sp_1.5-1              
-      [7] splines_4.1.2          listenv_0.9.0          scattermore_0.8       
-     [10] digest_0.6.31          htmltools_0.5.4        fansi_1.0.3           
-     [13] magrittr_2.0.3         tensor_1.5             googlesheets4_1.0.1   
-     [16] cluster_2.1.4          ROCR_1.0-11            tzdb_0.3.0            
-     [19] globals_0.16.2         modelr_0.1.10          matrixStats_0.63.0    
-     [22] timechange_0.2.0       spatstat.sparse_3.0-0  colorspace_2.0-3      
-     [25] rvest_1.0.3            ggrepel_0.9.2          haven_2.5.1           
-     [28] xfun_0.36              crayon_1.5.2           jsonlite_1.8.4        
-     [31] progressr_0.13.0       spatstat.data_3.0-0    survival_3.5-0        
-     [34] zoo_1.8-11             glue_1.6.2             polyclip_1.10-4       
-     [37] gtable_0.3.1           gargle_1.2.1           leiden_0.4.3          
-     [40] future.apply_1.10.0    abind_1.4-5            scales_1.2.1          
-     [43] pheatmap_1.0.12        DBI_1.1.3              spatstat.random_3.0-1 
-     [46] miniUI_0.1.1.1         viridisLite_0.4.1      xtable_1.8-4          
-     [49] reticulate_1.27        htmlwidgets_1.6.1      httr_1.4.4            
-     [52] RColorBrewer_1.1-3     ellipsis_0.3.2         ica_1.0-3             
-     [55] farver_2.1.1           pkgconfig_2.0.3        uwot_0.1.14           
-     [58] dbplyr_2.2.1           deldir_1.0-6           utf8_1.2.2            
-     [61] labeling_0.4.2         tidyselect_1.2.0       rlang_1.0.6           
-     [64] reshape2_1.4.4         later_1.3.0            munsell_0.5.0         
-     [67] cellranger_1.1.0       tools_4.1.2            cli_3.6.0             
-     [70] generics_0.1.3         broom_1.0.2            ggridges_0.5.4        
-     [73] evaluate_0.19          fastmap_1.1.0          yaml_2.3.6            
-     [76] goftest_1.2-3          knitr_1.41             fs_1.5.2              
-     [79] fitdistrplus_1.1-8     RANN_2.6.1             pbapply_1.6-0         
-     [82] future_1.30.0          nlme_3.1-161           mime_0.12             
-     [85] xml2_1.3.3             compiler_4.1.2         rstudioapi_0.14       
-     [88] plotly_4.10.1          png_0.1-8              spatstat.utils_3.0-1  
-     [91] reprex_2.0.2           stringi_1.7.12         lattice_0.20-45       
-     [94] Matrix_1.5-3           vctrs_0.5.1            pillar_1.8.1          
-     [97] lifecycle_1.0.3        spatstat.geom_3.0-3    lmtest_0.9-40         
-    [100] RcppAnnoy_0.0.20       data.table_1.14.6      irlba_2.3.5.1         
-    [103] httpuv_1.6.8           patchwork_1.1.2        R6_2.5.1              
-    [106] promises_1.2.0.1       KernSmooth_2.23-20     gridExtra_2.3         
-    [109] parallelly_1.33.0      codetools_0.2-18       MASS_7.3-58.1         
-    [112] assertthat_0.2.1       withr_2.5.0            sctransform_0.3.5     
-    [115] parallel_4.1.2         hms_1.1.2              grid_4.1.2            
-    [118] rmarkdown_2.20         googledrive_2.0.0      Rtsne_0.16            
-    [121] spatstat.explore_3.0-5 shiny_1.7.4            lubridate_1.9.0       
+      [7] splines_4.1.2          RcppHNSW_0.4.1         listenv_0.9.0         
+     [10] scattermore_0.8        digest_0.6.31          htmltools_0.5.4       
+     [13] fansi_1.0.3            magrittr_2.0.3         tensor_1.5            
+     [16] googlesheets4_1.0.1    cluster_2.1.4          ROCR_1.0-11           
+     [19] tzdb_0.3.0             globals_0.16.2         modelr_0.1.10         
+     [22] matrixStats_0.63.0     timechange_0.2.0       spatstat.sparse_3.0-0 
+     [25] colorspace_2.0-3       rvest_1.0.3            ggrepel_0.9.2         
+     [28] haven_2.5.1            xfun_0.36              crayon_1.5.2          
+     [31] jsonlite_1.8.4         progressr_0.13.0       spatstat.data_3.0-0   
+     [34] survival_3.5-0         zoo_1.8-11             glue_1.6.2            
+     [37] polyclip_1.10-4        gtable_0.3.1           gargle_1.2.1          
+     [40] leiden_0.4.3           future.apply_1.10.0    abind_1.4-5           
+     [43] scales_1.2.1           pheatmap_1.0.12        DBI_1.1.3             
+     [46] spatstat.random_3.0-1  miniUI_0.1.1.1         viridisLite_0.4.1     
+     [49] xtable_1.8-4           reticulate_1.27        htmlwidgets_1.6.1     
+     [52] httr_1.4.4             RColorBrewer_1.1-3     ellipsis_0.3.2        
+     [55] ica_1.0-3              farver_2.1.1           pkgconfig_2.0.3       
+     [58] uwot_0.1.14            dbplyr_2.2.1           deldir_1.0-6          
+     [61] utf8_1.2.2             labeling_0.4.2         tidyselect_1.2.0      
+     [64] rlang_1.0.6            reshape2_1.4.4         later_1.3.0           
+     [67] munsell_0.5.0          cellranger_1.1.0       tools_4.1.2           
+     [70] cli_3.6.0              generics_0.1.3         broom_1.0.2           
+     [73] ggridges_0.5.4         evaluate_0.19          fastmap_1.1.0         
+     [76] yaml_2.3.6             goftest_1.2-3          knitr_1.41            
+     [79] fs_1.5.2               fitdistrplus_1.1-8     RANN_2.6.1            
+     [82] pbapply_1.6-0          future_1.30.0          nlme_3.1-161          
+     [85] mime_0.12              xml2_1.3.3             compiler_4.1.2        
+     [88] rstudioapi_0.14        plotly_4.10.1          png_0.1-8             
+     [91] spatstat.utils_3.0-1   reprex_2.0.2           stringi_1.7.12        
+     [94] lattice_0.20-45        Matrix_1.5-3           vctrs_0.5.1           
+     [97] pillar_1.8.1           lifecycle_1.0.3        spatstat.geom_3.0-3   
+    [100] lmtest_0.9-40          RcppAnnoy_0.0.20       data.table_1.14.6     
+    [103] irlba_2.3.5.1          httpuv_1.6.8           patchwork_1.1.2       
+    [106] R6_2.5.1               promises_1.2.0.1       KernSmooth_2.23-20    
+    [109] gridExtra_2.3          parallelly_1.33.0      codetools_0.2-18      
+    [112] MASS_7.3-58.1          assertthat_0.2.1       withr_2.5.0           
+    [115] sctransform_0.3.5      parallel_4.1.2         hms_1.1.2             
+    [118] grid_4.1.2             rmarkdown_2.20         googledrive_2.0.0     
+    [121] Rtsne_0.16             spatstat.explore_3.0-5 shiny_1.7.4           
+    [124] lubridate_1.9.0       
+
+## Paulos base R code

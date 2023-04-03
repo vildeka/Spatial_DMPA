@@ -1,5 +1,5 @@
 ---
-title: "Integrate ST Data"
+title: "Integrate spatial data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 format:
   html:
@@ -13,10 +13,6 @@ editor_options:
 
 ```{r background-job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
-file_name <- "./02_integrate_st_data.md"
-lab_dir <- "../lab_book/02_QC_integrate_st_data/"
-
-file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
 
 # quarto
 # render_html_with_job(out_dir = lab_dir)
@@ -27,10 +23,10 @@ render_git_with_job(fig_path = "./Figures/02/")
 # Change the figure path from ./Figures/03/ to ../Figures/03/:
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename(file_name))))
+                 paste0("./md_files/", basename("./02_integrate_st_data.md"))))
 
 # kniter
-knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/02/")
+knit_html_with_job(out_dir = "../lab_book/02_QC_integrate_st_data/", fig_path = "./Figures/02/")
 ```
 
 ```{r setup, include=FALSE}
@@ -50,7 +46,7 @@ knitr::opts_chunk$set(
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src")
 ```
 
-## Load data and libraries
+### Load data and libraries
 ```{r Load-Library-and-data}
 ##################
 # LOAD LIBRARIES #
@@ -66,7 +62,6 @@ source("../bin/plotting_functions.R")
 # PATHS #
 #########
 input_dir <- "../results/01_QC_st_data/"
-#input_dir <- "../results/00_load_st_data/"
 result_dir <- "../results/02_integrate_st_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 
@@ -77,7 +72,7 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_filtered.RDS"))
 
 ```
 
-## Identify Highly Variable Genes (HVG) across samples
+### Identify Highly Variable Genes (HVG) across samples
 ```{r Find-HVG}
 ################################
 # SPLIT INTO SEPERATE DATASETS #
@@ -115,12 +110,13 @@ remove <- str_subset(hig_var, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
 hig_var <- setdiff(hig_var, remove)
 ```
 
-## Heatmap of HVG in all samples
+### Heatmap of HVG in all samples
 ```{r 02a_HVG_heatmap, fig.width=10}
 pheatmap::pheatmap(t(hvgs_heat * 1), cluster_rows = F, color = c("grey90", "grey20"))
 ```
 
-## Integration
+
+### Integration
 ```{r Integration}
 ############
 # HARMONY #
@@ -132,23 +128,62 @@ DATA <- DATA %>%
                       verbose = FALSE) %>%
   ScaleData(verbose = FALSE, features = hig_var ) %>%
   RunPCA(verbose = FALSE, npcs = 50) %>%
-  RunUMAP(dims = 1:20, n.components = 2L, n.neighbors = 10) 
+  RunUMAP(dims = 1:50,
+          n.components = 2L,
+          n.neighbors = 10,
+          min.dist = .1,
+          spread = .3) 
 
 DATA <- DATA %>%
   RunHarmony(group.by.vars = "orig.ident", 
-             reduction = "pca", 
-             dims.use = 1:20, 
+             reduction = "pca",
+             dims.use = 1:50, 
              assay.use = "RNA") #%>%
 
 DATA <-   DATA %>%
-  RunUMAP(dims = 1:10, 
+  RunUMAP(dims = 1:50, 
           n.neighbors = 10,
+          min.dist = .1,
+          spread = 1,
+          repulsion.strength = 1,
+          negative.sample.rate = 10,
+          n.epochs = 100,
           reduction = "harmony",
           reduction.name = "umap_harmony")
 ```
 
-## Plot before and after integration
-```{r 02b_Plot_dim_reduction, fig.height=6}
+### Alternative graph based UMAP
+```{r alternative-way-of-UMAP}
+integrated <- DATA@reductions$harmony@cell.embeddings
+ann <- RcppHNSW::hnsw_build(as.matrix(integrated), distance = "cosine")
+knn <- RcppHNSW::hnsw_search(as.matrix(integrated) , ann = ann , k = 15)
+
+UU2 <- uwot::umap(X = NULL,
+                 nn_method =  knn,
+                 n_components = 2,
+                 ret_extra = c("model","fgraph"),
+                 verbose = T,
+                 min_dist = 0.1,
+                 spread = .3,
+                 repulsion_strength = 1,
+                 negative_sample_rate = 10,
+                 n_epochs = 150,
+                 n_threads = 8)
+dimnames(UU2$embedding) <- list(colnames(DATA),paste0("umap_harmony_knn_", 1:2))
+DATA@reductions[["umap_harmony_knn"]] <- CreateDimReducObject(embeddings = UU2$embedding, 
+                                                              key = "umap_harmony_knn_")
+colnames(DATA@reductions$umap_harmony_knn@cell.embeddings) <- paste0("umap_harmony_knn_", 1:2)
+```
+
+```{r, 02b_UMAP_options, fig.asp=5/10}
+res <- c("umap_harmony", "umap_harmony_knn")
+p <- map(res, ~plot_clusters.fun(DATA, red=.x, cluster="orig.ident", lable=FALSE, txt_size = 7))
+plot_grid(ncol = 2, 
+          plotlist = p)
+```
+
+### Plot before and after integration
+```{r 02c_Plot_dim_reduction, fig.height=6}
 #  dev.new(height=6, width=6.6929133858, noRStudioGD = TRUE)
 res <- c("PC", "harmony", "UMAP", "umap_harmony")
 title <- c("PCA raw data", "PCA Harmony integrated", "UMAP raw data", "UMAP Harmony integrated")
@@ -160,14 +195,14 @@ plot_grid(ncol = 2,
          plotlist = p)
 ```
 
-## Plot marker genes
-```{r 02c_plot_marker_genes, fig.height=3, fig.width=8}
+### Plot marker genes
+```{r 02d_plot_marker_genes, fig.height=3, fig.width=8}
 #  dev.new(height=3, width=8, noRStudioGD = TRUE)
 ################################
 # VISUALIZE EXPR. OF KEY GENES #
 ################################
 # col <- c("grey90","grey80","grey60","navy","black")
-col <- c("lightgray", "mistyrose", "red", "dark red", "black")
+col <- c("#FFF5F0", "#FEE0D2", "#FCBBA1", "#FC9272", "#FB6A4A", "#EF3B2C", "#CB181D", "#A50F15", "#67000D")
 genes <- c("KRT1", "KRT15", "CDH1")
 # genes <- c("CD8A", "SFRP2", "CD3E")
 # genes <- c("CD8A", "MYOZ2", "CD3E", "EPCAM", "COL6A1", "CD4")
@@ -177,7 +212,21 @@ plot_grid(ncol = 3,
           plotlist = p)
 ```
 
-# Paulos base R code
+## Save seurat object
+```{r save-SeuratObj}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(DATA, paste0(result_dir,"seuratObj_integrated.RDS"))
+# DATA <- readRDS(paste0(result_dir,"seuratObj_integrated.RDS"))
+```
+
+### Session info
+```{r}
+sessionInfo()
+```
+
+## Paulos base R code
 ```{r Paulos-HVG, eval=FALSE, include=FALSE}
 DATA.list <- SplitObject(DATA, split.by = "sample_name")
 
@@ -262,19 +311,4 @@ plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.1", cex = 0.5, label =
 #     ggtitle("leiden_1"), DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.2") +
 #     ggtitle("leiden_2"))
 
-```
-
-## Save seurat object
-```{r save-SeuratObj}
-##################################
-# SAVE INTERMEDIATE SEURAT OJECT #
-##################################
-#saveRDS(DATA, paste0(result_dir,"seuratObj_harmony.RDS"))
-saveRDS(DATA, paste0(result_dir,"seuratObj_harmony_filt.RDS"))
-#DATA <- readRDS(paste0(result_dir,"seuratObj_harmony.RDS"))
-```
-
-### Session info
-```{r}
-sessionInfo()
 ```
