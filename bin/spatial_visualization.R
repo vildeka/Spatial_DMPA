@@ -63,7 +63,7 @@ plot_spatial.fun <- function(
     spectral = TRUE,
     colors = NULL, # lightgray
     point_size = 1.75,
-    img_alpha = .5,
+    img_alpha = 0,
     zoom = NULL ) {
   
   # Set default assay
@@ -256,8 +256,8 @@ my_theme <-
       theme(
         panel.border = element_blank(),
         axis.line = element_line(),
-        panel.grid.major = element_line(size = 0.2),
-        panel.grid.minor = element_line(size = 0.1),
+        panel.grid.major = element_line(linewidth = 0.2),
+        panel.grid.minor = element_line(linewidth = 0.1),
         text = element_text(size = 12),
         legend.position = "bottom",
         #aspect.ratio = 1,
@@ -270,10 +270,10 @@ my_theme <-
 # VIOLIN PLOT #
 ################
 # https://stackoverflow.com/questions/35717353/split-violin-plot-with-ggplot2
-violin.fun <- function(obj, feature, fill="sample_name", col_pal=friendly_cols, n=1){
+violin.fun <- function(obj, facet="orig.ident", feature, fill="sample_name", col_pal=friendly_cols, n=1){
   m <- max(obj[[feature]])/n # try e.g 2
   obj %>%
-    tidyseurat::ggplot(aes(orig.ident, .data[[feature]], fill=.data[[fill]])) +
+    tidyseurat::ggplot(aes(.data[[facet]], .data[[feature]], fill=.data[[fill]])) +
     geom_violin() + ggtitle(feature) +
     geom_jitter(width = 0.3, alpha = 0.2, size=.1) +
     scale_fill_manual(values = col_pal) +
@@ -476,12 +476,13 @@ plot_st_feat.fun <- function(
     sp_annot = TRUE,
     geneid = "CDH1", #"LINC01135",# "nFeature_RNA"
     orig.ident = "orig.ident",
-    lvls = c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031"),
+    lvls = c("P118", "P105", "P080", "P031", "P097", "P107", "P108", "P114"),
     title = " ",
     image_id = "hires",
     alpha = 1,
     ncol = 4,
     col = c("grey95","grey70","navy","black"),
+    scale = TRUE,
     mins = NULL, maxs = NULL,
     annot_col = "#808080",
     annot_line = .3,
@@ -508,22 +509,21 @@ plot_st_feat.fun <- function(
   # Colour pal:
   if(is.null(mins)){
     mins <- min(c(feat_vec, 0),na.rm = T)} # get 0 or negative value
-  if(is.null(maxs)){maxs <- quantile(feat_vec,0.99,na.rm = T) # get percentile
-  if(maxs==0){maxs <- max(feat_vec,na.rm = T)}
-  }
+  if(is.null(maxs)){maxs <- quantile(feat_vec,0.99,na.rm = T) 
+  if(maxs==0){maxs <- max(feat_vec,na.rm = T)}} # get percentile
+  
   if(max(feat_vec, na.rm=T) != 0){
-    # Calculate percentage:
     spe <- spe %>%
       mutate(feat = (!!(gene) - mins) / ( maxs - mins) ) %>%
       mutate(feat = ifelse(.$feat > 1, 1, .$feat))
-  }
+  } # Calculate percentage
   
   spe <- spe %>%
     #select(1:3, feat, !!(gene)) %>%
     mutate(feat_val = !!(gene)) %>%
-    mutate(!!(gene) := round(.$feat*98)+1) #%>%
-  #mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) 
-  
+    #mutate(!!(gene) := round(.$feat*98)+1) #%>%
+    mutate(feat = round(.$feat*98)+1) #%>%
+    #mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) 
   
   # get scale factor:
   scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
@@ -544,20 +544,26 @@ plot_st_feat.fun <- function(
     as_tibble() %>%
     arrange(feat_val) 
   
+  if(scale == TRUE){df <- df %>% mutate(!!(gene) := feat)}
+  
   gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
   text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
   #text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, )
   
   # select viewframe:
   if (!(is.null(zoom))){
-    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident") #%>% select(-contains("..."))
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% 
+      map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%  
+      map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
+      bind_rows(., .id = "orig.ident") #%>% select(-contains("..."))
     l <- tools %>% 
       filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
       #select(row=imagerow)
       dplyr::rename("_row"=y, "_col"=x) %>%
       summarise(across("_row":"_col", 
-                       list(min=min, max=max), 
-                       .names = "{.fn}{.col}")) 
+                       list(min=~min(.x), max=~max(.x)), 
+                       .names = "{.fn}{.col}")) %>%
+      mutate()
   }
   else{l <- tibble( min_col = 0, max_col = ncol(img),
                     min_row = 0, max_row = nrow(img))}
@@ -586,13 +592,14 @@ plot_st_feat.fun <- function(
   ## Spatial annotation:
   if(sp_annot){
     tools <- map(ID, ~pluck(spe@tools, .x)) %>% 
+      map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%  
+      map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
       bind_rows(., .id = "orig.ident") %>%
-      #bind_rows(.) %>%
       filter(.$colour == "black")
     spatial_annotation <- geom_path(
       data=tools, 
       show.legend = FALSE, linewidth = annot_line,
-      aes(x=x, y=y, group=interaction(elem_idx)),colour=annot_col)
+      aes(x=x, y=y, group=interaction(elem_idx)), colour=annot_col)
   }
   else{spatial_annotation <- NULL}
   #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
@@ -601,18 +608,18 @@ plot_st_feat.fun <- function(
     geom_point(data=df, aes(x=imagecol,y=imagerow, colour=.data[[gene]]),
                stroke = 0, size = point_size, alpha = alpha) +
     #scale_colour_identity() +
-    scale_color_gradientn(colours = col, 
+    scale_color_gradientn(colours = col,
                           values = seq(from=0, to=1, along.with=col),
-                          na.value = "#FFFFFF") + 
+                          breaks = if(scale== TRUE){c(1,25,50,75,99)}else{waiver()},
+                          na.value = "grey90") + 
     spatial_image + 
     spatial_annotation + 
-    #scale_color_manual(values=c(annot_col, "transparent")) +
-    coord_cartesian(expand=FALSE ) + #theme(l) +
+    coord_cartesian(expand=FALSE ) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
     geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+80), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
-    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
+    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
+    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol, dir = if(ncol > 2){"h"}else{"v"})
   #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
   #Hexagon shape:
@@ -631,7 +638,7 @@ plot_st_feat.fun <- function(
     theme_set(theme_bw(base_size = 10))+
     theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
           legend.position = "right",
-          #rect = element_rect(fill = "transparent"),
+          rect = element_blank(), # removes the box around the tissue
           legend.key = element_rect(fill = "white"),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
