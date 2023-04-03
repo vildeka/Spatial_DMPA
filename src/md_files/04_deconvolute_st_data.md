@@ -1,6 +1,6 @@
 Deconvolut spatial and bulk data
 ================
-3/16/23
+3/17/23
 
 ### Load data and libraries
 
@@ -477,10 +477,6 @@ plot_grid(bar, l ,rel_widths = c(1,.35))
 
 <img src="../Figures/04/04d_bulk_decon_bar_plot.png"
 data-fig-align="center" />
-
-``` r
-  #axis = "tblr",
-```
 
 ### Barplot of cell composition for st dataset
 
