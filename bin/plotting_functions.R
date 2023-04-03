@@ -42,21 +42,26 @@ plot_clusters.fun <- function(obj, cluster,
              RColorBrewer::brewer.pal(8,"Set2"),
              RColorBrewer::brewer.pal(8,"Accent"),
              RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )}else{pal=color}
+             RColorBrewer::brewer.pal(8,"Pastel2") )}else{pal <- color}
   
   cluster <- sym(cluster)
-  if(title == "colname"){title <- as_label(cluster)}else{title <- title}
+  if(title == "colname"){title <- as_label(cluster)}
+    else{title <- title}
   
   if(lable == TRUE){ lab <- cluster
   l=T
   t <- NoLegend() #+ labs(color= "Clusters")
-  }else if(lable == FALSE){ lab <- cluster
-  l=F
-  t <- NoLegend()
-  text <- geom_blank() #+ labs(color= "Clusters"){
-  }else{lab <- sym(lable)
-  l=T
-  t <- guides(color = "none")}
+    }
+    else if(lable == FALSE){ 
+    lab <- cluster
+    l=F
+    t <- NoLegend()
+    text <- geom_blank() 
+    #+ labs(color= "Clusters"){
+      }
+      else{lab <- sym(lable)
+      l=T
+      t <- guides(color = "none")}
   
   DefaultAssay(obj) <- assay
   
@@ -76,7 +81,7 @@ plot_clusters.fun <- function(obj, cluster,
   red_1 <- sym(paste0(red, "_1"))
   red_2 <- sym(paste0(red, "_2"))
   
-  if(!(lable== FALSE)){text <- geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) } 
+  if(!(lable == FALSE)){text <- geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) }else{text <- NULL}
   
   p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
                         color = !!cluster), label=l) + 
@@ -86,9 +91,12 @@ plot_clusters.fun <- function(obj, cluster,
     text +
     scale_color_manual(values = pal)  +
     my_theme + t +
-    theme(axis.title = element_text(size=txt_size, margin=margin(t=10, r=10, b=10, l=10)),
-          axis.text = element_text(size=txt_size),
-          plot.title = element_text(size=txt_size))
+    theme(
+      plot.margin = unit(c(.05,.1,0,0), "cm"), #t,r,b,l c(.1,.1,-.4,-.1)
+      axis.title.x = element_text(size=txt_size, vjust=3.5), # margin=margin(t=10, r=10, b=10, l=10,)
+      axis.title.y = element_text(size=txt_size, vjust=-1),
+      axis.text = element_text(size=txt_size),
+      plot.title = element_text(size=txt_size, vjust=-5, hjust = 0.05))
   return(p)
 }
 
@@ -99,6 +107,7 @@ plot_clusters.fun <- function(obj, cluster,
 # gene <- sym("CTSK")
 plot_genes.fun <- function(obj, 
                            gene, 
+                           point_size = .5,
                            mins=NULL, maxs=NULL, 
                            red="umap_harmony", 
                            col=c("grey90","grey80","grey60","navy","black") ,
@@ -147,7 +156,7 @@ plot_genes.fun <- function(obj,
   text <- geom_text(data = lable_df, aes(label = lab), col="black", size=2.5) }
   
   p <- ggplot(obj, aes(!!(red_1), !!(red_2), label=l , color = pal) ) +
-    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(gene)) +
+    geom_point(alpha = 0.5, size=point_size) + ggtitle(as_label(gene)) +
     text + #scale_color_viridis(option = "D", na.value="#EBECF0") +
     scale_colour_identity() +
     my_theme + theme_void() +
