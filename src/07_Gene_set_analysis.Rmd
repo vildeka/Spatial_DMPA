@@ -1,0 +1,464 @@
+---
+title: "Gene Set Analysis (GSEA)"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "`r paste0(params$fig.path)`" #./Figures/
+  run.gsea: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  fig.width     = 6.6929133858,
+  fig.path      = params$fig.path,#"../Figures/",
+  fig.align     = "center",
+  message       = FALSE,
+  warning       = FALSE,
+  dev           = c("png"),
+  dpi           = 300,
+  fig.process = function(filename){
+    new_filename <- stringr::str_remove(string = filename,
+                                        pattern = "-1")
+    fs::file_move(path = filename, new_path = new_filename)
+    ifelse(fs::file_exists(new_filename), new_filename, filename)
+  }
+  )
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/ST_DMPA/src")
+```
+
+```{r background_job, eval=FALSE, include=FALSE}
+source("../bin/render_with_jobs.R")
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html due to source code option 
+render_git_with_job(fig_path = "./Figures/07/")
+system2(command = "sed", stdout = TRUE,
+        args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
+                 paste0("./md_files/", basename("./07_GSEA_st_data.md"))))
+
+# kniter
+knit_html_with_job(out_dir = "../lab_book/07_GSEA_st_data", fig_path = "./Figures/07/")
+```
+
+### Load data and libraries
+
+```{r Load_data}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(SeuratObject)
+library(tidyseurat)
+library(cowplot)
+library(ggrepel)
+library(ggridges)
+library(scales)
+library(niceRplots)
+library(fgsea)
+library(openxlsx)
+
+source("../bin/plotting_functions.R")
+source("../../broliden_5325/code/enrichment_function.R")
+
+#########
+# PATHS #
+#########
+input_dir <- "../results/06_DGE_condition_st_data/"
+result_dir <- "../results/07_GSEA_st_data/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+
+GO_path <- "../../broliden_5325/resources/KEGG_GO_database/c5.bp.v6.2.symbols.gmt.txt"
+KEGG_path <- "../../broliden_5325/resources/KEGG_GO_database/c2.cp.kegg.v6.2.symbols.gmt.txt"
+
+#############
+# LOAD DATA #
+#############
+# DEGs_table <- read_csv(paste0(input_dir,"subset_100/DGEs_condition_wilcox_epi_100.csv")) %>% filter(groups == "DMPA")
+DEGs_table <- read_csv(paste0(input_dir,"DGEs_condition_wilcox.csv"))
+DATA <- readRDS(paste0("../results/04_deconvolution_st_data/","seuratObj_deconvolution_scdc.RDS"))
+
+GO_database <- fgsea::gmtPathways(GO_path)
+KEGG_database <- fgsea::gmtPathways(KEGG_path)
+```
+
+```{r factor}
+ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
+ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
+
+DEGs_table <- DEGs_table %>%
+  mutate(subgroup = factor(.$subgroup, levels = ord2)) %>%
+  mutate(layers = factor(.$layers, levels = ord1)) %>%
+  dplyr::rename(Clusters="layers") 
+```
+
+```{r order-by-gene-rank}
+####################
+# CREATE GENE RANK #
+####################
+# log.pct.diff , p_val_adj
+DEGs_list <- DEGs_table %>% 
+  group_split(., subgroup) %>% 
+  set_names(., sort(unique(DEGs_table$Clusters)))
+
+get_gene_rank.fun <- function(DEGs_list, stat = "avg_log2FC"){
+  stat <- sym(stat)
+  gene_rank_df <- DEGs_list %>%
+    map(., ~.x %>%
+      select(gene, avg_log2FC) %>%
+        mutate(.x, "logFC*p-val" = sign(avg_log2FC) * -log10(p_val))  %>%
+        mutate(.x, stat_ord = !!(stat)) %>%
+        mutate(.x, rank = rank(stat_ord))
+        #mutate(.x, statsAdj = sign(stat_ord) * (abs(stat_ord) ^ 1) ) %>%
+        #mutate(.x, statsAdj = statsAdj / max(abs(statsAdj))) %>%
+  ) %>% map(., ~arrange(.x, stat_ord))
+}
+gene_rank_df <- get_gene_rank.fun(DEGs_list, "avg_log2FC")
+#gene_rank_df <- get_gene_rank.fun(DEGs_list, "logFC*p-val")
+
+gene_rank_list <- gene_rank_df %>%
+  map(., ~pull(.x, stat_ord)) %>% 
+  map2(., DEGs_list, ~set_names(.x, pull(.y, "gene")))
+
+```
+
+Here is a documentation for GSEA, pointing to Enrichment Scores in particular: https://www.gsea-msigdb.org/gsea/doc/GSEAUserGuideTEXT.htm#*Enrichment_Score*(ES)
+
+And here is one of the clearest and most thorough explanations I've found: https://www.pathwaycommons.org/guide/primers/data_analysis/gsea/
+
+Answering your specific questions:
+
+Larger magnitudes are "better" The sign on the score simply indicates when end of your ranked gene list is enriched. You provide the rank list of genes, so the biiological interpretation is up to you. If, for example, you provide a gene list ranked by a combination of fold change and p-value (e.g., sign(FC) \* log10(pvalue)), then the positive scores are associated with upregulated genes and negative scores are associated with downregulated genes. Caution: some tools reverse this, so manually check a few to see which convention they are using. ES values range from -1 to 1. Normalized ES values will go a bit beyond these bounds. If you are seeing ES values \> 1, then I would suspect something is wrong.
+
+Additional comment: You probably want to look at NES (Normalized ES) if that is provided by the tool you are using. The first two points above apply just the same.
+
+```{r GSEA, eval=params$run.gsea}
+# http://www.baderlab.org/ChangjiangXu/GSEA
+# Create a gene rank based on the parameter chosen in the previous chunck
+#####################
+# RUN GESA ANALYSIS #
+#####################
+fgseaRes_GO <- gene_rank_list %>%
+  map(., ~fgsea(pathways=GO_database, stats=.x)) %>%
+  map(., ~as_tibble(.x)) %>%
+  map(., ~arrange(.x, pval))
+
+#fgseaRes_KEGG <- NULL
+#fgseaRes_GO <- NULL
+fgseaRes_KEGG <- gene_rank_list %>%
+  map(., ~fgsea(pathways=KEGG_database, stats=.x)) %>%
+  map(., ~as_tibble(.x)) %>%
+  map(., ~arrange(.x, pval))
+
+fgseaRes <- append(fgseaRes_GO, fgseaRes_KEGG)
+
+# Show in a nice table:
+# fgseaResTidy <- fgseaRes$`8` %>% 
+#   top_n(15, abs(NES)) %>% 
+#   dplyr::select(-leadingEdge, -ES, -nMoreExtreme) %>% 
+#   arrange(padj) #%>% 
+#   #DT::datatable()
+```
+
+### save GESA object
+```{r save-fgseaRes, eval=params$run.gsea}
+saveRDS(fgseaRes, paste0(result_dir,"fgseaRes_tables.RDS"))
+```
+
+```{r load-GESA-results, eval=isFALSE(params$run.gsea)}
+fgseaRes <- readRDS(paste0(result_dir,"fgseaRes_tables.RDS"))
+```
+
+```{r save-GESA-results, results='hide'}
+# gene_rank_df <- gene_rank_df[[6]]
+# fgseaRes <- fgseaRes[[6]]
+# top_n <- 20
+db <- c(rep("GO", length(fgseaRes)/2),rep("KEGG", length(fgseaRes)/2))
+GSEA_table.fun <- function(fgseaRes, gene_rank_df, top_n, Cluster, n = 40){
+  f <- fgseaRes  %>% # fgseaRes[["Basal_2"]]
+    mutate(Direction = ifelse(ES > 0, "UP", "DOWN")) %>%
+    group_by(Direction) %>%
+    top_n(-pval, n = top_n) %>%
+    ungroup() %>%
+    #filter(padj < 0.05) %>%
+    mutate(overlap = map_dbl(leadingEdge, ~length(.x)), .after = "size") %>%
+    unnest(leadingEdge) %>%
+    left_join(., select(gene_rank_df, gene, avg_log2FC), by=c("leadingEdge"="gene")) %>% # gene_rank_df$Basal_2
+    mutate(., dir = ifelse(.$avg_log2FC < 0, "down", "up")) %>%
+    group_by(pathway) %>% 
+    mutate(min_logFC = min(avg_log2FC)) %>%
+    mutate(max_logFC = max(avg_log2FC)) %>% 
+    add_count(., dir) %>%
+    ungroup() %>%
+    select(pathway, overlap, dir, n, min_logFC, max_logFC) %>%
+    unique() %>% #filter(pathway == "GO_PEPTIDE_CROSS_LINKING")
+    pivot_wider(.,  names_from = dir, values_from = n)
+  
+  f_ <- fgseaRes %>% # fgseaRes[["Basal_2"]]
+    left_join(., f, by="pathway") %>%
+    mutate(dir = ifelse(is.na(.$down) & is.na(.$up), NA,
+                        ifelse(is.na(.$up), "down",
+                          ifelse(is.na(.$down) | .$down < .$up, "up", "down")))) %>%
+    mutate(Direction = ifelse(ES > 0, "UP", "DOWN")) %>%
+    select(-leadingEdge, leadingEdge)
+  return(f_)
+}
+
+ridge_plots <- tibble(Clusters=factor(names(fgseaRes), levels = levels(DEGs_table$Clusters)),
+                      db = db,
+                      fgseaRes = fgseaRes) %>% arrange(Clusters)
+
+epi_clus <- "Sup_0|Sup_1|Sup_2|Intrmed|Basal_2|Basal_1"
+tab <- ridge_plots %>%
+  mutate(tab = pmap(., ~GSEA_table.fun(fgseaRes=..3, gene_rank_df[[..1]], top_n=25, Cluster=..1))) %>%
+  mutate(tab = map(tab, ~split(.x, .x$dir))) %>%
+  unnest(c(tab)) %>%
+  mutate(dir = names(tab)) %>%
+  mutate(morf = ifelse(grepl(epi_clus, .$Clusters), "epi", "SubMuc")) %>%
+  mutate(tab = set_names(.$tab, paste0(.data[["Clusters"]],"_",.data[["dir"]]))) %>%
+  select(db, tab, morf) %>%
+  group_by(morf, db) %>%
+  summarise(tab = list(tab), .groups = "drop")
+
+pmap(tab, ~write.xlsx(..3, keepNA=TRUE, na.string="NA", overwrite=TRUE,
+                             file=paste0(result_dir,"GESA_",..1,"_",..2,".xlsx"))) 
+```
+
+### Split violin plots of genes in GO terms of intrest
+
+```{r 07a_violin_plots, fig.height=8*3}
+# dev.new(width=6.6929133858, height=5*3, noRStudioGD = TRUE)
+######################
+# GENES IN GESA TERM #
+#####################
+terms <- c("GO_KERATINOCYTE_DIFFERENTIATION", "GO_PEPTIDE_CROSS_LINKING", "GO_SKIN_DEVELOPMENT", "GO_B_CELL_MEDIATED_IMMUNITY")
+terms.fun <- function(tab, term){
+  term_genes <- tab %>%
+    unnest(c(tab)) %>%
+    mutate(clus = str_replace(names(.$tab), "_down|_up", "") ) %>%
+    unnest(c(tab)) %>%
+    filter(pathway == term & morf == "epi") %>%
+    mutate(clus_all = paste(unique(.$clus), collapse = "$|^")) %>%
+    arrange(desc(overlap)) %>%
+    #filter(overlap == max(overlap)) %>%
+    summarise(genes = unique(unlist(.$leadingEdge)), clus = .$clus[1], clus_all = .$clus_all[1]) %>%
+    mutate( genes = factor(.$genes, levels = gene_rank_df[[.$clus[1]]]$gene)) %>%
+    nest(data = c(genes)) %>%
+    
+  return(term_genes)
+}
+
+term_genes <- terms %>%
+  map(., ~terms.fun(tab, .x)) %>% list_rbind()
+
+################
+# VIOLIN PLOTS #
+################
+library(patchwork)
+violin_split.fun <- function(obj, gene_list, split.by, group.by, filt_pattern){
+  obj <- filter(obj, grepl(filt_pattern, obj$layers))
+  plots <- VlnPlot(obj, features = gene_list, adjust = 1/2, cols =  c("#88CCEE", "#CC6677"),
+                   split.by = split.by, group.by = group.by, 
+                   pt.size = 0, combine = FALSE, split.plot = TRUE) 
+  plots <- map(plots, ~.x + geom_point(alpha = .3, size=.1, show.legend = F,
+                                       position = position_jitterdodge(jitter.width=.5)) +
+                 #scale_fill_manual(values = c("#88CCEE", "#CC6677")) +
+                 #scale_color_manual(values = c("#88CCEE", "#CC6677")) +
+                 theme(axis.title.x = element_blank()))
+  p <- wrap_plots(plots, ncol = 10) + plot_layout(guides = "collect")
+  h <- round(length(plots)/10)*4
+return(tibble(plot=list(p), height = list(h), p = list(plots)))
+}
+
+plots <- term_genes %>%
+  mutate(data = map(data, ~arrange(.x, genes))) %>%
+  mutate(data = map(data, ~unlist(.x))) %>%
+  pmap(., ~violin_split.fun(DATA, ..3, "groups", "layers", ..2)) %>%
+  list_rbind() %>%
+  mutate(term = terms)
+
+pmap(plots, ~ggsave(paste0("./Figures/07/","DEGs_",..4,".png"), plot=..1, width = 40, height = ..2))
+
+wrap_plots(plots[["p"]][[2]], ncol = 3) + plot_layout(guides = "collect")
+```
+
+```{r, include=FALSE, eval=FALSE}
+formating_str.fun <- function(terms){
+  terms <- gsub("_", " ", terms)
+  terms <- gsub("(GO |KEGG )|(\\w+)", "\\1\\L\\2", terms, perl = TRUE)
+  terms <- gsub("endoplasmic reticulum", "ER", terms, perl = TRUE)
+  #genes <- unlist(lapply(res_list,function(x){ x$genes [1:N] }))
+  #genes[is.na(genes)] <- ""
+  return(terms)
+}
+
+  
+  
+topPathwaysUp <- mutate(topPathwaysUp, pathway = formating_str.fun(topPathwaysUp$pathway))
+topPathwaysDown_ <- mutate(topPathwaysDown, pathway = formating_str.fun(topPathwaysDown$pathway))
+
+topPathwaysDown <- unlist(topPathwaysDown_[head(order(topPathwaysDown_$pval), n=n), "pathway"])
+
+gseaplot(edo2, geneSetID = 1, title = edo2$Description[1])
+
+```
+
+
+```{r 07b_GSEA_rank_plot, fig.width=12 }
+# dev.new(width=12, height=3, noRStudioGD = TRUE)
+# width = aspect * height 4.857143
+# height = width/aspect 10/4.857143
+##################
+# GESA RANK PLOT #
+##################
+db <- c(rep("GO", length(fgseaRes)/2),rep("KEGG", length(fgseaRes)/2))
+plot_GseaTable.fun <- function(db, fgseaRes, gene_rank_list, n = 10, padj = 0.05){
+    if(db == "GO"){database <- GO_database}else{database <- KEGG_database}
+    
+    #fgseaRes <- mutate(fgseaRes, pathway = formating_str.fun(fgseaRes$pathway))
+  
+    topPathwaysUp <- fgseaRes[fgseaRes$ES > 0 & fgseaRes$padj < padj,]
+    topPathwaysDown <- fgseaRes[fgseaRes$ES < 0 & fgseaRes$padj < padj,]
+    
+    topPathwaysUp <- unlist(topPathwaysUp[head(order(topPathwaysUp$pval), n=n), "pathway"])
+    topPathwaysDown <- unlist(topPathwaysDown[head(order(topPathwaysDown$pval), n=n), "pathway"])
+  
+    p <- plotGseaTable(database[c(topPathwaysUp, rev(topPathwaysDown))], 
+                  gene_rank_list, fgseaRes, gseaParam = 0.5, render=F)
+    return(tibble(rank_plots=list(p), n_pathways = length(topPathwaysUp) +length(topPathwaysDown)))  # tibble(plots=list(plot), df=list(f))
+    }
+
+# fgseaRes <- fgseaRes %>%
+#   map(., ~mutate(.x, pathway = formating_str.fun(.x$pathway)))
+
+ridge_plots <- tibble(Clusters=names(fgseaRes),db = db,fgseaRes = fgseaRes) 
+plots_df <- pmap_dfr(ridge_plots,
+              ~plot_GseaTable.fun(db=..2, fgseaRes=..3, n=10,
+                                  gene_rank_list[[..1]]) ) %>%
+  bind_cols(ridge_plots, .) %>%
+  mutate(rank_plots = setNames(.[["rank_plots"]], .$Clusters)) %>%
+  filter(n_pathways > 0)
+
+if( isFALSE(dir.exists("./Figures/07/GO/")) ) { dir.create("./Figures/07/GO/",recursive = TRUE) }
+if( isFALSE(dir.exists("./Figures/07/KEGG/")) ) { dir.create("./Figures/07/KEGG/",recursive = TRUE) }
+
+pmap(plots_df, ~ggsave(paste0("./Figures/07/",..2,"/GSEA_rank_plot_", ..1,"_",..2, ".png"), #"GO_filt/",
+                          plot=..4, width = 13, height = (..5*.3)+2 ))
+
+grid::grid.draw(plots_df$rank_plots$Basal_2)
+```
+
+```{r 07c_GSEA_rank_plotting, fig.width=10, eval=FALSE, include=FALSE}
+# \n (log2FC*log10(p_val))
+##########################
+# GESA RANK PLOT MY CODE #
+##########################
+# not quite finished. Missing p-val and NES values
+db <- c(rep("GO", length(fgseaRes_GO)),rep("KEGG", length(fgseaRes_KEGG)))
+GSEA_rank_plot.fun <- function(df, gene_rank_df, top_n, Cluster, n = 40){
+  #cols <- viridis(7)
+  cols <- brewer_pal(type = "div", palette = 'Spectral', direction = -1)(7) # 'RdYlBu'
+  #cols <- replace(cols, grepl("#F7F7F7", cols), "grey90")
+  
+  #string <- ridge_plots$fgseaRes[[1]]$pathway
+  clean_string <- function(string){
+    string <- gsub("_", " ", string)
+    string <- gsub("(GO |KEGG )|(\\w+)", "\\1\\L\\2", string, perl = TRUE)
+    string <- gsub("endoplasmic reticulum", "ER", string, perl = TRUE)
+    string <- gsub("^(.{50})(.*)$", "\\1\n\\2", string) }
+  
+  f <- df %>%
+    #filter(pathway %in% c(topPathwaysUp, rev(topPathwaysDown))) %>%
+    mutate(Direction = ifelse(ES > 0, "UP", "DOWN")) %>%
+    group_by(Direction) %>%
+    top_n(-pval, n = 10) %>%
+    # nest() %>%
+    ungroup() %>%
+    mutate(max_logFC = map_dbl(leadingEdge, 
+                               ~max( gene_rank_df$avg_log2FC[gene_rank_df$gene %in% .x] ))) %>%
+    filter(abs(max_logFC) > 0.32 ) %>%
+    mutate(pathway = clean_string(.$pathway)) %>%
+    unnest(leadingEdge) %>%
+    left_join(., gene_rank_df, by=c("leadingEdge"="gene")) %>%
+    arrange(NES) %>%
+    mutate(pathway = factor(pathway, levels=unique(c(.$pathway)))) %>%
+    mutate(rank = factor(as.character(rank), levels=as.character(seq_along(gene_rank_list))))
+  
+  
+  # lab <- tibble(pathway = "logFC", rank=as.factor(seq_along(gene_rank_list$`9`)),
+  #               avg_log2FC = gene_rank_df$`9`$avg_log2FC, fill = gene_rank_df$`9`$avg_log2FC)
+  # lab <- tibble(pathway = "logFC", rank=seq_along(gene_rank_list),  
+  #               avg_log2FC = gene_rank_df$avg_log2FC, fill = gene_rank_df$avg_log2FC)
+  # 
+  # f_ <- f %>% bind_rows(., lab) %>%
+  #   mutate(fill = ifelse(is.na(.$fill), .$avg_log2FC, .$fill)) %>%
+  #   mutate(rank = )
+    
+  
+  ma <- max(abs(f$`avg_log2FC`))
+  mi <- -max(abs(f$`avg_log2FC`))
+  # every_nth = function(n) {
+  # return(function(x) {x[c(TRUE, rep(FALSE, n - 1))]})
+  # }
+  # every_nth(n = 10)
+  # x <- 1:30
+  # x[c(TRUE, rep(FALSE, 3))]
+  #s <- as.character(seq(from=0, to=length(gene_rank_df$gene), by=4000))
+ plot <- f %>%
+    ggplot() +
+      geom_col( aes(x=rank, y=avg_log2FC, fill=stat(x) )) + # guides(fill="none") +
+      #geom_col( aes(x=rank, y=avg_log2FC, fill=`fill` )) + #guides(fill="none") +
+      geom_text(x = Inf, y = 0, aes(label = sprintf("%.1e", pval)), data = f, size = 2.5, hjust = -.5) +
+      geom_text(x = Inf, y = 0, aes(label = sprintf("%.1e", padj)), data = f, size = 2.5, hjust = -2.3) +
+      geom_text(x = Inf, y = 0, aes(label = sprintf("%.2f", NES)), data = f, size = 2.5, hjust = -6.1) +
+      #annotate("text", x = Inf, y = ma+1, label = "p-val") +
+      scale_x_discrete(breaks = NULL, expand = expansion(mult = .01))  + labs(x=NULL) +
+      #scale_y_continuous(labels = NULL, breaks = NULL, position = "right", limits = c(mi, ma)) + 
+      #scale_fill_stepsn(colours = cols, name = "rank") + # for fill=stat(x)
+      scale_fill_gradientn(colours = cols, name = "avg_logFC", limits = c(mi, ma), 
+                             #values = round(seq(from=-40, to=40, along.with=cols))
+                             #guide = guide_legend(override.aes = list(breaks=c(1, 0.5, 0.05, 0.01, 0.001)))
+                             ) +
+      coord_cartesian( clip = "off") +
+      facet_wrap("pathway", ncol = 1, strip.position = "left") +
+      labs(title = paste0('GSEA analysis Cluster ', Cluster)) +
+      theme_void() +
+      theme(strip.text.y.left = element_text(angle = 0, hjust = 1),
+            panel.spacing.y=unit(.1, "lines"),
+            legend.position="bottom",
+            legend.key.width=unit(10,"mm"),
+            #legend.key.width=unit(.4,"grobwidth", data = ggplotGrob(plot)),
+            #strip.background =element_rect(fill="transparent"),
+            axis.title.y = element_blank(),
+            axis.text.x = element_text(size = 3),
+            strip.background = element_blank(),
+            plot.margin = unit(c(1,50,1,1), "mm") # t,r,b,l
+            )
+  return(tibble(plots=list(plot), df=list(f)))
+  #return(plot, df=f))
+}
+
+ridge_plots <- tibble(Clusters=names(fgseaRes),
+                      db = db,
+                      fgseaRes = fgseaRes) 
+
+ridge_plots <- ridge_plots %>%
+  pmap_dfr(., ~GSEA_rank_plot.fun(df=..3, gene_rank_df[[..1]], top_n=15, Cluster=..1, n = 2)) %>%
+  bind_cols(ridge_plots, .) %>%
+  mutate(plots = setNames(.[["plots"]], .$Clusters))
+  
+ridge_plots$plots[4]
+
+pmap(ridge_plots, ~ggsave(paste0(result_dir,"GSEA_ridgeplot_", ..1,"_",..2, ".jpg"), 
+                          plot=..4, width = 7, height = (length(levels(..5$pathway))*.3)+2))
+ggsave(paste0("./Figures/07/","GSEA_ridgeplot", ".pdf"), width = 5, height = 5,
+       gridExtra::marrangeGrob(grobs=ridge_plots$plots, ncol=1, nrow=1))
+```
