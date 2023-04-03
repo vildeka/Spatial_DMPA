@@ -1,6 +1,6 @@
 Load Spatial data
 ================
-3/14/23
+3/21/23
 
 ### Load libraries
 
@@ -192,7 +192,7 @@ DATA
     10 P031_AAATTTGCGGGTGTGG P031             3570         1948 SubMuc  
     # … with 6,690 more rows
 
-## Add meta data
+### Add meta data
 
 ``` r
 meta <- meta %>%
@@ -220,7 +220,7 @@ DATA %>%
         )
 ```
 
-<img src="../Figures/00/plot_sp_annot.png" data-fig-align="center" />
+<img src="../Figures/00/00a_plot_sp_annot.png" data-fig-align="center" />
 
 ### Identify spots with missing morphology annotation
 
@@ -291,7 +291,8 @@ DATA %>%
         )
 ```
 
-<img src="../Figures/00/plot_new_sp_annot.png" data-fig-align="center" />
+<img src="../Figures/00/00b_plot_new_sp_annot.png"
+data-fig-align="center" />
 
 ## Plot spots to be removed
 
@@ -313,8 +314,10 @@ DATA %>%
         )
 ```
 
-<img src="../Figures/00/plot_spots_to_remove.png"
+<img src="../Figures/00/00c_plot_spots_to_remove.png"
 data-fig-align="center" />
+
+### Remove NA spots
 
 ``` r
 dim(DATA)
