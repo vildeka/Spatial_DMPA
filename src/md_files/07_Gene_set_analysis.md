@@ -272,7 +272,7 @@ pmap(plots, ~ggsave(paste0("./Figures/07/","DEGs_",..4,".png"), plot=..1, width 
 wrap_plots(plots[["p"]][[2]], ncol = 3) + plot_layout(guides = "collect")
 ```
 
-<img src="./Figures/07/07a_violin_plots.png" data-fig-align="center" />
+<img src="../Figures/07/07a_violin_plots.png" data-fig-align="center" />
 
 ``` r
 # dev.new(width=12, height=3, noRStudioGD = TRUE)
@@ -374,5 +374,5 @@ pmap(plots_df, ~ggsave(paste0("./Figures/07/",..2,"/GSEA_rank_plot_", ..1,"_",..
 grid::grid.draw(plots_df$rank_plots$Basal_2)
 ```
 
-<img src="./Figures/07/07b_GSEA_rank_plot.png"
+<img src="../Figures/07/07b_GSEA_rank_plot.png"
 data-fig-align="center" />
