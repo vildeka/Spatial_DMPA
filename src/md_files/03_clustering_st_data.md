@@ -1,8 +1,8 @@
-Clustering filtered ST data
+Clustering filtered spatial data
 ================
-3/14/23
+3/21/23
 
-## Load data and libraries
+### Load data and libraries
 
 ``` r
 ##################
@@ -33,7 +33,10 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
 #################
 # COLOUR PALLET #
 #################
-clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77CFF", "#FF7F00","#E41A1C",  "#FF61CC", "#FFFF33","#F8766D", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
+clus_1.5 <- c("#F8766D", "#7CAE00", "#CD9600", "#00A9FF", "#984EA3","#C77CFF", "#00BFC4", "#FF7F00",
+              "#FFFF33", "#E41A1C","#377EB8","#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
+clus_1 <- c( "#F8766D","#7CAE00", "#CD9600", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
+             "#00BFC4", "#FF7F00","#FFFF33", "#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
 
 # clus <- c(scales::hue_pal()(8),
 #              RColorBrewer::brewer.pal(9,"Set1"),
@@ -41,7 +44,8 @@ clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77
 #              RColorBrewer::brewer.pal(8,"Accent"),
 #              RColorBrewer::brewer.pal(9,"Pastel1"),
 #              RColorBrewer::brewer.pal(8,"Pastel2") )
-# scales::show_col(clus)
+# scales::show_col(clus_1.5)
+# scales::show_col(RColorBrewer::brewer.pal(9,"Set1"))
 ```
 
 ## Clustering
@@ -50,10 +54,10 @@ clus <- c("#7CAE00", "#F8766D", "#CD9600", "#984EA3", "#00A9FF","#00BFC4", "#C77
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
 ##################################
-DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:20, k.param = 20, prune.SNN = 1/15) 
+DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:30, k.param = 15, prune.SNN = 1/15) 
 
 # Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.5, 0.8, 1, 1.5, 2)) {
+for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     DATA <- FindClusters(DATA, resolution = res, algorithm = 1)
 }
 ```
@@ -61,56 +65,47 @@ for (res in c(0.1, 0.5, 0.8, 1, 1.5, 2)) {
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
-    Number of edges: 248366
+    Number of edges: 299026
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.9415
-    Number of communities: 3
+    Maximum modularity in 10 random starts: 0.9375
+    Number of communities: 2
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
-    Number of edges: 248366
+    Number of edges: 299026
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8499
+    Maximum modularity in 10 random starts: 0.8316
     Number of communities: 7
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
-    Number of edges: 248366
+    Number of edges: 299026
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8079
+    Maximum modularity in 10 random starts: 0.7608
     Number of communities: 11
     Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
-    Number of edges: 248366
+    Number of edges: 299026
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7866
-    Number of communities: 14
-    Elapsed time: 0 seconds
+    Maximum modularity in 10 random starts: 0.7115
+    Number of communities: 13
+    Elapsed time: 1 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
-    Number of edges: 248366
+    Number of edges: 299026
 
     Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7437
-    Number of communities: 14
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 6598
-    Number of edges: 248366
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7052
-    Number of communities: 17
+    Maximum modularity in 10 random starts: 0.6669
+    Number of communities: 16
     Elapsed time: 0 seconds
 
 ``` r
@@ -122,8 +117,10 @@ for (res in c(0.1, 0.5, 0.8, 1, 1.5, 2)) {
 ### UMAP of cluster resolutions
 
 ``` r
-res <- c("RNA_snn_res.0.8", "RNA_snn_res.1")
-p <- map(res, ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7))
+res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
+p <- map2(res, list(clus_1,clus_1.5),
+          ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7, 
+                             color = .y, red = "umap_harmony"))
 plot_grid(ncol = 2, 
           plotlist = p)
 ```
@@ -134,22 +131,22 @@ data-fig-align="center" />
 ### Cluster resolutions on tissue
 
 ``` r
-# dev.new(width=7, height=14, noRStudioGD = TRUE)
+# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
 plots <- DATA %>%
   mutate(group = orig.ident) %>%
   nest(., data = -group) %>%
-  mutate( "res_0.8" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.8", 
-                      point_size = 0.8, zoom="zoom", colors = clus))) %>%
-  mutate( "res_1.0" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1,geneid="RNA_snn_res.1",
-                      point_size = 0.8, zoom="zoom", colors = clus)))
+  mutate( "res_1" = pmap(., 
+    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1", 
+                      point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
+  mutate( "res_2" = pmap(., 
+    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1.5",
+                      point_size = 0.8, zoom="zoom", colors = clus_1.5)))
 
-legend_1 <- get_legend(plots$res_0.8[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_1.0[[1]] + theme(legend.position="right"))
+legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
+legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
 legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_0.8, plots$res_1.0), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
 combined
 ```
 
@@ -160,8 +157,9 @@ data-fig-align="center" />
 
 ``` r
 DATA <- DATA %>%
-  rename(Clusters="RNA_snn_res.0.8") %>%
-  SetIdent(., value = "Clusters")
+  rename(Clusters="RNA_snn_res.1") %>%
+  SetIdent(., value = "Clusters") %>%
+  select(-any_of(contains("RNA_snn_res")))
 ```
 
 ### Spot distribution by clusters
@@ -195,37 +193,37 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
 
 
        0    1    2    3    4    5    6    7    8    9   10 
-    1572 1143  681  678  657  495  411  394  354  175   38 
+    1148  884  747  656  646  558  511  507  471  432   38 
 
 | ctrl_P031 | ctrl_P080 | ctrl_P105 | ctrl_P118 | DMPA_P097 | DMPA_P107 | DMPA_P108 | DMPA_P114 | Clus   | DMPA_sum | ctrl_sum |
 |----------:|----------:|----------:|----------:|----------:|----------:|----------:|----------:|:-------|---------:|---------:|
-|         1 |         0 |         0 |         0 |         0 |         1 |         0 |         1 | **0**  |        2 |        1 |
-|         1 |         0 |         1 |         0 |         0 |         0 |         0 |         0 | **1**  |        0 |        2 |
+|         0 |         0 |         1 |         0 |         0 |         1 |         0 |         0 | **0**  |        1 |        1 |
+|         1 |         0 |         0 |         0 |         0 |         1 |         0 |         1 | **1**  |        2 |        1 |
 |         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **2**  |        0 |        0 |
-|        98 |        89 |        54 |        91 |        76 |        45 |        43 |        89 | **3**  |      253 |      332 |
-|         2 |         0 |         3 |         0 |         0 |         1 |         0 |         1 | **4**  |        2 |        5 |
-|        13 |         8 |         2 |         6 |         4 |         8 |         3 |         1 | **5**  |       16 |       29 |
-|        74 |        49 |        29 |        63 |        40 |        40 |        33 |        44 | **6**  |      157 |      215 |
-|        84 |        64 |        31 |        52 |        48 |        44 |        21 |        50 | **7**  |      163 |      231 |
-|        55 |        51 |        20 |        54 |        28 |        50 |        33 |        63 | **8**  |      174 |      180 |
-|         8 |        17 |        23 |        16 |         5 |        29 |         0 |        51 | **9**  |       85 |       64 |
-|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **10** |        0 |        0 |
+|         3 |         0 |         3 |         0 |         0 |         0 |         0 |         1 | **3**  |        1 |        6 |
+|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **4**  |        0 |        0 |
+|        79 |        67 |        47 |        77 |        67 |        31 |        37 |        67 | **5**  |      202 |      270 |
+|        60 |        66 |        43 |        69 |        30 |        76 |        29 |       112 | **6**  |      247 |      238 |
+|        89 |        67 |        34 |        77 |        49 |        51 |        38 |        61 | **7**  |      199 |      267 |
+|        12 |         9 |         1 |         6 |         4 |         7 |         3 |         1 | **8**  |       15 |       28 |
+|        92 |        69 |        33 |        53 |        51 |        51 |        26 |        56 | **9**  |      184 |      247 |
+|         0 |         0 |         1 |         0 |         0 |         0 |         0 |         1 | **10** |        1 |        1 |
 
 Distribution of epithelial spots per cluster per subject
 
 | ctrl_P031 | ctrl_P080 | ctrl_P105 | ctrl_P118 | DMPA_P097 | DMPA_P107 | DMPA_P108 | DMPA_P114 | Clus   | DMPA_sum | ctrl_sum |
 |----------:|----------:|----------:|----------:|----------:|----------:|----------:|----------:|:-------|---------:|---------:|
-|       178 |       331 |       185 |       211 |       377 |        42 |        43 |       202 | **0**  |      664 |      905 |
-|       140 |       200 |       123 |       206 |       240 |        22 |        40 |       170 | **1**  |      472 |      669 |
-|        23 |        83 |        77 |       192 |       147 |        37 |        19 |       103 | **2**  |      306 |      375 |
-|         1 |         7 |         8 |        21 |        44 |         1 |         1 |        10 | **3**  |       56 |       37 |
-|        47 |       112 |        77 |       120 |       131 |        24 |        39 |       100 | **4**  |      294 |      356 |
-|        24 |        46 |        62 |        90 |       110 |        15 |        22 |        81 | **5**  |      228 |      222 |
-|         1 |        32 |         1 |         2 |         3 |         0 |         0 |         0 | **6**  |        3 |       36 |
-|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **7**  |        0 |        0 |
-|         0 |         0 |         0 |         0 |         0 |         0 |         0 |         0 | **8**  |        0 |        0 |
-|         0 |         3 |         0 |         0 |         4 |        19 |         0 |         0 | **9**  |       23 |        3 |
-|         1 |         2 |         0 |         0 |         5 |        30 |         0 |         0 | **10** |       35 |        3 |
+|       150 |       208 |       124 |       201 |       227 |        20 |        34 |       182 | **0**  |      463 |      683 |
+|       131 |       192 |       118 |       121 |       182 |        10 |        36 |        91 | **1**  |      319 |      562 |
+|        37 |       155 |        72 |        91 |       231 |        35 |         9 |       117 | **2**  |      392 |      355 |
+|        46 |       100 |        76 |       130 |       141 |        25 |        43 |        88 | **3**  |      297 |      352 |
+|        24 |        73 |        76 |       192 |       123 |        37 |        21 |       100 | **4**  |      281 |      365 |
+|         1 |         5 |         8 |        20 |        41 |         1 |         1 |         9 | **5**  |       52 |       34 |
+|         0 |         3 |         0 |         0 |         4 |        19 |         0 |         0 | **6**  |       23 |        3 |
+|         1 |        33 |         0 |         2 |         4 |         0 |         0 |         1 | **7**  |        5 |       36 |
+|        24 |        46 |        59 |        85 |       102 |        14 |        20 |        78 | **8**  |      214 |      214 |
+|         0 |         0 |         0 |         0 |         1 |         0 |         0 |         0 | **9**  |        1 |        0 |
+|         1 |         1 |         0 |         0 |         5 |        29 |         0 |         0 | **10** |       34 |        2 |
 
 Distribution of submucosal spots per cluster per subject
 
@@ -240,7 +238,7 @@ Distribution of submucosal spots per cluster per subject
 (p <- plot_st_meta.fun( DATA,
         feat =  "Clusters",
         zoom = "zoom",
-        colors = clus,
+        colors = clus_1,
         alpha = .9,
         #annot_col = "#dbd9d9",
         annot_line = .1,
@@ -250,7 +248,17 @@ Distribution of submucosal spots per cluster per subject
 
 <img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
 
-# Paulos Code
+``` r
+###################
+# ADD ANNOTATION #
+##################
+ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
+ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
+epi_layers <- set_names(ord1, ord2)
+
+DATA <- DATA %>%
+mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
+```
 
 ## Save seurat object
 
@@ -258,12 +266,12 @@ Distribution of submucosal spots per cluster per subject
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
- saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
+saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
 # saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 # DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
 ```
 
-## Session info
+### Session info
 
 ``` r
 sessionInfo()
@@ -331,4 +339,4 @@ sessionInfo()
     [118] rmarkdown_2.20         googledrive_2.0.0      Rtsne_0.16            
     [121] spatstat.explore_3.0-5 shiny_1.7.4            lubridate_1.9.0       
 
-### Paulo section
+## Paulo’s Code

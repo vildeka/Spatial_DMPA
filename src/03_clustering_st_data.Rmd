@@ -13,10 +13,6 @@ editor_options:
 
 ```{r background-job, eval=FALSE, include=FALSE}
 source("../bin/render_with_jobs.R")
-file_name <- "./03_clustering_st_data.md"
-lab_dir <- "../lab_book/03_cluster_st_data"
-
-file <- paste0(basename(xfun::sans_ext(file_name)), '_', Sys.Date(), '.html')
 
 # quarto
 # render_html_with_job(out_dir = lab_dir)
@@ -27,17 +23,17 @@ render_git_with_job(fig_path = "./Figures/03/")
 # Change the figure path from ./Figures/03/ to ../Figures/03/:
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename(file_name))))
+                 paste0("./md_files/", basename("./03_clustering_st_data.md"))))
 
 # kniter
-knit_html_with_job(out_dir = lab_dir, fig_path = "./Figures/03/")
+knit_html_with_job(out_dir = "../lab_book/03_cluster_st_data", fig_path = "./Figures/03/")
 ```
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
     fig.width   = 6.6929133858,
     fig.path    = params$fig.path,
-    dev         = c("png", "pdf"),
+    dev         = c("png"),
     dpi         = 300,
     fig.align   = "center",
     message     = FALSE,
@@ -74,8 +70,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-DATA <- readRDS(paste0(input_dir,"seuratObj_harmony_filt.RDS"))
-#DATA <- readRDS(paste0(input_dir,"seuratObj_harmony.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_integrated.RDS"))
 
 #################
 # COLOUR PALLET #
@@ -124,8 +119,8 @@ plot_grid(ncol = 2,
 ```
 
 ### Cluster resolutions on tissue
-```{r, 03b_plot_resolutions_on_tissue, fig.height=14, fig.width=7}
-# dev.new(width=7, height=14, noRStudioGD = TRUE)
+```{r, 03b_plot_resolutions_on_tissue, fig.height=14, dev = c("png", "pdf")}
+# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
 plots <- DATA %>%
   mutate(group = orig.ident) %>%
   nest(., data = -group) %>%
@@ -133,14 +128,14 @@ plots <- DATA %>%
     ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1", 
                       point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
   mutate( "res_2" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1,geneid="RNA_snn_res.1.5",
+    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1.5",
                       point_size = 0.8, zoom="zoom", colors = clus_1.5)))
 
 legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
 legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
 legend <- plot_grid( legend_1, legend_2, ncol = 1)
 combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
 combined
 ```
 
@@ -149,7 +144,8 @@ combined
 DATA <- DATA %>%
   rename(Clusters="RNA_snn_res.1") %>%
   SetIdent(., value = "Clusters") %>%
-  select(-any_of(contains("RNA_snn_res")))
+  select(-any_of(contains("RNA_snn_res|seurat_clusters"))) %>%
+  select(-seurat_clusters)
 ```
 
 ### Spot distribution by clusters
@@ -181,27 +177,7 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
 ```
 
 ### Plot final clusters on tissue section:
-```{r 03b_sp_mt_plot_filt, fig.height=10, eval=FALSE, include=FALSE}
-plot_fun <- function(obj){
-p <- SpatialPlot(obj, 
-            group.by = "Clusters", cols = clus,
-            #cols = c("lightgray", "mistyrose", "red", "dark red", "black"),
-            pt.size.factor = 5, ncol = 1, image.alpha = 0) + 
-            theme(panel.grid.major = element_blank(), 
-                  panel.grid.minor = element_blank(),
-                  legend.title = element_blank())
-}
-
-DATA_n <- DATA %>%
-  nest(data = -orig.ident)
-p <- map(DATA_n$data, ~plot_fun(.x))
-
-legend <- get_legend(p[[1]] + theme(legend.position="right"))
-combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
-(combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) )
-```
-
-```{r 03c_clust_plot, fig.asp=6/13}
+```{r 03c_clust_plot, fig.asp=6/13, dev = c("png", "pdf")}
 # Horizontal 
 # dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 ############################
@@ -219,14 +195,25 @@ combined <- wrap_plots(p, ncol = 2) & theme(legend.position = "none")
       
 ```
 
+```{r, add-layer-annotation}
+###################
+# ADD ANNOTATION #
+##################
+ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
+ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
+epi_layers <- set_names(ord1, ord2)
+
+DATA <- DATA %>%
+mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
+```
+
 ## Save seurat object
 ```{r save-SeuratObject}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
-saveRDS(DATA, paste0(result_dir,"seuratObj_clustered_filt.RDS"))
-# saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
-# DATA<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
+saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
+# DATA <- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
 ```
 
 ### Session info
