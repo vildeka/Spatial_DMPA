@@ -1154,14 +1154,6 @@
       "Hash": "77bd60a6157420d4ffa93b27cf6a58b8",
       "Requirements": []
     },
-    "fastmatch": {
-      "Package": "fastmatch",
-      "Version": "1.1-3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "dabc225759a2c2b241e60e42bf0e8e54",
-      "Requirements": []
-    },
     "fastmatrix": {
       "Package": "fastmatrix",
       "Version": "0.4-1245",
@@ -1169,26 +1161,6 @@
       "Repository": "CRAN",
       "Hash": "193d10098463a2d0c6a854786d38ef25",
       "Requirements": []
-    },
-    "fgsea": {
-      "Package": "fgsea",
-      "Version": "1.20.0",
-      "Source": "Bioconductor",
-      "git_url": "https://git.bioconductor.org/packages/fgsea",
-      "git_branch": "RELEASE_3_14",
-      "git_last_commit": "b704f81",
-      "git_last_commit_date": "2021-10-26",
-      "Hash": "a4913104166e73957fa32d2e595cceef",
-      "Requirements": [
-        "BH",
-        "BiocParallel",
-        "Matrix",
-        "Rcpp",
-        "data.table",
-        "fastmatch",
-        "ggplot2",
-        "gridExtra"
-      ]
     },
     "fitdistrplus": {
       "Package": "fitdistrplus",
@@ -1526,6 +1498,17 @@
         "tibble",
         "tidyselect",
         "vctrs"
+      ]
+    },
+    "hdf5r": {
+      "Package": "hdf5r",
+      "Version": "1.3.8",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "cb0f2296c8ce6508c5bcfbdae359b6ea",
+      "Requirements": [
+        "R6",
+        "bit64"
       ]
     },
     "here": {
@@ -2391,10 +2374,10 @@
     },
     "rmarkdown": {
       "Package": "rmarkdown",
-      "Version": "2.19",
+      "Version": "2.20",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "4e29299e1f4c7eabb0b8365b338adf3c",
+      "Hash": "716fde5382293cc94a71f68c85b78d19",
       "Requirements": [
         "bslib",
         "evaluate",
@@ -3078,14 +3061,14 @@
       "Package": "xbioc",
       "Version": "0.1.19",
       "Source": "GitHub",
-      "Remotes": "renozao/pkgmaker@develop",
       "RemoteType": "github",
+      "Remotes": "renozao/pkgmaker@develop",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "xbioc",
       "RemoteUsername": "renozao",
       "RemoteRef": "HEAD",
       "RemoteSha": "1354168bd7e64be4ee1f9f74e971a61556d75003",
-      "Hash": "1ca0f0ce88d52bc7b6c735707c48845c",
+      "Hash": "5674ca513e16122b2dd7e453c04a0345",
       "Requirements": [
         "AnnotationDbi",
         "Biobase",
