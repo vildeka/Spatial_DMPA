@@ -149,7 +149,8 @@ title(xlab="UMAP 1", line=1.7, cex.lab=.9)
 text(centroids2d, labels = rownames(centroids2d), cex = 1, font = 1)
 ```
 
-<img src="./Figures/08/08a_plot_trajectory_UMAP.png"
+
+<img src="../Figures/08/08a_plot_trajectory_UMAP.png"
 data-fig-align="center" />
 
 ## Save seurat object
@@ -191,7 +192,7 @@ plot_st_feat.fun(.,
                  point_size = 1)
 ```
 
-<img src="./Figures/08/08b_spatial_trajectory_tissue.png"
+<img src="../Figures/08/08b_spatial_trajectory_tissue.png"
 data-fig-align="center" />
 
 ``` r
@@ -337,7 +338,8 @@ c <- pmap(l, ~((..1 /..2 / ..3) + plot_layout(heights = c(1,4,1)) | ..4 ) + plot
 c[[1]]
 ```
 
-<img src="./Figures/08/08c_combined_dot_and_tissue_plot.png"
+
+<img src="../Figures/08/08c_combined_dot_and_tissue_plot.png"
 data-fig-align="center" />
 
 ``` r
@@ -375,7 +377,8 @@ dot_fig <- map(for_fig2, ~layer_dotplot.fun(DATA, .x, facet = FALSE)) # , x_max 
 wrap_plots(dot_fig, ncol = 5, nrow = ceiling(length(dot_fig)/5)) + plot_layout(guides = 'collect')
 ```
 
-<img src="./Figures/08/08d_clus_dotplot.png" data-fig-align="center" />
+
+<img src="../Figures/08/08d_clus_dotplot.png" data-fig-align="center" />
 
 ``` r
 # ggsave("./Figures/08/dots_across_layers_clus.pdf", gridExtra::marrangeGrob(grobs = dot, ncol=1, nrow = 1), width = 5, height = 3)
