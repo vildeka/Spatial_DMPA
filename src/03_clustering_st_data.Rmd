@@ -77,8 +77,8 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_integrated.RDS"))
 #################
 clus_1.5 <- c("#F8766D", "#7CAE00", "#CD9600", "#00A9FF", "#984EA3","#C77CFF", "#00BFC4", "#FF7F00",
               "#FFFF33", "#E41A1C","#377EB8","#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-clus_1 <- c( "#F8766D","#7CAE00", "#CD9600", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
-             "#00BFC4", "#FF7F00","#FFFF33", "#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
+clus_1 <- c( "#CD9600", "#7CAE00", "#e0e067", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
+             "#00BFC4", "#FF7F00","#FFFF33", "#CD9600", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
 
 # clus <- c(scales::hue_pal()(8),
 #              RColorBrewer::brewer.pal(9,"Set1"),
@@ -88,6 +88,8 @@ clus_1 <- c( "#F8766D","#7CAE00", "#CD9600", "#00A9FF", "#377EB8","#984EA3", "#E
 #              RColorBrewer::brewer.pal(8,"Pastel2") )
 # scales::show_col(clus_1.5)
 # scales::show_col(RColorBrewer::brewer.pal(9,"Set1"))
+
+# "#7FC97F" "#BEAED4" "#FDC086" "#FFFF99" "#386CB0" "#F0027F" "#BF5B17" "#666666"
 ```
 
 ## Clustering
@@ -110,10 +112,11 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
 
 ### UMAP of cluster resolutions
 ```{r 03a_plot_resolution, fig.asp=5/10}
+# dev.new(width=6.6929133858, height=3.3, noRStudioGD = TRUE)
 res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
 p <- map2(res, list(clus_1,clus_1.5),
-          ~plot_clusters.fun(DATA, cluster=.x, txt_size = 7, 
-                             color = .y, red = "umap_harmony"))
+          ~plot_clusters.fun(DATA, cluster=.x, txt_size = 10, dot_size = 0.2,
+                             color = .y, red = "umap_harmony") + xlab("UMAP 1") + ylab("UMAP 2")) 
 plot_grid(ncol = 2, 
           plotlist = p)
 ```
@@ -146,6 +149,11 @@ DATA <- DATA %>%
   SetIdent(., value = "Clusters") %>%
   select(-any_of(contains("RNA_snn_res|seurat_clusters"))) %>%
   select(-seurat_clusters)
+```
+
+```{r 03c_Final_cluster_resolution, fig.height=3.3, fig.width=3.3, dev=c("png","pdf")}
+# dev.new(width=3.3, height=3.3, noRStudioGD = TRUE)
+p[[1]] + ggtitle("")
 ```
 
 ### Spot distribution by clusters
