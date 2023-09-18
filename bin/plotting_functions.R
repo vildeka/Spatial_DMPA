@@ -6,19 +6,19 @@ my_theme <-
   list(
     #scale_fill_manual(values = friendly_cols),
     #scale_color_manual(values = friendly_cols),
-    theme_bw() +
+    theme_classic() +
       #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
       theme(
-        panel.border = element_blank(),
+        panel.border = element_rect(fill=NA, linewidth = .7),
         axis.line = element_line(),
-        panel.grid.major = element_line(linewidth = 0.2),
-        panel.grid.minor = element_line(linewidth = 0.1),
+        panel.grid.major = element_blank(), #element_line(linewidth = 0.2),
+        panel.grid.minor = element_blank(), #element_line(linewidth = 0.1),
         text = element_text(size = txt_size),
         plot.title = element_text(hjust = 0.5),
         #legend.position = "bottom",
         #aspect.ratio = 1,
         strip.background = element_blank(),
-        axis.title = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
+        axis.title = element_text(margin = margin(t = 12, r = 10, b = 10, l = 10))
         #axis.title.y = element_text(size = txt_size, margin = margin(t = 10, r = 10, b = 10, l = 10))
       )
   )
@@ -32,6 +32,7 @@ plot_clusters.fun <- function(obj, cluster,
                               red = "umap_harmony", 
                               color = "Brew_all", 
                               lable = TRUE, 
+                              lable_size = 4,
                               txt_size = 7,
                               dot_size = 0.5,
                               title = "colname",
@@ -81,7 +82,9 @@ plot_clusters.fun <- function(obj, cluster,
   red_1 <- sym(paste0(red, "_1"))
   red_2 <- sym(paste0(red, "_2"))
   
-  if(!(lable == FALSE)){text <- geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) }else{text <- NULL}
+  if(!(lable == FALSE)){text <- geom_text(data = lable_df, aes(label = !!(lab)), 
+                                          col="black", size=lable_size, vjust=1, hjust=.5) }
+  else{text <- NULL}
   
   p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
                         color = !!cluster), label=l) + 
@@ -89,14 +92,14 @@ plot_clusters.fun <- function(obj, cluster,
     #if(!(lable == FALSE)){geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5)} +
     #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
     text +
-    scale_color_manual(values = pal)  +
+    scale_color_manual(values = pal, na.value = "transparent")  +
     my_theme + t +
     theme(
       plot.margin = unit(c(.05,.1,0,0), "cm"), #t,r,b,l c(.1,.1,-.4,-.1)
       axis.title.x = element_text(size=txt_size, vjust=3.5), # margin=margin(t=10, r=10, b=10, l=10,)
       axis.title.y = element_text(size=txt_size, vjust=-1),
       axis.text = element_text(size=txt_size),
-      plot.title = element_text(size=txt_size, vjust=-5, hjust = 0.05))
+      plot.title = element_text(size=txt_size, vjust=-9, hjust = 0.05))
   return(p)
 }
 
@@ -187,7 +190,9 @@ revlog_trans <- function(base = exp(1)){
 }
 
 
-Volcano.fun_logFC <- function(DEGs_table, group, y.axis, up=c(1, 0.001), down = c(-1, 0.001)){
+Volcano.fun_logFC <- function(DEGs_table, group, y.axis, 
+                              up=c(1, 0.001), down = c(-1, 0.001),
+                              lab_size = 4, dot_size = .3){
   tt <- DEGs_table %>% 
     mutate('p-value treshold' = ifelse(avg_log2FC >= 0 & p_val_adj <= 0.05 ,"Up", 
                                        ifelse(avg_log2FC <= -0 & p_val_adj  <= 0.05, "Down", 'NotSig'))) %>%
@@ -199,14 +204,15 @@ Volcano.fun_logFC <- function(DEGs_table, group, y.axis, up=c(1, 0.001), down = 
       #scale_x_continuous(trans = revlog_trans(), expand = c(0.005, 0.05)) +
       #expand_limits(x = c(0.001, 1)) +
       #geom_point(data = tt, alpha = 0.5, lable = tt$Lable) +
-      geom_jitter(width = 0.3, alpha = 0.3, size=.1) +
-      geom_text_repel(data = tt, label= tt$Lable, colour = "black", size=2, #vjust = -0.6,
+      geom_jitter(width = 0.3, alpha = 0.3, size=dot_size) +
+      geom_text_repel(data = tt, label= tt$Lable, colour = "black", size=lab_size, #vjust = -0.6,
                       show.legend=FALSE, segment.color = NA,
                       #check_overlap = TRUE 
                       #,point.padding = NA, segment.color = NA,
       )+
       geom_hline(yintercept = 0, linetype = "solid") +
       #geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
+      guides(col = guide_legend(override.aes = list(size=2), keyheight = .7)) +
       theme_minimal() + 
       theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
       scale_colour_manual(values = c("Up"= "red", "NotSig"= "grey90", "Down"="blue"),
@@ -217,7 +223,7 @@ Volcano.fun_logFC <- function(DEGs_table, group, y.axis, up=c(1, 0.001), down = 
     pos <- which(abs(TopTable$FDR-0.05)==min(abs(TopTable$FDR-0.05)))
     plot <- ggplot(tt, aes(x = logFC, y = -log10(P.Value), colour = `p-value treshold`)) +
       geom_point(data = tt, alpha = 0.5, size=3) +
-      geom_text(data = tt, label= tt$Lable, colour = "black", size=4, vjust = -0.6,
+      geom_text(data = tt, label= tt$Lable, colour = "black", size=lab_size, vjust = -0.6,
                 show.legend=FALSE, 
                 #check_overlap = TRUE 
                 #,point.padding = NA, segment.color = NA,
@@ -229,6 +235,7 @@ Volcano.fun_logFC <- function(DEGs_table, group, y.axis, up=c(1, 0.001), down = 
       #geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
       theme_linedraw() + theme_classic() + # Set the theme
       xlab(bquote('                                             '~log[2]~ "(fold change)")) + ylab(bquote('-'~log[10]~ "(p-value)")) + # Relabel the axes
+      guides(col = guide_legend(override.aes = list(size=2), keyheight = .7)) +
       theme(#legend.position="none", 
         axis.title.x = element_text(hjust=0.001),
         legend.title = element_blank()) + # Hide the legend
@@ -306,3 +313,4 @@ plot_cell_pie_c.fun <- function(obj, markers,
       axis.text = element_text(size=txt_size),
       plot.title = element_text(size=txt_size, vjust=-9, hjust = 0.05))
   return(p)
+}
