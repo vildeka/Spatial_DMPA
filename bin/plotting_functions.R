@@ -249,3 +249,60 @@ Volcano.fun_logFC <- function(DEGs_table, group, y.axis, up=c(1, 0.001), down = 
   }
   return(plot)
 }
+
+###################################
+# PLOT CLUSTERS PROP PIE FUNCTION #
+###################################
+# obj <- seuratObj
+# cluster <- sym("RNA_snn_res.0.1")
+plot_cell_pie_c.fun <- function(obj, markers, 
+                              red = "umap_harmony", 
+                              color = "Brew_all", 
+                              radius_adj = 0,
+                              #lable = TRUE, 
+                              #lable_size = 4,
+                              txt_size = 7,
+                              dot_size = 0.5,
+                              title = "colname",
+                              assay="RNA"){
+  if(color[[1]] == "Brew_all"){
+    pal <- c(scales::hue_pal()(8),
+             RColorBrewer::brewer.pal(9,"Set1"),
+             RColorBrewer::brewer.pal(8,"Set2"),
+             RColorBrewer::brewer.pal(8,"Accent"),
+             RColorBrewer::brewer.pal(9,"Pastel1"),
+             RColorBrewer::brewer.pal(8,"Pastel2") )}else{pal <- color}
+  
+  #cluster <- sym(cluster)
+  
+  
+  DefaultAssay(obj) <- assay
+  
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
+  
+  feat <- obj %>%
+    mutate(., FetchData(., vars = markers) ) %>%
+    select(.cell, !!(red_1), !!(red_2), any_of(markers), nCount_RNA, nFeature_RNA) %>%
+    as_tibble()
+  
+  radius = (max(feat[[red_1]]) - min(feat[[red_2]])) * (max(feat[[red_1]]) - min(feat[[red_2]]))
+  radius = radius / nrow(feat)
+  radius = radius / pi
+  radius = sqrt(radius) * 0.85
+  
+  p <- ggplot(feat, aes(!!(red_1), !!(red_2))) + 
+    #geom_point(alpha=.5, size=dot_size) + ggtitle(title) +
+    geom_scatterpie(data=feat,aes(!!(red_1), !!(red_2),r=radius+radius_adj), cols=markers, color=NA) + 
+    #if(!(lable == FALSE)){geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5)} +
+    #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
+
+    scale_fill_manual(values = pal, na.value = "transparent")  +
+    my_theme +
+    theme(
+      plot.margin = unit(c(.05,.1,0,0), "cm"), #t,r,b,l c(.1,.1,-.4,-.1)
+      axis.title.x = element_text(size=txt_size, vjust=3.5), # margin=margin(t=10, r=10, b=10, l=10,)
+      axis.title.y = element_text(size=txt_size, vjust=-1),
+      axis.text = element_text(size=txt_size),
+      plot.title = element_text(size=txt_size, vjust=-9, hjust = 0.05))
+  return(p)
