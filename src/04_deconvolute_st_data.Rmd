@@ -7,6 +7,7 @@ format:
     code-fold: show
 params:
   fig.path: "./Figures/04/"
+  re.run: FALSE
 editor_options: 
   chunk_output_type: console
 ---
@@ -80,24 +81,27 @@ source("../bin/spatial_visualization.R")
 # PATHS #
 #########
 input_dir_s <- "../results/03_clustering_st_data/"
-input_dir_r <- "../results/04_DGE_ref_data/"
+input_dir_r <- "../results/06_plot_annotation_ref_data/"
 result_dir <- "../results/04_deconvolution_st_data/"
-marker_dir <- "./marker_genes/"
-bulk_path <- "/Users/vilkal/Raw_data/Bulk_Transcriptomics/Raw_counts_matrix.csv"
+bulk_path <- "/Users/vilkal/Raw_data/Bulk_Transcriptomics/Visit_3/Raw_counts_matrix.csv"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
-if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) }
 
 #############
 # LODA DATA #
 #############
 DATA_st <- readRDS(paste0(input_dir_s,"seuratObj_clustered.RDS"))
-DATA_r <- readRDS(paste0(input_dir_r,"seuratObj_clustered.RDS"))
-cell_id <- read.xlsx("../../Spatial_DMPA/data/Reference_data/annotation_single_cell.xlsx")
-markers_genes <- readRDS(paste0(input_dir_r,"markers_genes.RDS"))
+DATA_r <- readRDS(paste0(input_dir_r,"seuratObj_annotated_celltypes.RDS"))
+cell_id <- read.xlsx("../../Spatial_DMPA/data/Reference_data/annotation_single_cell.xlsx", sheet = "edited")
+markers_genes_clus <- readRDS(paste0("../results/04_DGE_ref_data/","markers_genes.RDS"))
+#markers_genes_annot1 <- readRDS(paste0(input_dir_r,"markers_genes_annot1.RDS"))
+#markers_genes_annot2 <- readRDS(paste0(input_dir_r,"markers_genes_annot2.RDS"))
+markers_genes_annot1 <- readRDS(paste0(input_dir_r,"markers_genes_annot1_filt.RDS"))
+markers_genes_annot2 <- readRDS(paste0(input_dir_r,"markers_genes_annot2_filt.RDS"))
 
 Bulk_data <- read_csv(bulk_path)
-bulk_meta <- read_csv("/Users/vilkal/Raw_data/Clinincal_data/Clinical_visit_3_updateOct2022_wSampleInfo.csv")
+bulk_meta <- read_csv("/Users/vilkal/Raw_data/Clinical_data/Clinical_visit_3_updateOct2022_wSampleInfo.csv")
 
+epi_clus <- "^5$|^6$|^7|^9"
 ```
 
 ### SCDC deconcolution steps
@@ -119,6 +123,7 @@ dim(DATA_st_filt@assays$RNA@counts)
 #sum(DATA_st_filt@assays$RNA@counts[,"P031_TGCCTTGCCCTTACGG"])
 
 # creating a subseted object with 200 spots selected from each cluster
+set.seed(1)
 DATA_sub <- DATA_r %>%
     filter(., .cell %in% WhichCells(., downsample = 200)) %>%
     SetIdent(., value = "Clusters")
@@ -126,31 +131,38 @@ DATA_sub <- DATA_r %>%
 table(DATA_r$Clusters)
 table(DATA_sub$Clusters)
 
-# run normalization and dimensionality reduction
-# only necessary to get new subseted UMAP
-DATA_sub <- DATA_sub %>%
-  SCTransform(., ncells = 3000, verbose = FALSE, method = "poisson") %>% 
-  RunPCA(verbose = FALSE) %>%
-  RunUMAP(dims = 1:30)
 ```
 
 ### Plot UMAP of subseted reference data
 ```{r 04a_reference_UMAP_plot, fig.height=6}
 # dev.new(width=6.6929133858, height=6.6929133858, noRStudioGD = TRUE)
-p <- plot_clusters.fun(DATA_sub, cluster="Clusters", red = "UMAP", txt_size = 11)
+p <- plot_clusters.fun(DATA_sub, cluster="cell_annot_1", red = "UMAP", txt_size = 11)
 p
 ```
 
 ### Select genes for deconvolution
-```{r Get-best-markers}
+```{r Get-best-markers, eval=params$re.run}
 # Identify the top genes that have a high difference in expression
-top30 <- markers_genes %>%
+top30_clus <- markers_genes_clus %>%
   filter(.$gene %in% rownames(DATA_st@assays$RNA@counts)) %>%
   group_by(cluster) %>%
   top_n(-50, p_val_adj) %>%
   top_n(40, pct.diff) %>%
   top_n(30, log.pct.diff) 
 
+top30_annot1 <- markers_genes_annot1 %>%
+  filter(.$gene %in% rownames(DATA_st@assays$RNA@counts)) %>%
+  group_by(cluster) %>%
+  top_n(-50, p_val_adj) %>%
+  top_n(40, pct.diff) %>%
+  top_n(30, log.pct.diff) 
+
+top30_annot2 <- markers_genes_annot2 %>%
+  filter(.$gene %in% rownames(DATA_st@assays$RNA@counts)) %>%
+  group_by(cluster) %>%
+  top_n(-50, p_val_adj) %>%
+  top_n(40, pct.diff) %>%
+  top_n(30, log.pct.diff) 
 # remove all VDJ-genes from list of HVG
 # remove <- str_subset(top30$gene, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
 # top25_gr <- top25 %>%
@@ -160,109 +172,146 @@ top30 <- markers_genes %>%
 #   group_split() %>%
 #   set_names(., seq(0, length(.)-1) )
 
-m_feats <- unique(as.character(top30$gene))
+m_feats_clus <- unique(as.character(top30_clus$gene))
+m_feats_annot1 <- unique(as.character(top30_annot1$gene))
+m_feats_annot2 <- unique(as.character(top30_annot2$gene))
 ```
 
 ### Create ExpressionSet
-```{r ExpressionSet}
-# Create Expression Sets
-eset_SC <- ExpressionSet(assayData = as.matrix(DATA_r@assays$RNA@counts[m_feats,
-    ]), phenoData = AnnotatedDataFrame(DATA_r@meta.data))
-eset_ST <- ExpressionSet(assayData = as.matrix(DATA_st_filt@assays$RNA@counts[m_feats,
-    ]), phenoData = AnnotatedDataFrame(DATA_st_filt@meta.data))
-
+```{r ExpressionSet, eval=params$re.run}
 bulk <- Bulk_data %>%
   select(-entrez, -length) %>%
   group_by(symbol) %>% 
   summarise_all(sum) %>%
   filter(!(is.na(.$symbol))) %>%
-  filter(.$symbol %in% m_feats) %>%
+  #filter(.$symbol %in% m_feats) %>%
   column_to_rownames(., var = "symbol")
 
-eset_B <- ExpressionSet(assayData = as.matrix(bulk[m_feats,]))
+deconvolution <- tibble(genes = list("clus" = m_feats_clus, "annot1" = m_feats_annot1, "annot2" = m_feats_annot2),
+                        column = c("Clusters", "cell_annot_1", "cell_annot_2"))
+
+# Create Expression Sets
+deconvolution <- deconvolution %>%
+  mutate(eset_SC = pmap(., ~ExpressionSet(
+                assayData = as.matrix(DATA_r@assays$RNA@counts[..1,]), 
+                phenoData = AnnotatedDataFrame(DATA_r@meta.data))) 
+         ) %>%
+  mutate(eset_ST = pmap(., ~ExpressionSet(
+                assayData = as.matrix(DATA_st_filt@assays$RNA@counts[..1,]), 
+                phenoData = AnnotatedDataFrame(DATA_st_filt@meta.data))) 
+         ) %>%
+  mutate(eset_B = pmap(., ~ExpressionSet(
+                assayData = as.matrix(bulk[..1,]) )) ) %>%
+  mutate(ct.sub = pmap(., ~as.character(unique(..3[[..2]])))) %>%
+  mutate(ct.sub = map(ct.sub, ~replace_na(.x, "unknown")))
 ```
 
 ## Deconvolution
-```{r deconvolution, include=TRUE, eval=FALSE}
-################
-# BULK DECONV. #
-#################
-deconvolution <- SCDC::SCDC_prop(bulk.eset = eset_B, sc.eset = eset_SC, 
-                                 ct.varname = "Clusters",
-                                 ct.sub = as.character(unique(eset_SC$Clusters)))
-
-saveRDS(deconvolution, paste0(result_dir,"deconvolution_bulk_scdc.RDS"))
-# deconvolution <- readRDS(paste0(result_dir,"deconvolution_bulk.RDS"))
-
+```{r deconvolution, eval=params$re.run}
 ###################
 # SPATIAL DECONV. #
 ###################
-deconvolution <- SCDC::SCDC_prop(bulk.eset = eset_ST, sc.eset = eset_SC, 
-                                 ct.varname = "Clusters",
-                                 ct.sub = as.character(unique(eset_SC$Clusters)))
+deconvolution <- deconvolution %>%
+  mutate(decon_ST = pmap(., ~SCDC::SCDC_prop(
+    bulk.eset = ..4, sc.eset = ..3, 
+    ct.varname = ..2, ct.sub = ..6)
+    ))
+################
+# BULK DECONV. #
+#################
+deconvolution <- deconvolution %>%
+  mutate(decon_bulk = pmap(., ~SCDC::SCDC_prop(
+    bulk.eset = ..5, sc.eset = ..3, 
+    ct.varname = ..2, ct.sub = ..6)
+                           ))
 
-saveRDS(deconvolution, paste0(result_dir,"deconvolution_scdc.RDS"))
+saveRDS(deconvolution, paste0(result_dir,"deconvolution_scdc_filt_ST.RDS"))
+pmap(deconvolution, ~write_csv(as_tibble(..8$prop.est.mvw, rownames = "ID"), 
+                               paste0(result_dir,"deconvolution_bulk_",..2,".csv")))
 
-head(deconvolution$prop.est.mvw)
+head(deconvolution$decon_ST$annot1$prop.est.mvw)
+```
+
+### Load allready saved data
+```{r load-deconvolution-object, include=FALSE, eval=isFALSE(params$re.run)}
+# Load data
+deconvolution <- readRDS(paste0(result_dir,"deconvolution_scdc_filt_ST.RDS"))
 ```
 
 ### Add single cell deconvolution matrix to seurat object
-```{r merge-decon-with-seuratobj, include=TRUE, eval=TRUE}
-deconvolution <- readRDS(paste0(result_dir,"deconvolution_scdc.RDS"))
-all_spots <- c(rownames(deconvolution$prop.est.mvw), colnames(DATA_st)) %>% unique(.)
+```{r merge-decon-with-seuratobj}
+all_spots <- c(rownames(deconvolution$decon_ST[[1]]$prop.est.mvw), colnames(DATA_st)) %>% unique(.)
 
 # Create empty matrix and populate with SCDC results
-temp <- Matrix::Matrix(0, 
-                 nrow = ncol(deconvolution$prop.est.mvw), 
+scdc_mtx.fun <- function(decon, all_spots){
+  temp <- Matrix::Matrix(0, 
+                 nrow = ncol(decon), 
                  ncol = length(all_spots), 
-                 dimnames = list(colnames(deconvolution$prop.est.mvw), all_spots))
+                 dimnames = list(colnames(decon), all_spots))
 
-temp[,rownames(deconvolution$prop.est.mvw)] <- t(deconvolution$prop.est.mvw)
+temp[,rownames(decon)] <- t(decon)
 temp <- temp[,colnames(DATA_st)]
+return(temp)
+}
 
-# take the deconvolution output and add it to the Seurat object as a new assay.
-DATA_st@assays[["SCDC"]] <- CreateAssayObject(data = temp)
-DATA_st@assays$SCDC@key <- "scdc_"
+deconvolution %>%
+  mutate(matrix_ST = pmap(., ~scdc_mtx.fun(..7$prop.est.mvw, all_spots) )) %>%
+  pmap(., ~CreateAssayObject(data = ..8)) %>%
+
+  # take the deconvolution output and add it to the Seurat object as a new assay.
+  imap(., ~{.x ->> DATA_st@assays[[paste0("SCDC_",.y)]] }) %>%
+  imap(., ~{ paste0("scdc_",.y, "_") ->> DATA_st@assays[[paste0("SCDC_",.y)]]@key }) 
+
 ```
 
 ### Add cell annotation to seurat object
-```{r Add-ST-cell-annotation}
-cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., as.character(0:28))
-
-annot2 <- c("fibroblasts","fibroblasts","T-cell","T-cell","T-cell","T-cell","T-cell","T-cell","T-cell","fibroblasts","T-cell",NA,NA,"T-cell","fibroblasts","fibroblasts","myeloid",NA,"myeloid",NA,NA,NA,NA,NA,"T-cell","B cell",NA,"T-cell", NA) %>% set_names(., as.character(0:28))
+```{r Add-ST-cell-annotation, eval=params$re.run}
+cell_type <- set_names(cell_id$annotation_level1, as.character(cell_id$cluster))
+cell_annot_1 <- set_names(cell_id$annotation_level2, as.character(cell_id$cluster))
+cell_annot_2 <- set_names(cell_id$annotation_level3, as.character(cell_id$cluster))
 
 # tibble(cell_type)
 
-df <- DATA_st@assays$SCDC@data %>%
+df <- DATA_st@assays$SCDC_clus@data %>%
   as_tibble(., rownames = "clus") %>%
   pivot_longer(., cols = -clus, names_to = ".cell", values_to = "values") %>%
   filter(!(values==0)) %>% 
   #nest( data = -clus) %>%
-  left_join(., select(as_tibble(DATA_st),.cell, Clusters, groups, sp_annot), by=".cell") %>%
+  left_join(., select(as_tibble(DATA_st),.cell, ID="orig.ident",
+                      Clusters, groups, sp_annot), by=".cell") %>%
+  #group_by(orig.ident) %>%
+  mutate(Percent = 100 *values/sum(values), .by = "ID") %>%
   mutate(., cell_type = cell_type[as.character(.$clus)]) %>%
-  mutate(., cell_type_2 = annot2[as.character(.$clus)]) %>%
-  mutate(., annot = paste0(.$clus, "_", cell_type_2)) %>%
+  mutate(., cell_annot_1 = cell_annot_1[as.character(.$clus)]) %>%
+  mutate(., cell_annot_2 = cell_annot_2[as.character(.$clus)]) %>%
+  #mutate(., annot = paste0(.$clus, "_", cell_annot_2)) %>%
   mutate(clus = factor(clus, levels = as.character(0:28)))
 
-df <- df %>%
-  mutate(cell_type_2 = case_when(.$cell_type == "epithelial" & .$Clusters == "4" ~ 'ker_s1',
-                                 .$cell_type == "epithelial" & .$Clusters == "7" ~ 'ker_b1',
-                                 .$cell_type == "epithelial" & .$Clusters == "8" ~ 'ker_b2',
-                                 .$cell_type == "epithelial" & .$Clusters == "9" ~ 'ker_int',
-                                 .$cell_type == "epithelial" & .$Clusters == "10" ~ 'ker_s2',
-                                 TRUE ~ .$cell_type_2))
+# df <- df %>%
+#   mutate(cell_type_2 = case_when(.$cell_type == "epithelial" & .$Clusters == "4" ~ 'ker_s1',
+#                                  .$cell_type == "epithelial" & .$Clusters == "7" ~ 'ker_b1',
+#                                  .$cell_type == "epithelial" & .$Clusters == "8" ~ 'ker_b2',
+#                                  .$cell_type == "epithelial" & .$Clusters == "9" ~ 'ker_int',
+#                                  .$cell_type == "epithelial" & .$Clusters == "10" ~ 'ker_s2',
+#                                  TRUE ~ .$cell_type_2))
 
 # This annotation will duplicate the spots, so it cannot be added directly to the SeuratObject
 # instead its added to the miscellaneous assay 
+
 DATA_st@assays[["misc"]] <- list(cell_annot = df)
 ```
 
+### Save seurat object
+```{r Save-SeuratObj, eval=params$re.run}
+saveRDS(DATA_st, paste0(result_dir,"seuratObj_deconvolution_scdc_filt.RDS"))
+# DATA_st <- readRDS(paste0(result_dir,"seuratObj_deconvolution_scdc.RDS"))
+```
+
 ### Save the cell annotation for the bulk data
-```{r Save-bulk-cell-annotation}
-deconvolution <- readRDS(paste0(result_dir,"deconvolution_bulk_scdc.RDS"))
+```{r Save-bulk-cell-annotation, eval=params$re.run}
 gr <- set_names(bulk_meta$Contraception, bulk_meta$ID) 
 
-decon_column_bulk <- deconvolution$prop.est.mvw %>%
+decon_column_bulk <- deconvolution$decon_bulk$clus$prop.est.mvw %>%
   as_tibble(., rownames = "ID") %>%
   pivot_longer(., cols = -ID, names_to = "clus", values_to = "values") %>%
   mutate(clus = factor(clus, levels = as.character(0:28))) %>%
@@ -270,47 +319,72 @@ decon_column_bulk <- deconvolution$prop.est.mvw %>%
   #filter(ID %in% DATA_st$orig.ident) %>%
   mutate(., groups = gr[.$ID])  %>%
   mutate(., cell_type = cell_type[as.character(.$clus)]) %>%
-  mutate(., cell_type_2 = annot2[as.character(.$clus)]) %>%
-  mutate(., annot = paste0(.$clus, "_", cell_type_2)) %>%
-  mutate(., cell_type_2 = case_when(is.na(.$cell_type_2) ~ .$cell_type,
-                                    TRUE ~ .$cell_type_2)) %>%
-  mutate(., annot = case_when(is.na(.$cell_type_2) ~ paste0(.$clus, "_", .$cell_type),
-                              TRUE ~ .$annot))
+  mutate(., cell_annot_1 = cell_annot_1[as.character(.$clus)]) %>%
+  mutate(., cell_annot_2 = cell_annot_2[as.character(.$clus)])
 
-saveRDS(deconvolution, paste0(result_dir,"deconvolution_bulk_cell_annotation.RDS"))
+write_csv(decon_column_bulk, paste0(result_dir,"decon_bulk_annotation.csv"))
+# decon_column_bulk <- read_csv(paste0(result_dir,"decon_bulk_annotation.csv"))
 ```
 
-## Save seurat object
-```{r Save-SeuratObj}
-saveRDS(DATA_st, paste0(result_dir,"seuratObj_deconvolution_scdc.RDS"))
-# DATA_st <- readRDS(paste0(result_dir,"seuratObj_deconvolution_scdc.RDS"))
+### Load allready saved data
+```{r load-bulk-deconvolution-tbl, include=FALSE, eval=isFALSE(params$re.run)}
+# Load data
+decon_column_bulk <- read_csv(paste0(result_dir,"decon_bulk_annotation.csv"))
 ```
 
-## Plotting deconvolution data
-```{r 04b_celltype_by_clusters}
-#################
-# COLOUR PALLET #
-#################
-pal <- c(scales::hue_pal()(8),
-             RColorBrewer::brewer.pal(9,"Set1"),
-             RColorBrewer::brewer.pal(8,"Set2"),
-             RColorBrewer::brewer.pal(8,"Accent"),
-             RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )
+```{r}
+b_df_ <- DATA_st@assays[["misc"]]$cell_annot %>%
+  filter(cell_annot_1 == "B cell") %>%
+  filter(values > 0) %>%
+  filter(sp_annot == "epi") %>%
+  mutate(ID = str_extract(.$.cell, "^P\\d\\d\\d")) %>%
+  pull(., "ID") %>%
+  unique(.)
 
-##########################
-# CELL TYPE DISTRIBUTION #
-##########################
-# cell type distribution per cluster in each condition:
-decon_column_st <- DATA_st@assays[["misc"]][["cell_annot"]] %>%
-  arrange(clus) %>%
-  mutate(annot = factor(annot, levels = unique(.$annot)))
-
-ggplot(decon_column_st, aes(fill=annot, y=values, x=Clusters)) + 
-  geom_bar(position="stack", stat="identity") +
-  scale_fill_manual(values = pal) +
-  facet_wrap(~groups + sp_annot) + theme_minimal() +
-  guides(fill = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7))
+# dev.new(width=5, height=2, noRStudioGD = TRUE)
+col<- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D")
+DefaultAssay(object=DATA_st) <- "SCDC_annot1"
+DATA_st %>%
+  #filter(orig.ident == "P118" | orig.ident == "P097") %>%
+  mutate(., FetchData(., vars = c("B cell", "T cell")), .after = "nFeature_RNA" ) %>%
+  mutate(across(c("B cell", "T cell"), ~ ifelse(. > 0, "yes", "other"))) %>%
+  #mutate(b_cell = ifelse(.$`B cell` > 0, "B-cell", "other"), .after = "nFeature_RNA" ) %>%
+  #{.@meta.data ->> b_df} %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "T cell",
+          col = c("#FF7F00","#EFEDF5"),
+          zoom = "zoom",
+          ncol = 4,
+          annot_line = .1,
+          annot_col = "black",
+          img_alpha = 0,
+          point_size = 0.8
+        )
+library(cowplot)
+library(patchwork)
+library(RColorBrewer)
+plots <- DATA_st %>%
+  #filter(orig.ident == "P118" | orig.ident == "P097") %>%
+  
+  mutate(., FetchData(., vars = c("B cell")), .after = "nFeature_RNA" ) %>%
+  mutate(b_cell = ifelse(.$sp_annot == "SubMuc", 0, .$`B cell`), .after = "nFeature_RNA") %>%
+  mutate(group = orig.ident) %>%
+  nest(., data = -group) %>%
+  pmap(., 
+    ~plot_spatial.fun(..2,
+      assay="SCDC_annot1",
+      sampleid = ..1,
+      geneid = "b_cell",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      zoom = "zoom",
+      col = col,
+      img_alpha = 0,
+      point_size = .7)
+    )
+legend <- get_legend(plots[[1]] + theme(legend.position="right"))
+combined <- wrap_plots(plots, ncol=4) & theme(legend.position="none")
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .17)) 
+combined
 ```
 
 ### Keratins per cluster
@@ -345,17 +419,19 @@ ggplot(ker, aes(fill=Genes, y=values, x=Clusters)) +
 ```
 
 ```{r subseted-colour-pallet}
-cell_type <- c("fibroblasts","fibroblasts","immune","immune","immune","immune","immune","immune","immune","fibroblasts","immune","endothelial","epithelial","immune","fibroblasts","fibroblasts","immune","immune","immune","fibroblasts","immune","epithelial","fibroblasts","granulocytes","immune","immune","endothelial","immune","immune") %>% set_names(., 0:28)
+#### colours ####
+# maximum levels in the subgroup is 16
+s_col <- c("#FFD92F","#8DA0CB","#FC8D62","#66C2A5","#E78AC3","#A6D854","#eb6062","#E5C494","#B3B3B3","#377EB8","#4DAF4A","#984EA3","#FF7F00","#FFFF33","#A65628","#F781BF")
+e_col <- c("#FFF2AE","#CBD5E8","#FDCDAC","#B3E2CD","#F4CAE4","#E6F5C9","#FBB4AE","#F1E2CC","#CCCCCC","#B3CDE3","#CCEBC5","#DECBE4","#FED9A6","#FFFFCC","#E5D8BD","#FDDAEC")
 
-df <- tibble(cell_id =rep(0:28, 30)) %>%
-   mutate(cell_name = cell_type[as.character(.$cell_id)])
-
+#### function ####
 ColourPalleteMulti <- function(df, group, subgroup){
 
   # Find how many colour categories to create and the number of colours in each
   categories <- aggregate(as.formula(paste(subgroup, group, sep="~" )), df, function(x) length(unique(x)))
-  s <- c(RColorBrewer::brewer.pal(8,"Set2"), RColorBrewer::brewer.pal(8,"Set1"))
-  e <- c(RColorBrewer::brewer.pal(8,"Pastel2"), RColorBrewer::brewer.pal(8,"Pastel1"))
+  #categories <- arrange(categories, group)
+  s <- s_col # c(RColorBrewer::brewer.pal(8,"Set2"), RColorBrewer::brewer.pal(8,"Set1"))
+  e <- e_col # c(RColorBrewer::brewer.pal(8,"Pastel2"), RColorBrewer::brewer.pal(8,"Pastel1"))
   category.start <- (s[1:nrow(categories)]) # Set the top of the colour pallete
   category.end  <- (e[1:nrow(categories)]) # set the bottom
 
@@ -365,7 +441,9 @@ ColourPalleteMulti <- function(df, group, subgroup){
                             colorRampPalette(colors = c(category.start[i],
                                                         category.end[i]))(categories[i,2])}))
   return(colours)
+  #return(categories)
 }
+
 # choose higer and lower level:
 # colours <- ColourPalleteMulti(candida_df, "rank", "taxName") %>% set_names(levels(candida_df$taxName))
 #scales::show_col(scales::hue_pal()(8))
@@ -402,11 +480,12 @@ get_order2 <- function(df, id, value_1, value_2){
     mutate(!!(id_name) := fct_reorder2(!!(id), n, n2))
     
 }
-get_legend.fun <- function(df, title, id, colours){
+get_legend.fun <- function(df, title, id, colours, txt_size = 10){
   # https://stackoverflow.com/questions/73711918/how-to-remove-majority-of-blank-space-from-get-legend
   p <- ggplot() + geom_col(data = df, aes(fill=annot, y=values, x=.data[[id]])) +
     scale_fill_manual(title, values = colours[unique(pull(df, "annot"))]) +
-    guides(fill = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7))
+    guides(fill = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7)) +
+    theme(text = element_text(size = txt_size),)
   l <- cowplot::get_legend(p)
   return(l)
 }
@@ -415,22 +494,33 @@ get_legend.fun <- function(df, title, id, colours){
 ####################
 # ARRANGE ID ORDER #
 ####################
-df <- decon_column_bulk %>%
-  arrange(cell_type, cell_type_2) %>%
-  mutate(annot = factor(.$annot, levels = unique(.$annot))) %>%
-  mutate("14" = ifelse(.$clus == "14", .$values, NA)) %>%
-  mutate("18" = ifelse(.$clus == "18", .$values, NA)) %>%
-  #get_order2(., `18`, `14`)
-  get_order(., id = `ID`,`14`)
+meta_group <- "comb"
+subgroup <- "cell_annot_2"
+meta_group_lvl <- c("B cell", "endothelial", "epithelial", "T cell","fibroblasts","immune",  "granulocytes") #dput(sort(unique(df[[meta_group]])))
 
-colours <- ColourPalleteMulti(df, "cell_type", "annot") %>% set_names(levels(decon_column_bulk$annot))
+df <- decon_column_bulk %>%
+  mutate(cell_annot_1 = replace_na(.$cell_annot_1, "NA")) %>%
+  mutate(comb = ifelse( grepl("B cell|T cell", .$cell_annot_1), .$cell_annot_1, .$cell_type))  %>%
+  
+  # arrange the leves and order of colours:
+  mutate(meta_group = factor(.[[meta_group]], levels = meta_group_lvl)) %>%
+  mutate(annot = .[[subgroup]]) %>%
+  mutate("14" = ifelse(.$clus == "14", .$Percent, NA)) %>%
+  mutate("18" = ifelse(.$clus == "18", .$Percent, NA)) %>%
+  #get_order2(., `18`, `14`)
+  get_order(., id = `ID`,`14`) %>%
+  arrange(meta_group) %>%
+  mutate(annot = factor(.[[subgroup]], levels = unique(.[[subgroup]])))
+
+colours <- ColourPalleteMulti(df, "meta_group", "annot") %>% 
+  set_names(unique(df$annot))
 # scales::show_col(colours)
 
 ##########
 # LEGEND #
 ##########
 c <- df %>%
-  nest(data = -cell_type) %>%
+  nest(data = -sym(meta_group)) %>%
   mutate(legend = pmap(., ~get_legend.fun(..2, ..1, "ID", colours)))
 
 #################
@@ -445,57 +535,122 @@ bar <- ggplot(df, aes(fill=annot, y=values, x=ID)) +
     #facet_wrap(~group ) +
     facet_grid(cols = vars(groups), scales = "free_x", space = "free_x", switch = "x")
 
-l <- plot_grid(plotlist = c$legend, nrow =3 , byrow = T ,
+l <- plot_grid(plotlist = c$legend, nrow =4 , byrow = T ,
                rel_heights = c(1,1,3), rel_widths = c(.5,0.2),
                align = "hv", axis = "t")
-plot_grid(bar, l ,rel_widths = c(1,.35))
+plot_grid(bar, l, rel_widths = c(1,.35))
 ```
 
 ### Barplot of cell composition for st dataset
-```{r 04e_st_decon_bar_plot, fig.width=6, fig.height=5}
-# dev.new(height=5, width=6, noRStudioGD = TRUE)
-decon_column_st <- DATA_st@assays[["misc"]][["cell_annot"]] %>%
-  mutate(., cell_type_2 = case_when(is.na(.$cell_type_2) ~ .$cell_type,
-                                    TRUE ~ .$cell_type_2)) %>%
-  mutate(., annot = case_when(is.na(.$cell_type_2) ~ paste0(.$clus, "_", .$cell_type),
-                              TRUE ~ .$annot))
+```{r 04e_st_decon_bar_plot, fig.width=6, fig.height=5, dev=c('png','pdf')}
+# dev.new(height=6, width=6.6, noRStudioGD = TRUE)
+decon_column_st <- DATA_st@assays[["misc"]][["cell_annot"]] #%>%
+  # mutate(., cell_type_2 = case_when(is.na(.$cell_type_2) ~ .$cell_type,
+  #                                   TRUE ~ .$cell_type_2)) %>%
+  # mutate(., annot = case_when(is.na(.$cell_type_2) ~ paste0(.$clus, "_", .$cell_type),
+  #                             TRUE ~ .$annot))
 
 ####################
 # ARRANGE ID ORDER #
 ####################
+meta_group <- "comb"
+subgroup <- "cell_annot_2"
+meta_group_lvl <- c("B cell", "endothelial", "epithelial", "T cell","fibroblasts","immune", "granulocytes") #dput(sort(unique(df[[meta_group]])))
+
 df <- decon_column_st %>%
-  mutate(ID = str_extract(.$.cell, "^P\\d\\d\\d")) %>%
-  arrange(cell_type, cell_type_2) %>%
-  mutate(annot = factor(.$annot, levels = unique(.$annot))) %>%
+  #filter(sp_annot == "epi") %>%
+  mutate(ID = str_extract(.cell, "^P\\d+")) %>%
+  mutate(Percent_morf = 100 *values/sum(values), .by = c("ID", "sp_annot")) %>%
+  mutate(cell_annot_1 = replace_na(as.character(.$cell_annot_1), "NA")) %>%
+  mutate(comb = ifelse( grepl("B cell|T cell", .$cell_annot_1), .$cell_annot_1, .$cell_type))  %>%
+  
+  
+  # arrange the leves and order of colours:
+  mutate(meta_group = factor(.[[meta_group]], levels = meta_group_lvl)) %>%
+  mutate(annot = .[[subgroup]]) %>%
   #mutate(decon_clus = factor(.$clus, levels = as.character(seq(1:28)))) %>%
-  mutate("14" = ifelse(.$clus == "14", .$values, NA)) %>%
+  mutate("14" = ifelse(grepl("14|1|22|0|9", .$clus), .$values, NA)) %>%
   mutate("fibroblast" = ifelse(grepl("14|1|22|0|9", .$clus), .$values, NA)) %>%
   #get_order2(., `18`, `14`)
-  get_order(., id = `ID`,`fibroblast`)
+  get_order(., id = `ID`,`fibroblast`) %>%
+  arrange(meta_group) %>%
+  mutate(annot = factor(.[[subgroup]], levels = unique(.[[subgroup]])))
 
-colours <- ColourPalleteMulti(df, "cell_type", "annot") %>% set_names(levels(decon_column_st$annot))
+colours <- ColourPalleteMulti(df, "meta_group", "annot") %>% 
+  set_names(unique(df$annot))
 # scales::show_col(colours)
 ##########
 # LEGEND #
 ##########
 c <- df %>%
-  nest(data = -cell_type) %>%
-  mutate(legend = pmap(., ~get_legend.fun(..2, ..1, ".cell", colours)))
+  nest(data = -meta_group) %>%
+  mutate(legend = pmap(., ~get_legend.fun(..2, ..1, ".cell", colours, txt_size = 15)))
 
-###############
-# ST BAR PLOT #
-###############
-bar <- ggplot(df, aes(fill=annot, y=values, x=ID)) + 
+#########################################
+# ST CELL TYPE DISTRIBUTION PER SUBJECT #
+#########################################
+bar <- ggplot(df, aes(fill=annot, y=Percent_morf, x=ID)) + 
     geom_bar(position="stack", stat="identity") +
-    theme_minimal() +
+    theme_minimal() + 
     scale_fill_manual(values = colours) +
-    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1),
+    scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1.4, hjust=1),
+          axis.title = element_blank(),
+          text = element_text(size = 15),
           legend.position = "none") +
     #facet_wrap(~group ) +
-    facet_grid(cols = vars(groups), scales = "free_x", space = "free_x", switch = "x")
+    facet_grid(cols = vars(groups), rows = vars(sp_annot), scales = "free_x", space = "free_x", switch = "x")
 
-l <- plot_grid(plotlist = c$legend, nrow =3 , byrow = T , rel_heights = c(1,1,3), rel_widths = c(.5,0.2), align = "hv", axis = "t")
-plot_grid(bar, l ,rel_widths = c(1,.7))
+l <- plot_grid(plotlist = c$legend, nrow =4 , byrow = T , 
+               rel_heights = c(.3,.3,.3,.3), rel_widths = c(.5,0.2), align = "hv", axis = "t")
+p <- plot_grid(bar, l ,rel_widths = c(.7,1))
+ggsave("./test.tiff", p, height=10, width=6.6)
+```
+
+## Plotting deconvolution data
+```{r 04b_celltype_by_clusters, fig.width=4}
+# dev.new(height=5, width=6.6, noRStudioGD = TRUE)
+#################
+# COLOUR PALLET #
+#################
+pal <- c(#scales::hue_pal()(8),
+         #RColorBrewer::brewer.pal(9,"Set1"),
+         #RColorBrewer::brewer.pal(8,"Set2"),
+         #RColorBrewer::brewer.pal(8,"Accent"),
+         RColorBrewer::brewer.pal(8,"Pastel2"),
+         RColorBrewer::brewer.pal(9,"Pastel1")
+          )
+
+######################################
+# CELL TYPE DISTRIBUTION PER CLUSTER #
+######################################
+# cell type distribution per cluster in each condition:
+df <- df %>%
+  filter(grepl(epi_clus, .$Clusters) & sp_annot == "epi" |
+           !(grepl(epi_clus, .$Clusters)) & sp_annot == "SubMuc") %>%
+  mutate(Percent_morf = 100 *values/sum(values), .by = c("ID", "sp_annot")) %>%
+  arrange(clus) %>%
+  mutate(cell_annot_1 = factor(cell_annot_1, levels = unique(.$cell_annot_1)))
+
+# ggplot(decon_column_st, aes(fill=cell_annot_1, y=Percent_morf, x=Clusters)) +
+#   geom_bar(position="stack", stat="identity") +
+#   scale_fill_manual(values = pal, na.value = "grey90") +
+#   facet_wrap(~groups + sp_annot) + theme_minimal() +
+#   guides(fill = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7))
+
+bar_sub <- ggplot(df, aes(fill=annot, y=Percent_morf, x=Clusters)) + 
+  geom_bar(position="stack", stat="identity") +
+  scale_fill_manual(values = colours, na.value = "grey90") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  facet_grid(cols = vars(sp_annot), rows = vars(groups), scales="free_x", space = "free") + 
+  theme_minimal() +
+  theme(text = element_text(size = 15),
+        axis.title = element_blank(),
+        legend.position="none") 
+
+l <- plot_grid(plotlist = c$legend, nrow =4 , byrow = T , 
+               rel_heights = c(.3,.3,.3,.3), rel_widths = c(.5,0.2), align = "hv", axis = "t")
+plot_grid(bar_sub, l ,rel_widths = c(.5,.8))
 ```
 
 ### Heatmap of bulk deconvolution
@@ -592,15 +747,15 @@ draw(H, merge_legend = TRUE)
 # FACET WRAP CLUSTER #
 #####################
 # I want to plot the intensity of the cell population in 
-clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
+clus_exp <- function(spe, clus_spe, clusters_sc, gene, assay="RNA"){
   #c <- unique( pull(spe, as_label(clusters)))
-  col=c("grey90","grey80","grey60", "blue4","navy","black")
-  clus_col <- c("grey90","navy")
-  clusters <- enquo(clusters)
-  c <- unique( pull(clus_spe, !!(clusters))) %>% sort(.) %>% set_names()
+  col<- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D")
+  clus_col <- c("grey90","#3F007D")
+  clusters_sc <- enquo(clusters_sc)
+  c <- unique( pull(clus_spe, !!(clusters_sc))) %>% sort(.) %>% set_names()
     
   # Create Columns for induvidual clusters:
-  clus_columns <- map(c, ~(clus_spe@meta.data[["Clusters"]] == .x)*1) %>% 
+  clus_columns <- map(c, ~(clus_spe@meta.data[[as_label(clusters_sc)]] == .x)*1) %>% 
     map(.,~as.character(.x)) %>%
     set_names(., paste0("Clus_",c))
   
@@ -608,12 +763,12 @@ clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
   clus_spe <- bind_cols(clus_spe, clus_columns)
   # Plot Individal plot for each cluster
   P <- {map(c, ~plot_clusters.fun(clus_spe,  paste0("Clus_",.x), color=clus_col, 
-                                  red="umap_harmony"), txt_size=20, dot_size = 0.2, lable=F)}
+                                  red="umap_harmony", dot_size = 0.2, lable=F))} #txt_size=20,
   #clus_plot <- plot_clusters.fun(spe, paste0("Clus_","2"), color=col, red="umapharmony", txt_size=20, lable=F)
   
   filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
   
-  decon_columns <- spe@assays$SCDC@data %>% 
+  decon_columns <- spe@assays[[assay]]@data %>% 
     Matrix::t() %>%
     as_tibble(., rownames = ".cell") %>% 
     mutate_if(is.numeric, ~1 * (. > 0)) %>%
@@ -631,7 +786,7 @@ clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
         geneid = ..1,
         zoom = "zoom",
         col = col,
-        maxs = max(spe@assays$SCDC@data[..1,],0.1),
+        maxs = max(spe@assays[[assay]]@data[..1,],0.1),
         #annot_col = "#dbd9d9",
         annot_line = .1,
         img_alpha = 0,
@@ -640,7 +795,7 @@ clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
     mutate(l = map(.$plots, ~length(.x))) %>%
     mutate(clus_plot = ifelse(.$clus %in% names(P), P[.$clus], NA)) %>%
     mutate(., combined = pmap(.,
-      ~plot_grid( ..4, ..2, ncol=2, rel_widths=c(2,4)) ))
+      ~plot_grid( ..4, ..2, ncol=2, rel_widths=c(1.9,4.1)) ))
 
   # PLOTS$combined[[1]]
   # PLOTS$data[[1]]
@@ -648,7 +803,7 @@ clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
   combined <- plot_grid( plotlist=PLOTS$combined, ncol=1, rel_heights=rep_len(1, length(PLOTS$combined) ) )
 
   return(list(c = combined, eg = list(PLOTS$combined[11], PLOTS$combined[21])))
-  return(PLOTS)
+  #return(PLOTS)
 }
 Key(DATA_st@reductions$umap_harmony) <- "umapharmony_"
 
@@ -661,10 +816,16 @@ Key(DATA_st@reductions$umap_harmony) <- "umapharmony_"
 #gr <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")
 #DATA_r_ <- DATA_r %>% filter(Clusters == "22" | Clusters == "12")
 #CLUS_PLOTS <- clus_exp(DATA_st, DATA_r_, clusters=Clusters, assay="SCDC")
-CLUS_PLOTS <- clus_exp(DATA_st, DATA_r, clusters=Clusters, assay="SCDC")
 
-ggsave(paste0("./Figures/04/", "clus_plots.pdf"),
-       CLUS_PLOTS$c, height = 60, width = 10, limitsize = FALSE)
+m <- list(Assay=paste0("SCDC_annot",1:2), Column=deconvolution$column[2:3])
+
+decon_annot1 <- clus_exp(DATA_st, DATA_r, clusters_sc=cell_annot_1, assay="SCDC_annot1")
+decon_annot2 <- clus_exp(DATA_st, DATA_r, clusters_sc=cell_annot_2, assay="SCDC_annot2")
+
+ggsave(paste0("./Figures/04/", "Decon_on_tissue_annot1",".pdf"),
+       decon_annot1$c, height = length(unique(DATA_r[["cell_annot_1"]]))*2.1, width = 8, limitsize = FALSE)
+ggsave(paste0("./Figures/04/", "Decon_on_tissue_annot2",".pdf"),
+       decon_annot2$c, height = length(unique(DATA_r[["cell_annot_2"]]))*2.1, width = 8, limitsize = FALSE)
 
 plot_grid( CLUS_PLOTS$eg[[1]][[1]], CLUS_PLOTS$eg[[2]][[1]], ncol=1) 
 ```
@@ -918,12 +1079,12 @@ clus_exp <- function(spe, clus_spe, clusters, gene, assay="RNA"){
   clus_spe <- bind_cols(clus_spe, clus_columns)
   # Plot Individal plot for each cluster
   P <- {map(c, ~plot_clusters.fun(clus_spe, color=clus_col, paste0("Clus_",.x), 
-                                  red="umap_harmony"), txt_size=20, dot_size = 0.2, lable=F)}
+                                  red="umap_harmony", dot_size = 0.2, lable=F))} #  txt_size=20, 
   #clus_plot <- plot_clusters.fun(spe, color=col, paste0("Clus_","2"), red="umapharmony", txt_size=20, lable=F)
   
   filt_empty<- function(x, n_spot = 0) {x[c(TRUE, colSums(select(x, !(.cell))) > n_spot)]}
   
-  decon_columns <- spe@assays$SCDC@data %>%
+  decon_columns <- spe@assays[[assay]]@data %>%
     Matrix::t() %>%
     as_tibble(., rownames = ".cell") %>% 
     mutate_if(is.numeric, ~1 * (. > 0)) %>%
