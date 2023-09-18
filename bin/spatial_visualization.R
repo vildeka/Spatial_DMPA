@@ -657,3 +657,174 @@ plot_st_feat.fun <- function(
   return(p)
 }
 
+# spe <- DATA_st
+# ID = c("P097")
+# ct.res <- sym("cell_annot_1")
+########################
+# TISSUE PROP PIE PLOT #
+########################
+plot_cell_pie.fun <- function(
+    spe,
+    assay="RNA",
+    sp_annot = TRUE,
+    orig.ident = "orig.ident",
+    ct.res = NULL,
+    ct.select = NULL,
+    radius_adj = 0,
+    lvls = c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031"),
+    title = " ",
+    image_id = "hires",
+    alpha = 1,
+    ncol = 4,
+    spectral = TRUE,
+    colors = NULL,
+    annot_col = "#808080",
+    annot_line = .3,
+    point_size = 1.75,
+    img_alpha = .5,
+    zoom = "zoom" ) {
+  
+  if(isFALSE(is.null(ct.res))){ct.res <- enquo(ct.res)}
+  orig.ident <- enquo(orig.ident)
+  ID_ <- unique(pull(spe, orig.ident)) %>% set_names(.)
+  # Set default assay
+  DefaultAssay(spe) <- assay
+  
+  # get all cell annotations
+  if(assay == "celltypeprops"){
+    cell_annot <- t(spe@assays$celltypeprops@data) %>%
+      as_tibble(., rownames = "barcode") 
+  }else{
+    cell_annot <- spe@assays$misc$cell_annot %>%
+    filter(grepl(paste0(ID_, collapse="|"), .cell)) %>%
+    select(barcode=".cell", values, !!(ct.res)) %>%
+    pivot_wider(., names_from = !!(ct.res), values_fill = 0,
+                values_from = values, values_fn = function(x) sum(x)) }
+  
+    if(is.null(ct.select)){ct.select <- colnames(cell_annot)[2:length(colnames(cell_annot))]}
+  
+  # get all spot coordinates:
+  scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
+  df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
+    map2(., scale_fact, ~mutate(.x, scale_fact = .y)) %>%
+    bind_rows() %>%
+    mutate(imagecol = .$imagecol * .$scale_fact) %>%
+    mutate(imagerow = .$imagerow * .$scale_fact) %>%
+    cbind(.,as_tibble(select(spe, "orig.ident"=!!(orig.ident)))) %>%
+    rownames_to_column(var = "barcode") %>%
+    left_join(., cell_annot, by="barcode") %>%
+    #mutate(orig.ident = !!(facet)) %>%
+    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
+    #cbind(.,as_tibble(select(spe, groups))) %>%
+    as_tibble() 
+  
+  gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
+  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
+  
+  ## Colour pallets:
+  if (is.null(colors)){
+    # scales::show_col(disc_colors)
+    cell_col <- c(RColorBrewer::brewer.pal(9,"Pastel1"),
+                  RColorBrewer::brewer.pal(9,"Set1"),
+                  scales::hue_pal()(8),
+                  RColorBrewer::brewer.pal(8,"Set2"),
+                  RColorBrewer::brewer.pal(8,"Accent"),
+                  
+                  RColorBrewer::brewer.pal(8,"Pastel2") )
+    cell_col <- set_names(cell_col[1:length(ct.select)], ct.select)
+  }else{cell_col <- colors}
+  colour_pallet <- scale_fill_manual(values = cell_col, na.value = "grey90" )
+  guides <- guides(fill=guide_legend(ncol=1,title = ""))
+  
+  # select viewframe:
+  if (!(is.null(zoom))){
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+    l <- tools %>% 
+      filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
+      #select(row=imagerow)
+      dplyr::rename("_row"=y, "_col"=x) %>%
+      summarise(across("_row":"_col", 
+                       list(min=min, max=max), 
+                       .names = "{.fn}{.col}")) 
+  }
+  # else{l <- tibble( min_col = 0, max_col = ncol(img),
+  #                   min_row = 0, max_row = nrow(img))}
+  
+  ## Spatial image:
+  if (!(img_alpha == 0)){
+    
+    # set image alpha:
+    im <- map(ID, ~pluck(spe@images, .x, "image")) 
+    im <- map(im, ~ matrix(
+      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    
+    img <- map(im, ~as.raster(.x))
+    img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
+    
+    # get grob and save as list
+    grob <- map(img_, ~grid::rasterGrob(.x, width=unit(1,"npc"), height=unit(1,"npc")))
+    images_tibble <- tibble(sample=factor(ID), grob=grob, orig.ident = ID)
+    
+    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)
+  }
+  else{spatial_image <- NULL}
+  
+  ## Spatial annotation:
+  if(sp_annot){
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident") %>%
+      filter(!(grepl("fov|zoom|full_image", .$name))) # removes the black frame around image
+    spatial_annotation <- geom_path(
+      data=tools, 
+      show.legend = FALSE, linewidth = annot_line,
+      aes(x=x, y=y, group=interaction(elem_idx)), colour=annot_col)
+  }
+  else{spatial_annotation <- NULL}
+  
+  radius = (max(df$imagecol) - min(df$imagecol)) * (max(df$imagerow) - min(df$imagerow))
+  radius = radius / nrow(df)
+  radius = radius / pi
+  radius = sqrt(radius) * 0.85
+  
+  p <- ggplot() +
+    geom_scatterpie(data=df, aes(x=imagecol,y=imagerow, r=radius+radius_adj), cols=ct.select, color=NA) +
+    
+    colour_pallet +
+    spatial_image + 
+    spatial_annotation +
+    coord_cartesian(expand=FALSE ) + #theme(l) +
+    xlim(l$min_col,l$max_col) +
+    ylim(l$max_row,l$min_row) +
+    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
+    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
+    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
+  # facet_wrap(vars(!!(orig.ident)), ncol = ncol)
+  
+  #Hexagon shape:
+  # p <- p +
+  #   ggstar::geom_star(data=df, aes(x=imagecol,y=imagerow, fill=.data[[feat]], colour=.data[[feat]]),
+  #     starshape = "hexagon",
+  #     size = point_size,
+  #     #stroke = 0,
+  #     alpha = alpha
+  #   )
+  
+  p <- p +
+    xlab("") +
+    ylab("") +
+    guides +
+    theme(
+      rect =               element_blank(), # removes the box around the plot
+      strip.background =   element_blank(), # removes facet labels
+      strip.text.x =       element_blank(), # removes facet labels
+      axis.text =          element_blank(),
+      axis.title =         element_blank(),
+      panel.background =   element_blank(),
+      panel.grid.major =   element_blank(),
+      panel.grid.minor =   element_blank(),
+      axis.ticks.length =  unit(0, "cm"),
+      panel.spacing =      unit(0, "lines"),
+      plot.margin =        unit(c(0, 0, 0, 0), "lines")
+    ) 
+  #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
+  
+  return(p)
