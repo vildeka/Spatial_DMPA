@@ -344,6 +344,23 @@ dim(DATA)
 DATA
 ```
 
+```{r final-sp_annot, fig.height=8, fig.width=5}
+# dev.new(width=5, height=2, noRStudioGD = TRUE)
+DATA %>%
+  filter(orig.ident == "P118" | orig.ident == "P097") %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "sp_annot",
+          zoom = "zoom",
+          ncol = 2,
+          annot_line = .1,
+          annot_col = "black",
+          img_alpha = 0,
+          point_size = 0.8
+        )
+```
+
+
 ## Save seurat object
 ```{r save-SeuratObject}
 ##################################
