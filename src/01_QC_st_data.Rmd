@@ -250,11 +250,21 @@ DATA <- DATA %>%
 Dimension of DATA before filtering, genes: `r dim(temp)[1]`, spots: `r dim(temp)[2]`<br/>
 Dimension of DATA after  filtering, genes: `r dim(DATA)[1]`, spots: `r dim(DATA)[2]`
 ```{r summary-table-after}
-#################
-# SUMMARY STATS #
-#################
+###########################
+# SUMMARY STATS ALL SPOTS #
+###########################
 feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
 sapply(DATA@meta.data[feature], summary) %>% 
+  as_tibble(rownames = "stat") %>% 
+  knitr::kable(digits = 1)
+
+#########################
+# SUMMARY STATS CLUS 10 #
+#########################
+DATA@meta.data %>%
+  filter(Clusters == "10") %>%
+  .[feature] %>%
+  sapply(., summary) %>% 
   as_tibble(rownames = "stat") %>% 
   knitr::kable(digits = 1)
 ```
@@ -274,13 +284,13 @@ sapply(DATA@meta.data[feature], summary) %>%
 # VIOLIN PLOT BEFORE FILTERING #
 ################################
 feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
-p_ <-  map(feature, ~violin.fun(temp, .x, fill="orig.ident", col_pal=friendly_cols))
+p_ <-  map(feature, ~violin.fun(temp, feature=.x, fill="orig.ident", col_pal=friendly_cols))
 # plot_grid(plotlist=p_, ncol = 1)
 
 ################################
 # VIOLIN PLOT AFTER FILTERING #
 ################################
-p <-  map(feature, ~violin.fun(DATA, .x, fill="orig.ident", col_pal=friendly_cols, n=1))
+p <-  map(feature, ~violin.fun(DATA, feature=.x, fill="orig.ident", col_pal=friendly_cols, n=1))
 plot_grid(plotlist=c(p_, p), nrow = 5, byrow = F)
 ```
 
