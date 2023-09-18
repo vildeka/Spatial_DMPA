@@ -165,7 +165,7 @@ pseudotime <- pseudotime %>% as_tibble(rownames = "barcode") %>% dplyr::rename(s
 
 ```
 
-```{r 08a_plot_trajectory_UMAP, fig.height=3, fig.width=6}
+```{r 08a_plot_trajectory_UMAP, fig.height=3, fig.width=6, dev=c("png","pdf")}
 # dev.new(width=6, height=3, noRStudioGD = TRUE)
 col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
 # Plot curves on UMAP coloured by clusters
@@ -174,7 +174,7 @@ plot(DATA_epi@reductions$umap_harmony@cell.embeddings,
      col = col[DATA_epi$layers], pch = 16, cex = .5,  xlab = "", ylab = "",)
 lines(curves, lwd = 2, col = "black")
 text(centroids2d, labels = rownames(centroids2d), cex = 1, font = 1)
-title(ylab="UMAP 2", mgp=c(1,0,0), cex.lab=.9)
+title(ylab="UMAP 2", line=1.7, cex.lab=.9)
 title(xlab="UMAP 1", line=1.7, cex.lab=.9)
 
 plot(DATA_epi@reductions$umap_harmony@cell.embeddings[o, ], 
@@ -201,11 +201,11 @@ saveRDS(DATA_epi, paste0(result_dir,"seuratObj_epi_only.RDS"))
 ```
 
 ### Plot spatial distance on tissue
-```{r 08b_spatial_trajectory_tissue, fig.height=8, fig.width=7}
+```{r 08b_spatial_trajectory_tissue, fig.height=6, fig.width=4}
 ####################
 # SPATIAL DISTANCE #
 ####################
-# dev.new(width=10, height=7, noRStudioGD = TRUE)
+# dev.new(width=4, height=6, noRStudioGD = TRUE)
 col <- c("grey70", "orange3", "firebrick", "purple4")
 
 DATA %>%
@@ -214,13 +214,13 @@ plot_st_feat.fun(.,
                  geneid = "spatial_dist",
                  zoom = "zoom",
                  col = col,
-                 alpha = .9,
+                 alpha = 1,
                  ncol = 2, 
                  scale = FALSE,
                  #annot_col = "#dbd9d9",
                  annot_line = .1,
                  img_alpha = 0,
-                 point_size = 1)
+                 point_size = .7)
 ```
 
 ```{r Paulos-dot-plot, include=FALSE, eval=FALSE}
@@ -267,8 +267,11 @@ sig_nest <- DEGs_table_cond %>%
   nest() %>% mutate(n = map_dbl(data, nrow)) %>%
   arrange(layers, Direction)
 
+# selection (57 uniqe genes) by top 15 logFC:
 sig_nest_epi <- sig_nest %>% ungroup() %>% filter(grepl("_", .$layers))
 sig_genes_epi <- unnest(sig_nest_epi, c(layers, Direction, data))
+# all significant genes epi:
+cond_epi_DEGs <- sig_table %>% filter(grepl("_", .$layers)) %>% arrange(Direction, p_val) %>% pull(., "gene") %>% unique()
 
 #feat <- c("SAMD9", "GPRC5A", "TGM3", "KRT19", "PKP1")
 feat_cond <- unique(sig_genes_epi$gene)
@@ -298,11 +301,11 @@ feat_clus <- unique(sig_genes_epi$gene)
 int <- intersect(feat_cond, feat_clus)
 ```
 
-### Plot dotplot and tissue
+### Plot condition diff gene expression as dotplot and on tissue
 ```{r 08c_combined_dot_and_tissue_plot, fig.height=6, fig.width=6.75}
-#########################
-# DOTPLOT PER EPI LAYER #
-#########################
+##############################
+# COND DOTPLOT PER EPI LAYER #
+##############################
 layer_dotplot.fun <- function(DATA, feat, facet = TRUE, x_max=NULL){
   rects <- DATA %>%
     group_by(layers) %>%
@@ -335,17 +338,21 @@ layer_dotplot.fun <- function(DATA, feat, facet = TRUE, x_max=NULL){
     #scale_x_continuous(expand = c(0, 0)) +
     {if(!(is.null(x_max))){xlim(-.5, x_max)}} +
     facets +
-    my_theme
+    my_theme +
+    theme(panel.border = element_blank(),
+        axis.line = element_line(),
+        panel.grid.major = element_line(linewidth = 0.2),
+        panel.grid.minor = element_line(linewidth = 0.1))
   return(dot)
 }
 
 col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
-dot <- map(feat_cond, ~layer_dotplot.fun(DATA, .x))
+dot <- map(cond_epi_DEGs, ~layer_dotplot.fun(DATA, .x))
 
 
-#########################
-# EXPRESION ON TISSUE #
-#########################
+############################
+# COND EXPRESION ON TISSUE #
+############################
 # col <- RColorBrewer::brewer.pal(9,"PuRd")
 # col <-  c("grey95", RColorBrewer::brewer.pal(9,"Reds"))
 # col <- c("grey100","grey95", "mistyrose", "red", "dark red", "#870808", "black")
@@ -353,11 +360,12 @@ dot <- map(feat_cond, ~layer_dotplot.fun(DATA, .x))
 col <- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D") # Purples
 
 DAT <- DATA %>%
-    mutate(., FetchData(., vars = c(feat_cond)) ) #%>%
+    mutate(., FetchData(., vars = c(cond_epi_DEGs)) )
+    # mutate(., FetchData(., vars = c(feat_cond)) ) #%>%
     # mutate(across(c(feat_cond), ~case_when(sp_annot == "SubMuc" ~ as.double(NA), 
     #                              TRUE ~ .x)))
     
-p <- map(feat_cond, 
+p <- map(cond_epi_DEGs, 
         ~plot_st_feat.fun( DAT,
                            geneid = .x,
                            zoom = "zoom",
@@ -385,7 +393,7 @@ c[[1]]
 # CONDITION DOTPLOT AS PDF #
 #############################
 # dev.new(width=(1.05*10)+1, height=2.5, noRStudioGD = TRUE)  
-pdf("./Figures/08/condition_dotplots.pdf",  width = (1.05*10)+1, height = 2.5*ceiling(length(feat_cond)/5))
+pdf("./Figures/08/condition_dotplot_DEGs.pdf",  width = (1.05*10)+1, height = 2.5*ceiling(length(feat_cond)/5))
 wrap_plots(dot, ncol = 5, nrow = ceiling(length(feat_cond)/5)) + plot_layout(guides = 'collect')
 dev.off()
 
@@ -394,7 +402,7 @@ dev.off()
 #################################
 # dev.new(width=4, height=6, noRStudioGD = TRUE) 
 # p[[1]]
-ggsave("./Figures/08/tissue.pdf", gridExtra::marrangeGrob(grobs = p, nrow=1, ncol=1), width = 4, height = 6)
+ggsave("./Figures/08/condition_tissue_DEGs.pdf", gridExtra::marrangeGrob(grobs = p, nrow=1, ncol=1, top=NULL), width = 4, height = 6)
 
 #############################
 # CONDITION COMBINED AS PDF #
@@ -405,29 +413,27 @@ dev.off()
 
 ```
 
-
-```{r 08d_clus_dotplot, fig.height=5, fig.width=(1.2*5)+1}
+### Plot cluster diff. gene expression as dotplot and on tissue
+```{r 08d_clus_dotplot, fig.height=2.5*4, fig.width=(1.2*5)+1}
 # dev.new(width=2, height=2.5, noRStudioGD = TRUE) 
 # dev.new(width=(1.2*5)+1, height=2.5*ceiling(length(dot_fig)/5), noRStudioGD = TRUE) 
+##############################
+# CLUS DOTPLOT PER EPI LAYER #
+##############################
 col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
+dot_fig <- map(feat_clus, ~layer_dotplot.fun(DATA, .x, facet = FALSE)) # , x_max = 6
 
-for_fig2 <- c( "TGM1", "KRT14", "SPRR2E", "CRCT1",  "SPRR2D", "KRT78", "CSTA", "SPINK7", "CNFN", "MUC21", "MIR205HG", "CEACAM7", "PKM", "LCN2")
-dot_fig <- map(for_fig2, ~layer_dotplot.fun(DATA, .x, facet = FALSE)) # , x_max = 6
-
-wrap_plots(dot_fig, ncol = 5, nrow = ceiling(length(dot_fig)/5)) + plot_layout(guides = 'collect')
-# ggsave("./Figures/08/dots_across_layers_clus.pdf", gridExtra::marrangeGrob(grobs = dot, ncol=1, nrow = 1), width = 5, height = 3)
-
-#######################
+############################
 # CLUS EXPRESION ON TISSUE #
-#######################
+############################
 col <- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D") # Purples
 
 DAT <- DATA %>%
-    mutate(., FetchData(., vars = c(for_fig2)) )
+    mutate(., FetchData(., vars = c(feat_clus)) )
     # mutate(across(c(feat), ~case_when(sp_annot == "SubMuc" ~ as.double(NA), 
     #                              TRUE ~ .x)))
     
-p <- map(for_fig2, 
+p <- map(feat_clus, 
         ~plot_st_feat.fun( DAT,
                            geneid = .x,
                            zoom = "zoom",
@@ -446,22 +452,78 @@ p <- map(for_fig2,
 ```
 
 ```{r save-to-pdf-clusters, results='hide'}
-#################################
-# CLUSTERS TISSUE PLOTS AS PDF #
-#################################
-ggsave("./Figures/08/for_figure2_tissue.pdf", gridExtra::marrangeGrob(grobs = p, nrow=1, ncol=1), width = 4, height = 6)
-
-
 ###########################
 # CLUSTERS DOTPLOT AS PDF #
 ############################
-col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
-feat <- unique(c(int, feat_clus))
-dot <- map(feat, ~layer_dotplot.fun(DATA, .x, facet = FALSE)) # , x_max = 6
-
-pdf("./Figures/08/clus_dotplots.pdf",  width = (1.2*5)+1, height = 2.5*ceiling(length(feat)/5))
-wrap_plots(dot, ncol = 5, nrow = ceiling(length(feat)/5)) + plot_layout(guides = 'collect')
+pdf("./Figures/08/cluster_dotplot_top_DEGs.pdf",  width = (1.2*5)+1, height = 2.5*ceiling(length(feat_clus)/5))
+wrap_plots(dot_fig, ncol = 5, nrow = ceiling(length(feat_clus)/5)) + plot_layout(guides = 'collect')
 dev.off()
+
+#################################
+# CLUSTERS TISSUE PLOTS AS PDF #
+#################################
+ggsave("./Figures/08/clus_tissue_top_DEGs.pdf", gridExtra::marrangeGrob(grobs = p, nrow=1, ncol=1, top=NULL), width = 4, height = 6)
+
+```
+
+### Plot additional tissue and dotplots of intrest
+```{r Additional_figs, fig.height=2.5*4, fig.width=(1.2*5)+1}
+# dev.new(width=2, height=2.5, noRStudioGD = TRUE) 
+# dev.new(width=(1.2*5)+1, height=2.5*ceiling(length(dot_fig)/5), noRStudioGD = TRUE) 
+####################
+# GENES OF INTREST #
+####################
+for_figures <- c( "TGM1", "KRT6C", "KRT14", "SPRR2E", "CRCT1",  "SPRR2D", "KRT78", "CSTA", "SPINK7", "CNFN", "MUC21", "MUC4", "MIR205HG", "CEACAM7", "PKM", "LCN2", "LOR", "FLG", "DSG1", "DEFB1", "RPTN", "KLK6", "KLK7", "CHAC1") # "hmox1",
+
+##############################
+# CLUS DOTPLOT PER EPI LAYER #
+##############################
+col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
+dot_clus <- map(for_figures, ~layer_dotplot.fun(DATA, .x, facet = FALSE)) # , x_max = 6
+
+##############################
+# COND DOTPLOT PER EPI LAYER #
+##############################
+col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
+dot_cond <- map(for_figures, ~layer_dotplot.fun(DATA, .x))
+
+############################
+# CLUS EXPRESION ON TISSUE #
+############################
+col <- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D") # Purples
+
+DAT <- DATA %>%
+    mutate(., FetchData(., vars = c(for_figures)) )
+    
+p <- map(for_figures, 
+        ~plot_st_feat.fun( DAT,
+                           geneid = .x,
+                           zoom = "zoom",
+                           col = col,
+                           alpha = .9,
+                           ncol = 2, 
+                           #annot_col = "#dbd9d9",
+                           annot_line = .1,
+                           img_alpha = 0,
+                           point_size = .7)) #.35
+
+# dev.new(width=4, height=6, noRStudioGD = TRUE) 
+# p[[1]]
+# plot_grid( dot, p, ncol = 1, rel_heights = c(1,.7), rel_widths = c(1,.5))
+
+#####################
+# SAVE PLOTS AS PDF #
+#####################
+pdf("./Figures/08/for_figures_cond_dotplots.pdf",  width = (1.05*10)+1, height = 2.5*ceiling(length(for_figures)/5))
+wrap_plots(dot_cond, ncol = 5, nrow = ceiling(length(for_figures)/5)) + plot_layout(guides = 'collect')
+dev.off()
+
+pdf("./Figures/08/for_figures_clus_dotplots.pdf",  width = (1.2*5)+1, height = 2.5*ceiling(length(for_figures)/5))
+wrap_plots(dot_clus, ncol = 5, nrow = ceiling(length(for_figures)/5)) + plot_layout(guides = 'collect')
+dev.off()
+
+ggsave("./Figures/08/for_figures_tissue.pdf", gridExtra::marrangeGrob(grobs = p, nrow=1, ncol=1, top=NULL), width = 4, height = 6)
+
 ```
 
 ```{r fig.height=5, fig.width=5, eval=FALSE}
