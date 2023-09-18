@@ -1,24 +1,53 @@
 ---
 title: "Load Reference data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "./Figures/00/"
 editor_options: 
   chunk_output_type: console
-  
-knit: (function(inputFile, out_dir, ...) {
-    source("../../bin/custom_knit_functions.R");
-    knit_github(inputFile, "../../lab_book/00_load_reference_data")
-    })
 ---
 
+```{r background-job, eval=FALSE, include=FALSE}
+source("../../bin/render_with_jobs.R")
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html due to source code option 
+render_git_with_job(fig_path = "./Figures/00/")
+# Change the figure path from ./Figures/03/ to ../Figures/03/:
+system2(command = "sed", stdout = TRUE,
+        args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
+                 paste0("./md_files/", basename("./00_load_reference_data.md"))))
+
+# kniter
+knit_html_with_job(out_dir = "../../lab_book/reference_data/00_load_reference_data", fig_path = "./Figures/00/")
+```
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(fig.width = 6.6929133858, 
-                      message    = FALSE,
-                      warning    = FALSE)
+knitr::opts_chunk$set(
+    fig.width   = 6.6929133858,
+    fig.path    = params$fig.path,
+    dev         = c("png"),
+    dpi         = 300,
+    fig.align   = "center",
+    message     = FALSE,
+    warning     = FALSE,
+    fig.process = function(filename){
+      new_filename <- stringr::str_remove(string = filename, 
+                                        pattern = "-1")
+      fs::file_move(path = filename, new_path = new_filename)
+      ifelse(fs::file_exists(new_filename), new_filename, filename)}) 
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
 ```
 
-### Load data and libraries
-```{r}
+### Load meta data and libraries
+```{r Load-data}
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -31,7 +60,7 @@ library(readxl)
 # PATHS #
 #########
 cell_types <- "https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-020-20358-y/MediaObjects/41467_2020_20358_MOESM5_ESM.xlsx"
-ref_info <- "../../data/Reference_datasets.xlsx"
+ref_info <- "../../data/Reference_data/Reference_datasets.xlsx"
 data_dir <- "../../data/Reference_data"
 result_dir <- "../../results/00_load_ref_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
@@ -50,7 +79,7 @@ ref <- reference_info %>%
 ```
 
 ### Download data from GEO
-```{r Download_GEO_data, eval=F, echo=T}
+```{r Download-GEO-data, eval=F, echo=T}
 #########################
 # DOWNLOAD SUPPL. DATA #
 #########################
@@ -85,7 +114,8 @@ system(paste0("gunzip ",data_dir,"/*/*.gz"))
 
 ```
 
-```{r load_GEO_data}
+### Load data from GEO
+```{r load-GEO-data}
 ######################
 # LOAD SPARSE MATRIX #
 ######################
@@ -147,7 +177,7 @@ seuratObj_list <- map(matrix_list, ~CreateSeuratObject(counts = .x )) %>%
 ```
 
 ### Add cell annotation
-```{r Add_Cell_annotation}
+```{r Add-Cell-annotation}
 ########################
 # ADD CELL ANNOTATION  #
 ########################
@@ -170,14 +200,12 @@ seuratObj_list <- seuratObj_list %>%
 ```
 
 ### Merge datasets into one seurat object
-```{r Merge_SeuratObj}
-
+```{r Merge-SeuratObj}
 merged_Seurat <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
-
 ```
 
 ### Save seurat object
-```{r save_SeuratObject}
+```{r save-SeuratObject}
 ##################################
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
