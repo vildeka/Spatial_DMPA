@@ -1,30 +1,53 @@
 ---
 title: "Clustering reference data"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "./Figures/03/"
 editor_options: 
   chunk_output_type: console
-knit: (function(inputFile, out_dir, ...) {
-    source("../../bin/custom_knit_functions.R");
-    knit_github(inputFile, "../../lab_book/03_cluster_reference_data")
-    })
 ---
 
+```{r background-job, eval=FALSE, include=FALSE}
+source("../../bin/render_with_jobs.R")
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html due to source code option 
+render_git_with_job(fig_path = "./Figures/03/")
+# Change the figure path from ./Figures/03/ to ../Figures/03/:
+system2(command = "sed", stdout = TRUE,
+        args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
+                 paste0("./md_files/", basename("./03_clustering_ref_data.md"))))
+
+# kniter
+knit_html_with_job(out_dir = "../../lab_book/reference_data/03_clustering_reference_data", fig_path = "./Figures/03/")
+```
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(#fig.width = 6.6929133858,
-    fig.path="./Figures/",
-    fig.align="center",
-    message    = FALSE,
-    warning    = FALSE,
+knitr::opts_chunk$set(
+    fig.width   = 6.6929133858,
+    fig.path    = params$fig.path,
+    dev         = c("png"),
+    dpi         = 300,
+    fig.align   = "center",
+    message     = FALSE,
+    warning     = FALSE,
     fig.process = function(filename){
       new_filename <- stringr::str_remove(string = filename, 
                                         pattern = "-1")
       fs::file_move(path = filename, new_path = new_filename)
-      ifelse(fs::file_exists(new_filename), new_filename, filename)})
+      ifelse(fs::file_exists(new_filename), new_filename, filename)}) 
 # setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/00_reference_data")
 ```
 
-## Load data and libraries
-```{r Load_Library_and_data}
+### Load data and libraries
+```{r Load-Library-and-data}
 ##################
 # LOAD LIBRARIES #
 ##################
@@ -33,6 +56,8 @@ library(Seurat)
 library(tidyseurat)
 library(cowplot)
 library(harmony)
+
+source("../../bin/plotting_functions.R")
 
 #########
 # PATHS #
@@ -48,30 +73,7 @@ seuratObj <- readRDS(paste0(input_dir,"seuratObj_harmony.RDS"))
 
 ```
 
-```{r ggplot_theme}
-my_theme <-
-  list(
-    #scale_fill_manual(values = friendly_cols),
-    #scale_color_manual(values = friendly_cols),
-    theme_bw() +
-      #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
-      theme(
-        panel.border = element_blank(),
-        axis.line = element_line(),
-        panel.grid.major = element_line(size = 0.2),
-        panel.grid.minor = element_line(size = 0.1),
-        text = element_text(size = 12),
-        plot.title = element_text(hjust = 0.5),
-        #legend.position = "bottom",
-        #aspect.ratio = 1,
-        strip.background = element_blank(),
-        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
-        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
-      )
-  )
-```
-
-## Clustering
+### Clustering
 ```{r Clustering_resolution}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
@@ -86,56 +88,13 @@ for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
 # each time you run clustering, the data is stored in meta data columns:
 # seurat_clusters - lastest results only CCA_snn_res.XX - for each different
 # resolution you test.
-
 ```
 
-```{r 03a_plot_resolution, fig.width=10}
-# obj <- seuratObj
-# cluster <- sym("RNA_snn_res.0.1")
-plot_clusters.fun <- function(obj, cluster, red = "umap_harmony", color = "Brew_all", lable = TRUE){
-  if(color == "Brew_all"){
-    pal <- c(scales::hue_pal()(8),
-             RColorBrewer::brewer.pal(9,"Set1"),
-             RColorBrewer::brewer.pal(8,"Set2"),
-             RColorBrewer::brewer.pal(8,"Accent"),
-             RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )}
-  
-  cluster <- sym(cluster)
-  
-  if(lable == TRUE){ lab <- cluster
-    text <- NoLegend() #+ labs(color= "Clusters")
-  }else{lab <- sym(lable)
-    text <- guides(color = "none")}
-  
-  feat <- obj %>%
-    select(.cell, !!(cluster), !!(lab), sample_name, nCount_RNA, nFeature_RNA) %>%
-    group_by(!!(cluster)) %>%
-    add_tally() %>%
-    arrange(nFeature_RNA) %>%
-    arrange(desc(n))
-  
-  lable_df <- feat %>%
-    ungroup() %>%
-    group_by(!!(lab)) %>%
-    select(!!(lab), contains(red)) %>% 
-    summarize_all(mean)
-  
-  red_1 <- sym(paste0(red, "_1"))
-  red_2 <- sym(paste0(red, "_2"))
-  
-  p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
-                        color = !!cluster), label=TRUE) + 
-    geom_point(alpha = 0.5, size=.5) + ggtitle(as_label(cluster)) +
-    geom_text(data = lable_df, aes(label = !!(lab)), col="black", size=2.5) +
-    #guides(color = guide_legend(override.aes = list(size=2, alpha = 1))) +
-    scale_color_manual(values = pal)  +
-    my_theme + text
-  return(p)
-}
-
+### Plot clustering resolution
+```{r 03a_plot_resolution, fig.width=10, fig.height=5}
+# dev.new(width=10, height=5, noRStudioGD = TRUE)
 res <- c("RNA_snn_res.1", "RNA_snn_res.1.5")
-p <- map(res, ~plot_clusters.fun(seuratObj, cluster=.x))
+p <- map(res, ~plot_clusters.fun(seuratObj, cluster=.x, red = "umap_harmony", color = "Brew_all"))
 plot_grid(ncol = 2, 
          plotlist = p)
 
@@ -143,18 +102,32 @@ plot_grid(ncol = 2,
 seuratObj <- seuratObj %>%
   rename(Clusters="RNA_snn_res.1.5") %>%
   SetIdent(., value = "Clusters") %>%
-  select(-starts_with("RNA_snn_res."))
-
+  select(-starts_with("RNA_snn_res."), -cell_id) %>%
+  select(.cell, sample_name, Clusters, everything())
 ```
 
-```{r Convert_to_anndata, eval=FALSE, include=FALSE}
+### Save seurat object
+```{r save-SeuratObject}
+##################################
+# SAVE INTERMEDIATE SEURAT OJECT #
+##################################
+saveRDS(seuratObj, paste0(result_dir,"seuratObj_clustered.RDS"))
+# seuratObj<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
+```
+
+## Session info
+```{r}
+sessionInfo()
+```
+
+```{r Convert-to-anndata, eval=FALSE, include=FALSE}
 library(SeuratDisk)
 # seuratObj <- readRDS(paste0(result_dir,"seuratObj_Li_Y_harmony.RDS"))
 SaveH5Seurat(seuratObj, filename = paste0(result_dir,"Li_Y_integrated.h5Seurat"))
 Convert(paste0(result_dir,"Li_Y_integrated.h5Seurat"), dest = "h5ad")
 ```
 
-# Paulos Code 
+## Paulos Code 
 ```{r Clustering, eval=FALSE, include=FALSE}
 ##################################
 # EVALUATE CLUSTERING RESOLUTION #
@@ -175,18 +148,4 @@ plot_meta(seuratObj, red = "umap_harmony", feat = "RNA_snn_res.2", cex = 0.5, la
 #     ggtitle("leiden_2"))
 
 seuratObj <- SetIdent(seuratObj, value = "RNA_snn_res.1.5")
-```
-
-## Save seurat object
-```{r save_SeuratObject}
-##################################
-# SAVE INTERMEDIATE SEURAT OJECT #
-##################################
-saveRDS(seuratObj, paste0(result_dir,"seuratObj_clustered.RDS"))
-# seuratObj<- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
-```
-
-## Session info
-```{r}
-sessionInfo()
 ```
