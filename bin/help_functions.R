@@ -5,6 +5,7 @@ bez2poly <- function(x){
   x <- apply(x,1,as.numeric)
   x <- cbind(cumsum(x[,1]), cumsum(x[,2]) )
   x <- rbind(x,x[1,])
+  colnames(x) <- c("x", "y")
   return(x)
 }
 
@@ -30,9 +31,9 @@ rec2poly <- function(x){
 get_shape <- function(x){
   xx <- attributes(x)
   if( "d" %in% names(xx) ){
-    return( bez2poly( attr(x,"d") ) )
+    return( bez2poly( attr(x,"d") ) ) # path annot
   } else if( "width"  %in% names(xx) ){
-    return(rec2poly( x ))
+    return(rec2poly( x )) # rect annot
   } 
 }
 
