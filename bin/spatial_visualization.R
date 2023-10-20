@@ -62,6 +62,7 @@ plot_spatial.fun <- function(
     alpha = 1,
     ncol = 2,
     spectral = TRUE,
+    annot_line = .3,
     colors = NULL, # lightgray
     point_size = 1.75,
     img_alpha = 0,
@@ -121,14 +122,14 @@ plot_spatial.fun <- function(
     left_join(.,select(spe, barcode=".cell",!!(geneid)), by="barcode") %>%
     as_tibble() 
   
-  gr <- unique(spe@meta.data[grepl(paste0(sampleid, collapse = "|"),spe@meta.data$orig.ident),"groups"]) 
+  gr <- spe@meta.data %>% group_by(groups, orig.ident ) %>% nest() %>% pull(., "groups")
   text_annot <- tibble(sample_id = sampleid, x=500, y=500, orig.ident = sampleid, gr = gr) 
   
   # select viewframe:
   if (!(is.null(zoom))){
     tools <- map(sampleid, ~pluck(spe@tools, .x)) %>%
       map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%
-      map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
+      #map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
       bind_rows(., .id = "orig.ident")
     
     l <- tools %>% 
@@ -162,12 +163,12 @@ plot_spatial.fun <- function(
     
     tools <- map(sampleid, ~pluck(spe@tools, .x)) %>% 
       map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%  
-      map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
+      #map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
       bind_rows(., .id = "orig.ident") %>%
       filter(!(grepl("fov|zoom|full_image", .$name)))
     spatial_annotation <- geom_path(
       data=tools, 
-      show.legend = FALSE, linewidth = .3,
+      show.legend = FALSE, linewidth = annot_line,
       aes(x=x, y=y, group=interaction(elem_idx)), colour="#808080")
     
   }
@@ -720,7 +721,7 @@ plot_cell_pie.fun <- function(
   
   if(isFALSE(is.null(ct.res))){ct.res <- enquo(ct.res)}
   orig.ident <- enquo(orig.ident)
-  ID_ <- unique(pull(spe, orig.ident)) %>% set_names(.)
+  ID <- unique(pull(spe, orig.ident)) %>% set_names(.)
   # Set default assay
   DefaultAssay(spe) <- assay
   
@@ -730,7 +731,7 @@ plot_cell_pie.fun <- function(
       as_tibble(., rownames = "barcode") 
   }else{
     cell_annot <- spe@assays$misc$cell_annot %>%
-    filter(grepl(paste0(ID_, collapse="|"), .cell)) %>%
+    filter(grepl(paste0(ID, collapse="|"), .cell)) %>%
     select(barcode=".cell", values, !!(ct.res)) %>%
     pivot_wider(., names_from = !!(ct.res), values_fill = 0,
                 values_from = values, values_fn = function(x) sum(x)) }
