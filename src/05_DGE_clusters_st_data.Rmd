@@ -7,6 +7,7 @@ format:
     code-fold: show
 params:
   fig.path: "`r paste0(params$fig.path)`" #./Figures/
+  re.run: FALSE
 editor_options: 
   chunk_output_type: console
 ---
@@ -78,6 +79,7 @@ if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) 
 # LODA DATA #
 #############
 DATA <- readRDS(paste0(input_dir,"seuratObj_deconvolution_scdc.RDS"))
+#DATA <- readRDS(paste0("../results/03_clustering_st_data/","seuratObj_clustered.RDS"))
 epi_clus <- "^5$|^6$|^7|^9" # non-filt
 ```
 
@@ -171,7 +173,7 @@ bind_cols(DATA_sub$full_subset$n_subset_morf, "Clus" = paste0("**",names(table(D
   mutate(SubMuc_sum = sum(c_across(ends_with("_SubMuc"))),
          epi_sum = sum(c_across(ends_with("_epi")))) %>%
   select(sort(colnames(.)[1:8]), everything()) %>%
-  {. ->> tab}
+  {. ->> tab} %>%
   knitr::kable(., caption = "Distribution of spots per cluster per subject")
 
 colSums(tab[,c("SubMuc_sum", "epi_sum")]) %>%
@@ -208,7 +210,7 @@ combined
 ```
 
 ### Run differential gene expression analysis
-```{r DEGs, include=TRUE, eval=FALSE}
+```{r DEGs, include=TRUE, eval=params$re.run}
 ##################################
 # DGEs ONE AGAINST THE REST #
 ##################################
@@ -238,7 +240,7 @@ DEGs_table <- DEGs_table %>%
   mutate(layers = factor(epi_layers[as.character(.$clus)], levels = ord1)) 
 ```
 
-```{r DEGs-SubMuc-vs-epi, include=TRUE, eval=FALSE}
+```{r DEGs-SubMuc-vs-epi, include=TRUE, eval=params$re.run}
 ##############################
 # DGEs EPI AGAINST SUBMUCOSA #
 ##############################
@@ -247,7 +249,6 @@ DEGs_table_morf <- DATA_sub$full_subset %>%
   DEGs_fun(., "sp_annot") %>%
   filter(cluster == "epi_all") 
 
-
 sig_morf <- DEGs_table_morf %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
   group_by(Direction) %>%
@@ -255,7 +256,7 @@ sig_morf <- DEGs_table_morf %>%
 ```
 
 ### Save files
-```{r save-DGEs, include=TRUE, eval=FALSE}
+```{r save-DGEs, include=TRUE, eval=params$re.run}
 #################
 # SAVE CLUSTERS #
 #################
@@ -281,54 +282,10 @@ write.xlsx(DEGs_filt, keepNA=TRUE, na.string="NA", overwrite=TRUE,
            file=paste0(result_dir,"DGEs_epi_vs_Submuc_25_25_wilcox",".xlsx"))
 ```
 
-```{r top-10-morf-DEGs, fig.height=8.5, fig.width=8.27}
-#############################
-# TOP 15 DOWN/UP DEGS TABLE #
-#############################
-top30 <- DEGs_table_morf %>%
-  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-  #filter(Direction == "UP") %>%
-  #filter(pct.1 > 0.2) %>%
-  group_by(Direction) %>%
-  
-  #top_n(-40, p_val_adj) %>% 
-  top_n(15, abs(avg_log2FC)) 
-
-
-write.xlsx(list("DEGs"=DEGs_filt, "top 15 DEGs by log2FC"=top30), keepNA=TRUE, na.string="NA", overwrite=TRUE,
-           file=paste0(result_dir,"DGEs_epi_vs_Submuc_25_25_wilcox",".xlsx"))
-
-############################
-# MARKER GENES FOR DOTPLOT #
-############################
-marker_genes_morf <- DEGs_table_morf %>%
-  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-  group_by(Direction) %>%
-  top_n(-70, p_val_adj) %>%
-  top_n(40, abs(log.pct.diff)) %>%
-  
-  top_n(10, abs(avg_log2FC)) 
-
-###################################
-# DOTPLOT TOP 10 DOWN AND UP DEGs #
-###################################
-DAT <- DATA  %>%
-  mutate(., feature = .$sp_annot)
-ord <- niceRplots::getcluster(DAT, unique(marker_genes_morf$gene), "feature")
-
-#pdf( paste0("./Figures/05/","Marker_genes_epi_vs_subMuc.pdf"), width=4.27, height=length(ord)/6+2, bg = "transparent")
-par(mfrow=c(1,1), mar=c(4,6,1,5))
-plot_dots(DAT, names(sort(ord)), clustering = "feature", show_grid = T,main = "top markers",cex.main=1,font.main=1,cex.col = 1,srt = 0,cex.row = 1.1)
-abline(v=cumsum(c(table(sub( "_.*","",names(table(DAT$feature))))))+0.5)
-dev.off()
-
-```
-
 ### Load allready saved data
-```{r get_DEGs, include=TRUE, eval=TRUE}
-# Load data
+```{r get_DEGs, include=FALSE, eval=isFALSE(params$re.run)}
 DEGs_table <- read_csv(paste0(result_dir,"DGEs_clusters_wilcox.csv"))
-DEGs_table_morf <- read_csv(paste0(result_dir,"DGEs_clusters_morf_25_25.csv"))
+DEGs_table_morf <- readxl::read_xlsx(paste0(result_dir,"DGEs_epi_vs_Submuc_25_50_wilcox.xlsx"))
 # DATA_sub <- readRDS(paste0("../results/06_DGE_condition_st_data/", "DATA_sub.RDS"))
 # DATA_sub <- DATA_sub$DATA_sub 
 ```
@@ -358,101 +315,348 @@ Volcano.fun_logFC(DEGs_filt, "cluster", y.axis="p-value",
                   up=c(.2, 0.05), down = c(-.2, 0.05)) # labeling: (logFC, p-value)
 ```
 
-### Identify marker genes to seperate clusters
-```{r Get-best-markrs}
+```{r save-morf-DEGs}
+#############################
+# TOP 15 DOWN/UP DEGS TABLE #
+#############################
+top30 <- DEGs_table_morf %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  #filter(Direction == "UP") %>%
+  #filter(pct.1 > 0.2) %>%
+  group_by(Direction) %>%
+  
+  #top_n(-40, p_val_adj) %>% 
+  top_n(15, abs(avg_log2FC)) %>%
+  arrange(avg_log2FC, Direction)
+
+
+write.xlsx(list("DEGs"=DEGs_filt, "top 15 DEGs by log2FC"=top30), keepNA=TRUE, na.string="NA", overwrite=TRUE,
+           file=paste0(result_dir,"DGEs_epi_vs_Submuc_25_25_wilcox",".xlsx"))
+
+```
+
+```{r 05c_dotplott_top40_DEGs_sm_vs_epi, fig.height=40*.3+2, fig.width=4}
+#| fig-format: pdf
+############################
+# MARKER GENES FOR DOTPLOT #
+############################
+marker_genes_morf <- DEGs_table_morf %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  group_by(Direction) %>%
+  top_n(-70, p_val_adj) %>%
+  top_n(40, abs(log.pct.diff)) %>%
+  {.->> top_40} %>%
+  top_n(10, abs(avg_log2FC)) %>%
+  arrange(pct.diff, Direction)
+
+# get order of marker genes to seperate clusters
+ord <- niceRplots::getcluster(DATA, unique(top_40$gene), "sp_annot")
+
+###################################
+# DOTPLOT TOP 10 DOWN AND UP DEGs #
+###################################
+# dev.new(width=4, height=40*.3+2, noRStudioGD = TRUE) # vertical
+#pdf( paste0("./top_20_DEG_subset_epi.pdf"),width=8.27,height=length(ord)/6+2)
+par(mfrow=c(1,1), mar=c(7,6,1,5))
+plot_dots(DATA, names(sort(ord)), clustering = "sp_annot", 
+          show_grid = T,
+          main = "top cluster markers",
+          cex.main=1,font.main=1,cex.col = 1,srt = 90,cex.row = 1.1)
+abline(v=cumsum(c(table(sub( "_.*","",names(table(DATA$sp_annot))))))+0.5)
+#dev.off()
+```
+
+```{r 05d_dotplott_top5_DEGs_sm_vs_epi, fig.height=2, fig.width=6}
+################################
+# DOTPLOT MARKER GENE FUNCTION #
+################################
+library(ggnewscale)
+get_order <- function(df, markers, markers_id, value){
+  m <- set_names(markers, markers_id)
+  value <- enquo(value) 
+  
+  df <- df %>%
+    mutate(marker_id =  map_chr(.$marker, ~names(m)[which(m == as.character(.x))])) %>%
+    nest(., .by=c(groups)) %>%
+    mutate(., data = pmap(., ~filter(..2, marker_id == .[[1]]))) %>%
+    mutate(., data = pmap(., ~arrange(..2, desc(!!(value))))) %>%
+    unnest(cols = c("data")) %>%
+    #mutate(marker = fct_reorder2(marker, Avg, Pct))
+    mutate(row_id = cur_group_rows(), .by=c(groups))
+  return(df[["marker"]]) # use rev() to reorder the dots depending on horizontal/vertical 
+}
+get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect=TRUE, alpha=.2, gr_lvl=NULL){
+  col <- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D") # 
+  markers_lvl <- set_names(seq_along(markers), markers)
+  gr <- unique(obj[[groups]])[[1]]
+  gr_lvl <- set_names(seq_along(gr), if(is.null(gr_lvl)){gr}else{gr_lvl})
+  
+  df <- obj %>%
+    mutate(., FetchData(., vars = c(markers)) ) %>%
+    as_tibble() %>%
+    select(., .cell, any_of(c(groups, markers))) %>%
+    pivot_longer(., cols = -c(".cell", groups), 
+                 names_to = "marker", values_to = "values") %>%
+    #mutate(Clusters = factor(.$Clusters, levels=names(clus_lvl))) %>%
+    group_by(!!sym(groups), marker) %>%
+    summarise(Avg = mean(values),
+              Avg_ = mean(values)/max(values), # gives the median as a percentage of max value among spots if .5 you have a normal dist.
+              Pct = sum(values > 0) / length(values) * 100, .groups="drop") %>%
+    #group_by(marker) %>%
+    #nest()
+    mutate(Avg_p = Avg/max(Avg), .by = "marker") %>%
+    mutate(marker = factor(.$marker, levels=get_order(., markers, markers_id, Avg))) %>% 
+    mutate(., ymin = gr_lvl[as.character(.[[groups]])]-.5,
+              ymax = gr_lvl[as.character(.[[groups]])]+.5) %>%
+    mutate(., xmin = markers_lvl[as.character(.$marker)]-0.5,
+              xmax = markers_lvl[as.character(.$marker)]+0.5) %>%
+    mutate(!!sym(groups) := factor(unlist(.[,1]), levels=names(gr_lvl)))
+  
+  df_rect <- df %>% select(1, ymin,  ymax) %>% slice_max(., n=1, order_by=ymin, by=groups, with_ties=F)
+  
+  p <- ggplot(df, aes(x=marker, y=.data[[groups]])) +
+    {if(rect == TRUE)
+      list(new_scale_fill(),
+      
+      annotate(geom = "rect", ymin=df_rect$ymin, ymax=df_rect$ymax,
+                  xmin=rep(0, length(gr)), xmax=rep(length(markers_lvl)+1, length(gr)),
+                  fill = gr_col[1:length(gr)], colour = NA, alpha = alpha),
+      coord_cartesian(expand = F) )} +
+    
+    new_scale_fill() +
+    geom_point(aes(size = Pct, fill = Avg_), col = "gray", shape = 21) + #"#6A2595"
+    scale_fill_gradientn(colours = col,
+                       guide = guide_colorbar(ticks.colour = "black",
+                                              frame.colour = "black"),
+                       name = "Average\nexpression") +
+    
+    
+    theme_bw() +
+    guides(size = guide_legend(override.aes = list(color = "black") ) ) +
+    theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black"),
+          axis.text.y = element_text(size=12, color="black",hjust=.9 ),
+          legend.text = element_text(size=10),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,-10,-10,-10),
+          axis.title = element_blank(),
+          #panel.grid.major = element_blank(), 
+          #panel.grid.minor = element_blank(), 
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(c(.2,.2,.2,.2),units = "cm") #trbl
+          ) 
+  return(p)
+}
+
+###################################
+# DOTPLOT TOP 10 DOWN AND UP DEGs #
+###################################
+# dev.new(width=6, height=2, noRStudioGD = TRUE)
+gr_col <- c("#F0B6AD","#BACCE5")
+markers <-  marker_genes_morf$gene
+markers_id <- rep("epi", length(markers))
+groups="sp_annot"
+(plot <- get_df_for_dotplot.fun(DATA, markers, groups="sp_annot", gr_col, rect=T ) + theme(legend.position="top")) 
+
+ggsave(paste0("./Figures/05/","Marker_genes_morf", ".pdf"), plot,  width = 6, height = 2)
+```
+
+### Identify marker genes to seperate epithelial clusters
+```{r Get-best-markrs_epi}
 #######################################
 # FILTER BY P-VAL logFC AND pct.diff #
 ######################################
+filter_top.fun <- function(nested_df, n, var, min_pct = 0){
+  if(is.na(n[4])){n[4] = min_pct}
+  res <- nested_df %>% # res <- top20$data[[1]] %>%
+    #mutate(p_val_adj = 1.000-.$p_val_adj) %>%
+    filter(p_val_adj < 0.05) %>%
+    arrange(desc(avg_log2FC)) %>%
+    filter(pct.1 > n[4]) %>%
+    top_n(., n=n[1], abs(!!sym(var[1]))) %>%
+    arrange(desc(avg_log2FC)) %>%
+    top_n(., n=n[2], abs(!!sym(var[2]))) %>%
+    top_n(., n=n[3], abs(!!sym(var[3]))) 
+  print(res)
+  return(res[1:n[3],])
+}
+
+sel_epi <- list(
+  Sup_1 = list(n=c(-40, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  #Sup_1 = list(n=c(-100, 70, 5, 0.5),var=c("pct.diff", "p_val_adj", "log.pct.diff")),
+  Sup_2 = list(n=c(-40, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  #Sup_2 = list(n=c(20, 5, 5),var=c("avg_log2FC", "log.pct.diff", "log.pct.diff")),
+  Basal_2 = list(n=c(25, 7, 5, .5),var=c("avg_log2FC", "log.pct.diff", "log.pct.diff")),
+  Basal_1 = list(n=c(10, 5, 5, .8),var=c("avg_log2FC", "log.pct.diff", "log.pct.diff")) )
+
 # Identify the top genes that have a high difference in expression between the clusters
-top20 <- DEGs_table %>%
+top20_epi <- DEGs_table %>%
+  filter(grepl(epi_clus, .$clus)) %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
   filter(Direction == "UP") %>%
-  filter(pct.1 > 0.2) %>%
-  group_by(cluster) %>%
+  #filter(!(pct.2 > 0.2)) %>%
+  nest(., .by = "layers") %>%
+  mutate(data = pmap(., ~filter_top.fun(..2, n=sel_epi[[..1]]$n, var=sel_epi[[..1]]$var)) ) %>%
+  unnest(., cols=c("data"))
   
-# group_by(cluster, Direction) %>%
-  
-  top_n(-40, p_val_adj) %>%
-  top_n(20, pct.diff) %>%
-  top_n(10, log.pct.diff) %>%
-  # nest()
-  
-  top_n(40, avg_log2FC) %>%
-  top_n(10, pct.diff) %>%
-  arrange(desc(avg_log2FC)) %>%
-  nest()
-  
-  #top_n(10, log.pct.diff) 
-
-top20_morf <- top20 %>%
-  ungroup() %>%
-  mutate(morf = ifelse(grepl(epi_clus, .$clus), "epi", "subMuc")) %>%
-  group_by(morf) %>%
-  group_split() %>%
-  set_names(., c("epi", "subMuc"))
-
-# top20 <- DEGs_table %>%
-#   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-#   group_by(cluster, Direction) %>%
-#   top_n(-40, p_val_adj) %>%
-#   top_n(20, pct.diff) %>%
-#   top_n(10, log.pct.diff) 
-  
-top20 <- top20 %>%
-  arrange(cluster)
-# top25[grep("NCR1",top25$gene),]
-
-# remove all VDJ-genes from list of HVG
-remove <- str_subset(top20$gene, "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG")
-top20_gr <- top20 %>%
-  ungroup() %>%
-  split(., f = .$layers)
 ```
 
-### Dotplot of DEGs 
-```{r 05c_dotplott_top20_DEGs_epi, fig.height=8.5, fig.width=8.27}
-#| fig-format: pdf
-# Select marker genes to seperate clusters
-DAT <- DATA  %>%
-  filter(grepl(epi_clus, .$Clusters )) %>%
-  mutate(., feature = .$layers)
-ord <- niceRplots::getcluster(DAT, unique(top20_morf$epi$gene), "feature")
+### Dotplot of epithelial marker genes 
+```{r 05e_Marker_genes_epi, fig.height=3, fig.width=8}
+###################################
+# DOTPLOT TOP 10 MARKER GENES EPI #
+###################################
+# dev.new(width=6.5, height=3, noRStudioGD = TRUE)
+gr_col <-c("#EB5253","#FA9F50","#D7A1FF","#984EA3")
+markers <- top20_epi$gene
+markers_id <- top20_epi$layers
+#markers <- c("FLG","DUOXA2","DHRS9","SPRR2B","KPRP","LINC02487","CLCA4","CD177","SERPINB2","RPTN","TGM1","TMEM184A","EPHA1","FAM83G","ALOX15B","GALNT5","MUC22","COL7A1","STMN1","FGFR2","LAMA5","MEGF6","MIR205HG")
+#markers_id <- c(rep("Sup_1",5), rep("Sup_2",6),rep("Basal_2",6),rep("Basal_1",6))
+groups="layers"
+gr_lvl <- rev(c("Sup_1", "Sup_2", "Basal_2", "Basal_1"))
+(plot <- DATA %>%
+    filter(grepl(epi_clus, .$Clusters) & sp_annot == "epi") %>%
+    get_df_for_dotplot.fun(., markers, groups="layers", gr_col, rect=T, gr_lvl=gr_lvl)  +
+    theme(legend.position="top") )#+ coord_flip(expand=F))
 
-###################################
-# DOTPLOT TOP 10 DOWN AND UP DEGs #
-###################################
+# dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
+# dev.new(width=5, height=6.5, noRStudioGD = TRUE) # vertical
+# ggsave(paste0("./Figures/05/","Marker_genes_epi", ".pdf"), plot,  width = 8, height = 3)
+```
+
+### Identify marker genes to seperate Submucosal clusters
+```{r Get-best-markrs_SubMuc}
+#######################################
+# FILTER BY P-VAL logFC AND pct.diff #
+######################################
+filter_top.fun <- function(nested_df, n, var, min_pct = 0.001){
+  if(is.na(n[4])){n[4] = min_pct}
+  res <- nested_df %>% # res <- top20$data[[3]] %>%
+    #mutate(p_val_adj = 1.000-.$p_val_adj) %>%
+    filter(pct.1 > n[4]) %>%
+    top_n(., n=n[1], abs(!!sym(var[1]))) %>%
+    top_n(., n=n[2], abs(!!sym(var[2]))) %>%
+    top_n(., n=n[3], abs(!!sym(var[3]))) 
+  print(res)
+  return(res[1:n[3],])
+}
+sel_s <- list(
+  "8" = list(n=c(-100, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  "3" = list(n=c(-150, 100, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  "4" = list(n=c(-100, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  "0" = list(n=c(-150, 50, 5, 0.04),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  "1" = list(n=c(-150, 50, 5, 0.04),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  "2" = list(n=c(-150, 50, 5, 0.04),var=c("p_val_adj", "pct.diff", "log.pct.diff"))
+  )
+
+# Identify the top genes that have a high difference in expression between the clusters
+top20_sub <- DEGs_table %>%
+  filter(grepl("^8|^3|^4|^0|1$|^2", .$clus)) %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  filter(Direction == "UP") %>%
+  #filter(!(pct.2 > 0.2)) %>%
+  nest(., .by = "layers") %>%
+  mutate(data = pmap(., ~filter_top.fun(..2, n=sel_s[[..1]]$n, var=sel_s[[..1]]$var)) ) %>%
+  unnest(., cols=c("data"))
+  
+```
+
+### Dotplot of submucosal marker genes 
+```{r 05f_Marker_genes_SubMuc, fig.height=4, fig.width=9}
+######################################
+# DOTPLOT TOP 10 MARKER GENES SUBMUC #
+######################################
+# dev.new(width=6.5, height=3, noRStudioGD = TRUE)
+gr_col <- c("#FBAAB1","#FFDAB8","#F1D2FF","#E6B3E9","#8BCFCE","#92DBFF","#ABC9E1", "#E5C264","#BBD99B", "#E1E2A4", "#FDFFD3")[5:10]
+markers <- top20_sub$gene
+markers_id <- top20_sub$layers
+groups="Clusters"
+gr_lvl <- c("8","3","4","2","1","0")
+(plot <- DATA %>%
+    filter(grepl("^8|^3|^4|^0|1$|^2", .$Clusters) & sp_annot == "SubMuc") %>%
+    get_df_for_dotplot.fun(., markers, groups="Clusters", gr_col, rect=T, alpha = .3, gr_lvl=NULL) + 
+    theme(legend.position="top") )#coord_flip(expand = F) )
+
+# dev.new(width=9, height=4, noRStudioGD = TRUE) # horizontal
+# dev.new(width=6.5, height=3, noRStudioGD = TRUE) # vertical
+# ggsave(paste0("./Figures/05/","Marker_genes_SubMuc", ".pdf"), plot,  width = 6.5, height = 3)
+```
+
+```{r 05g_dotplott_top_DEGs_epi, fig.height=40*.25+2, fig.width=4}
+#| fig-format: pdf
+
+# Identify the top genes that have a high difference in expression between the clusters
+top_epi <- DEGs_table %>%
+  filter(grepl(epi_clus, .$clus )) %>%
+  filter(avg_log2FC > 0) %>%
+  group_by(layers) %>%
+  top_n(-60, p_val_adj) %>%
+  top_n(20, pct.diff) %>%
+  slice_max(., n=10, order_by=log.pct.diff, with_ties = F )
+
+# Select marker genes to seperate clusters
+DAT <- DATA  %>% 
+  filter(grepl(epi_clus, .$Clusters )) %>%
+  mutate(layers = factor(.$layers, levels=c("Sup_1", "Sup_2", "Basal_2", "Basal_1") ) )
+  
+ord <- niceRplots::getcluster(DAT, unique(top_epi$gene), "layers")
+
+######################################
+# DOTPLOT TOP 10 MARKERS PER CLUSTER #
+######################################
+# dev.new(width=6, height=40*.2+2, noRStudioGD = TRUE)
 #pdf( paste0("./Figures/05/","top_20_DEG_subset_epi_pval.pdf"), width=8.27,height=length(ord)/6+2, bg = "transparent")
 par(mfrow=c(1,1), mar=c(7,6,1,5))
-plot_dots(DAT, names(sort(ord)), clustering = "feature", show_grid = T,main = "top cluster markers",cex.main=1,font.main=1,cex.col = 1,srt = 90,cex.row = 1.1)
-abline(v=cumsum(c(table(sub( "_.*","",names(table(DAT$feature))))))+0.5)
+plot_dots(DAT, names(sort(ord)), clustering = "layers", 
+          show_grid = T,
+          main = "top cluster markers",
+          cex.main=1, font.main=1,
+          cex.col = 1, srt = 90,cex.row = 1.1)
+abline(v=cumsum(c(table(sub( "_.*","",names(table(DAT$layers))))))+0.5)
 #dev.off()
 ```
 
-```{r 05c_dotplott_top20_DEGs_subMuc, fig.height=length(unique(top20_morf$subMuc$gene))/6+2, fig.width=8.27}
+```{r 05h_dotplott_top_DEGs_SubMuc, fig.height=60*.2+2, fig.width=6}
 #| fig-format: pdf
-# Select marker genes to seperate clusters
-DAT <- DATA  %>%
-  filter(!(grepl(epi_clus, .$Clusters ))) %>%
-  mutate(., feature = .$Clusters)
-ord <- niceRplots::getcluster(DAT, unique(top20_morf$subMuc$gene), "feature")
 
-###################################
-# DOTPLOT TOP 10 DOWN AND UP DEGs #
-###################################
-#pdf( paste0("./top_20_DEG_subset_epi.pdf"),width=8.27,height=length(ord)/6+2)
+# Identify the top genes that have a high difference in expression between the clusters
+top_sub <- DEGs_table %>%
+  filter(!(grepl(epi_clus, .$clus ))) %>%
+  filter(avg_log2FC > 0) %>%
+  filter(pct.1 > .4) %>%
+  group_by(layers) %>%
+  top_n(-60, p_val_adj) %>%
+  top_n(20, pct.diff) %>%
+  slice_max(., n=10, order_by=log.pct.diff, with_ties = F )
+
+# Select marker genes to seperate clusters
+DAT <- DATA  %>% 
+  filter(!(grepl(epi_clus, .$Clusters ))) %>%
+  mutate(layers = factor(.$layers, levels=c("8","3","4","2","1","0","10") ) )
+  
+ord <- niceRplots::getcluster(DAT, top_sub$gene, "layers")
+
+######################################
+# DOTPLOT TOP 10 MARKERS PER CLUSTER #
+######################################
+# dev.new(width=6, height=40*.25+2, noRStudioGD = TRUE)
+#pdf( paste0("./Figures/05/","top_20_DEG_subset_epi_pval.pdf"), width=8.27,height=length(ord)/6+2, bg = "transparent")
 par(mfrow=c(1,1), mar=c(7,6,1,5))
-plot_dots(DAT, names(sort(ord)), clustering = "feature", show_grid = T,main = "top cluster markers",cex.main=1,font.main=1,cex.col = 1,srt = 90,cex.row = 1.1)
-abline(v=cumsum(c(table(sub( "_.*","",names(table(DAT$feature))))))+0.5)
+plot_dots(DAT, names(sort(ord)), clustering = "layers", 
+          show_grid = T,
+          main = "top cluster markers",
+          cex.main=1, font.main=1,
+          cex.col = 1, srt = 90,cex.row = 1.1)
+abline(v=cumsum(c(table(sub( "_.*","",names(table(DAT$layers))))))+0.5)
 #dev.off()
 ```
 
-```{r 05d_violin_DEGs_plot, fig.height=ceiling(length(unique(top20_morf$epi$gene))/3)*2, fig.width=7}
+```{r 05i_violin_DEGs_plot, fig.height=ceiling(length(top20_epi$gene)/3)*2, fig.width=7}
 # dev.new(width=6.6929133858, height=round(length(unique(top20_morf$epi$gene))/3)*2, noRStudioGD = TRUE) 
 ################################
 # VIOLIN PLOT BEFORE FILTERING #
 ################################
 col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
-feature <-  unique(top20_morf$epi$gene)
+feature <-  top20_epi$gene
 
 DAT <- DATA  %>%
   filter(grepl(epi_clus, .$Clusters )) %>%
@@ -462,43 +666,14 @@ p <-  map(feature, ~violin.fun(DAT, facet="layers", .x, fill="layers", col_pal=c
 plot_grid(plotlist=p, nrow = ceiling(length(feature)/3), ncol = 3, byrow = T)
 ```
 
-```{r 05e_dotplott_top20_DEGs_sm_vs_epi, fig.height=40/6+2, fig.width=4}
-#| fig-format: pdf
-#######################################
-# FILTER BY P-VAL logFC AND pct.diff #
-######################################
-# Identify the top genes that have a high difference in expression between the clusters
-top20_sm_vs_epi <- DEGs_table_morf %>%
-  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-  #filter(Direction == "UP") %>%
-  group_by(Direction) %>%
-  top_n(-40, p_val_adj) %>%
-  top_n(20, pct.diff)
-
-# Select marker genes to seperate clusters
-DAT <- DATA  %>%
-  #filter(!(grepl(epi_clus, .$Clusters ))) %>%
-  mutate(., feature = .$sp_annot)
-ord <- niceRplots::getcluster(DAT, unique(top20_sm_vs_epi$gene), "feature")
-
-###################################
-# DOTPLOT TOP 10 DOWN AND UP DEGs #
-###################################
-#pdf( paste0("./top_20_DEG_subset_epi.pdf"),width=8.27,height=length(ord)/6+2)
-par(mfrow=c(1,1), mar=c(7,6,1,5))
-plot_dots(DAT, names(sort(ord)), clustering = "feature", show_grid = T,main = "top cluster markers",cex.main=1,font.main=1,cex.col = 1,srt = 90,cex.row = 1.1)
-abline(v=cumsum(c(table(sub( "_.*","",names(table(DAT$feature))))))+0.5)
-#dev.off()
-```
-
-```{r 05f_violin_DEGs_sm_vs_epi, fig.height=ceiling(length(unique(top20_sm_vs_epi$gene))/3)*2, fig.width=7}
+```{r 05j_violin_DEGs_sm_vs_epi, fig.height=ceiling(length(marker_genes_morf$gene)/3)*2, fig.width=10}
 # dev.new(width=6.6929133858, height=round(length(unique(top20_sm_vs_epi$gene))/2)*2, noRStudioGD = TRUE) 
 # dev.new(width=6.6929133858, height=round(length(feature)/2)*2, noRStudioGD = TRUE) 
 ################################
 # VIOLIN PLOT BEFORE FILTERING #
 ################################
 col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3", "#CD9600","#00BFC4","#F8766D","#7CAE00", "#00A9FF", "#377EB8","#FFFF33")
-feature <-  unique(top20_sm_vs_epi$gene)
+feature <-  marker_genes_morf$gene
 
 DAT <- DATA  %>%
   mutate(., FetchData(., vars = c(feature)) ) 
@@ -507,27 +682,31 @@ p <-  map(feature, ~violin.fun(DAT, facet="layers", .x, fill="layers", col_pal=c
 plot_grid(plotlist=p, nrow = ceiling(length(feature)/2), ncol = 2, byrow = T)
 ```
 
-```{r 05e_barplot_top25_DGEs, fig.width=10, fig.height=6}
+```{r 05k_barplot_top25_DGEs, fig.width=10, fig.height=6}
 ###################################
 # BARPLOT TOP 10 DOWN AND UP DEGs #
 ###################################
+# dev.new(width=10, height=6, noRStudioGD = TRUE) 
+top20 <- bind_rows(top_epi, top_sub)
+
 par(mfrow=c(2, 5), mar = c(4, 6, 3, 1))
-for (i in unique(top20$groups)[1:10]) {
-    barplot(sort(setNames(top20$avg_log2FC, top20$gene)[top20$cluster == i], F),
+for (i in unique(top20$layers)[1:10]) {
+    barplot(sort(setNames(top20$avg_log2FC, top20$gene)[top20$layers == i], F),
         horiz = T, las = 1, main = paste0(i, " vs. rest"), border = "white", yaxs = "i")
     abline(v = c(0, 0.25), lty = c(1, 2))
 }
 ```
 
-```{r 05f_UMAP_top10_markergenes_plot, fig.width=8.5, fig.height=6.5}
+```{r 05l_UMAP_top10_markergenes_plot, fig.width=8.5, fig.height=6.5}
 #| fig-format: png
 # dev.new(width=8.5, height=6.5, noRStudioGD = TRUE) 
 ################################
 # UMAP TOP 10 DOWN AND UP DEGs #
 ################################
-col=c("grey90","grey80","grey60","navy","black")
+col <- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D") # Purples
+clus <-   c("#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#984EA3","#E41A1C","#C77CFF","#00BFC4","#FF7F00","#FFFF33")
 
-clus_plot <- plot_clusters.fun(DATA, red = "umap_harmony", 
+clus_plot <- plot_clusters.fun(DATA, red = "umapharmony", color = clus,
                                dot_size = 0.2, cluster="Clusters") + theme_void() + NoLegend()
 
 grid_genes <- function(plot_list, title){
@@ -538,8 +717,12 @@ grid_genes <- function(plot_list, title){
   return(g_)
 }
 
+top20_gr <- top20 %>%
+  ungroup() %>%
+  split(., f = .$layers)
+
 plots <- imap(top20_gr, "gene") %>%
-  map(., map, ~plot_genes.fun(DATA, red = "umap_harmony", .x, lable = "Clusters", point_size = .2))
+  map(., map, ~plot_genes.fun(DATA, red = "umapharmony", .x, col = col, lable = "Clusters", point_size = .2))
 
 cluster_markers <- plots %>%
   map(., ~c("Clusters"=list(clus_plot), .x)) %>%
@@ -547,8 +730,10 @@ cluster_markers <- plots %>%
 
 cluster_markers[[10]]
 
-imap(cluster_markers, ~ggsave(paste0(marker_dir,"Marker_genes_cluster_", .y, ".jpg"), plot=.x, height = 6.5, width = 8.5))
-ggsave(paste0("./Figures/05/","Marker_genes_all_clusters", ".pdf"), gridExtra::marrangeGrob(grobs=cluster_markers, ncol=1, nrow=1, height = 6.5, width = 8.5))
+# imap(cluster_markers, ~ggsave(paste0(marker_dir,"Marker_genes_cluster_", .y, ".jpg"), plot=.x, height = 6.5, width = 8.5))
+pdf(paste0("./Figures/05/","Marker_genes_UMAP", ".pdf"), height = 6.5, width = 8.5)
+cluster_markers
+dev.off()
 ```
 
 ## Session info
