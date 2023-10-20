@@ -1,6 +1,6 @@
 Load Spatial data
 ================
-3/21/23
+Invalid Date
 
 ### Load libraries
 
@@ -111,6 +111,18 @@ a2 <- map(sample_id, ~xml2::as_list( read_xml( paste0( input_dir,"/",.x,"/",.x,"
 dd <- map(a2, ~as.numeric( strsplit( attributes(.x$svg)$viewBox , " ")[[1]] ))
 dd2 <- map(sample_id, ~dim(DATA@images[[.x]]@image))
 
+# sample_id <- "P031"
+# a2 <- a2[["P031"]]
+# dd <- dd[["P031"]]
+# dd2 <- dd2[["P031"]]
+
+# add image coordinates to the seurat object
+get_img_coord <- function(DATA, sample_id){
+  img_coord <- DATA@images[[sample_id]]@coordinates
+  DATA@images[[sample_id]]@coordinates <<- img_coord 
+}
+
+# add manual spatial annotation
 get_sp_annot <- function(a2, dd, dd2, sample_id){
   scale.factor <- DATA@images[[sample_id]]@scale.factors$hires
   img_coord <- DATA@images[[sample_id]]@coordinates
@@ -165,7 +177,6 @@ get_sp_annot <- function(a2, dd, dd2, sample_id){
   
   return(list(coord=annot_coord, annot=sp_annot))
 }
-
 annot <- list(a2, dd, dd2, names(a2)) %>%
   pmap(., ~get_sp_annot(..1, ..2, ..3, ..4)) %>%
   set_names(., names(a2))
@@ -190,7 +201,7 @@ DATA
      8 P031_AAATGGCCCGTGCCCT P031              789          477 <NA>    
      9 P031_AAATTAACGGGTAGCT P031              639          465 SubMuc  
     10 P031_AAATTTGCGGGTGTGG P031             3570         1948 SubMuc  
-    # … with 6,690 more rows
+    # ℹ 6,690 more rows
 
 ### Add meta data
 
@@ -341,20 +352,37 @@ DATA
 
     # A Seurat-tibble abstraction: 6,612 × 7
     # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
-       .cell                 groups sp_annot orig.ident nCount_RNA nFeatur…¹ sp_an…²
-       <chr>                 <chr>  <chr>    <chr>           <dbl>     <int> <chr>  
-     1 P031_AAACGAGACGGTTGAT ctrl   SubMuc   P031              463       356 SubMuc 
-     2 P031_AAACTGCTGGCTCCAA ctrl   SubMuc   P031             4081      2232 SubMuc 
-     3 P031_AAAGTAGCATTGCTCA ctrl   epi      P031             7595      2588 epi    
-     4 P031_AAAGTGTGATTTATCT ctrl   epi      P031            11394      3873 epi    
-     5 P031_AAAGTTGACTCCCGTA ctrl   epi      P031             4617      2270 epi    
-     6 P031_AAATACCTATAAGCAT ctrl   epi      P031             5538      2507 epi    
-     7 P031_AAATCGTGTACCACAA ctrl   SubMuc   P031             1765      1084 SubMuc 
-     8 P031_AAATGGCCCGTGCCCT ctrl   SubMuc   P031              789       477 <NA>   
-     9 P031_AAATTAACGGGTAGCT ctrl   SubMuc   P031              639       465 SubMuc 
-    10 P031_AAATTTGCGGGTGTGG ctrl   SubMuc   P031             3570      1948 SubMuc 
-    # … with 6,602 more rows, and abbreviated variable names ¹​nFeature_RNA,
-    #   ²​sp_annot2
+       .cell            groups sp_annot orig.ident nCount_RNA nFeature_RNA sp_annot2
+       <chr>            <chr>  <chr>    <chr>           <dbl>        <int> <chr>    
+     1 P031_AAACGAGACG… ctrl   SubMuc   P031              463          356 SubMuc   
+     2 P031_AAACTGCTGG… ctrl   SubMuc   P031             4081         2232 SubMuc   
+     3 P031_AAAGTAGCAT… ctrl   epi      P031             7595         2588 epi      
+     4 P031_AAAGTGTGAT… ctrl   epi      P031            11394         3873 epi      
+     5 P031_AAAGTTGACT… ctrl   epi      P031             4617         2270 epi      
+     6 P031_AAATACCTAT… ctrl   epi      P031             5538         2507 epi      
+     7 P031_AAATCGTGTA… ctrl   SubMuc   P031             1765         1084 SubMuc   
+     8 P031_AAATGGCCCG… ctrl   SubMuc   P031              789          477 <NA>     
+     9 P031_AAATTAACGG… ctrl   SubMuc   P031              639          465 SubMuc   
+    10 P031_AAATTTGCGG… ctrl   SubMuc   P031             3570         1948 SubMuc   
+    # ℹ 6,602 more rows
+
+``` r
+# dev.new(width=5, height=2, noRStudioGD = TRUE)
+DATA %>%
+  #filter(orig.ident == "P118" | orig.ident == "P097") %>%
+  plot_st_meta.fun(.,  
+          assay="RNA",
+          feat = "sp_annot",
+          zoom = "zoom",
+          ncol = 2,
+          annot_line = .1,
+          annot_col = "black",
+          img_alpha = 0,
+          point_size = 0.8
+        )
+```
+
+<img src="../Figures/00/final-sp_annot.png" data-fig-align="center" />
 
 ## Save seurat object
 
@@ -388,50 +416,50 @@ sessionInfo()
     other attached packages:
      [1] xml2_1.3.3         niceRplots_0.1.0   hdf5r_1.3.8        Seurat_4.3.0      
      [5] tidyseurat_0.5.3   SeuratObject_4.1.3 sp_1.5-1           ttservice_0.2.2   
-     [9] forcats_0.5.2      stringr_1.5.0      dplyr_1.0.10       purrr_1.0.1       
-    [13] readr_2.1.3        tidyr_1.2.1        tibble_3.1.8       ggplot2_3.4.0     
+     [9] forcats_1.0.0      stringr_1.5.0      dplyr_1.1.2        purrr_1.0.1       
+    [13] readr_2.1.3        tidyr_1.3.0        tibble_3.2.1       ggplot2_3.4.3     
     [17] tidyverse_1.3.2   
 
     loaded via a namespace (and not attached):
       [1] readxl_1.4.1           backports_1.4.1        plyr_1.8.8            
-      [4] igraph_1.3.5           lazyeval_0.2.2         splines_4.1.2         
+      [4] igraph_1.4.1           lazyeval_0.2.2         splines_4.1.2         
       [7] listenv_0.9.0          scattermore_0.8        digest_0.6.31         
-     [10] htmltools_0.5.4        fansi_1.0.3            magrittr_2.0.3        
+     [10] htmltools_0.5.5        fansi_1.0.4            magrittr_2.0.3        
      [13] tensor_1.5             googlesheets4_1.0.1    cluster_2.1.4         
      [16] ROCR_1.0-11            tzdb_0.3.0             globals_0.16.2        
      [19] modelr_0.1.10          matrixStats_0.63.0     vroom_1.6.0           
-     [22] timechange_0.2.0       spatstat.sparse_3.0-0  colorspace_2.0-3      
-     [25] rvest_1.0.3            ggrepel_0.9.2          haven_2.5.1           
-     [28] xfun_0.36              crayon_1.5.2           jsonlite_1.8.4        
-     [31] progressr_0.13.0       spatstat.data_3.0-0    survival_3.5-0        
+     [22] timechange_0.2.0       spatstat.sparse_3.0-0  colorspace_2.1-0      
+     [25] rvest_1.0.3            ggrepel_0.9.3          haven_2.5.1           
+     [28] xfun_0.38              crayon_1.5.2           jsonlite_1.8.5        
+     [31] progressr_0.13.0       spatstat.data_3.0-0    survival_3.5-5        
      [34] zoo_1.8-11             glue_1.6.2             polyclip_1.10-4       
-     [37] gtable_0.3.1           gargle_1.2.1           leiden_0.4.3          
+     [37] gtable_0.3.4           gargle_1.2.1           leiden_0.4.3          
      [40] future.apply_1.10.0    abind_1.4-5            scales_1.2.1          
      [43] DBI_1.1.3              spatstat.random_3.0-1  miniUI_0.1.1.1        
-     [46] Rcpp_1.0.9             viridisLite_0.4.1      xtable_1.8-4          
-     [49] reticulate_1.27        bit_4.0.5              htmlwidgets_1.6.1     
-     [52] httr_1.4.4             RColorBrewer_1.1-3     ellipsis_0.3.2        
+     [46] Rcpp_1.0.10            viridisLite_0.4.2      xtable_1.8-4          
+     [49] reticulate_1.28        bit_4.0.5              htmlwidgets_1.6.2     
+     [52] httr_1.4.5             RColorBrewer_1.1-3     ellipsis_0.3.2        
      [55] ica_1.0-3              farver_2.1.1           pkgconfig_2.0.3       
      [58] uwot_0.1.14            dbplyr_2.2.1           deldir_1.0-6          
-     [61] utf8_1.2.2             labeling_0.4.2         tidyselect_1.2.0      
-     [64] rlang_1.0.6            reshape2_1.4.4         later_1.3.0           
+     [61] utf8_1.2.3             labeling_0.4.3         tidyselect_1.2.0      
+     [64] rlang_1.1.1            reshape2_1.4.4         later_1.3.0           
      [67] munsell_0.5.0          cellranger_1.1.0       tools_4.1.2           
-     [70] cli_3.6.0              generics_0.1.3         broom_1.0.2           
-     [73] ggridges_0.5.4         evaluate_0.19          fastmap_1.1.0         
-     [76] yaml_2.3.6             goftest_1.2-3          knitr_1.41            
-     [79] bit64_4.0.5            fs_1.5.2               fitdistrplus_1.1-8    
-     [82] RANN_2.6.1             pbapply_1.6-0          future_1.30.0         
-     [85] nlme_3.1-161           mime_0.12              compiler_4.1.2        
+     [70] cli_3.6.1              generics_0.1.3         broom_1.0.4           
+     [73] ggridges_0.5.4         evaluate_0.21          fastmap_1.1.1         
+     [76] yaml_2.3.7             goftest_1.2-3          knitr_1.42            
+     [79] bit64_4.0.5            fs_1.6.2               fitdistrplus_1.1-8    
+     [82] RANN_2.6.1             pbapply_1.7-0          future_1.32.0         
+     [85] nlme_3.1-163           mime_0.12              compiler_4.1.2        
      [88] rstudioapi_0.14        plotly_4.10.1          png_0.1-8             
      [91] spatstat.utils_3.0-1   reprex_2.0.2           stringi_1.7.12        
-     [94] lattice_0.20-45        Matrix_1.5-3           vctrs_0.5.1           
-     [97] pillar_1.8.1           lifecycle_1.0.3        spatstat.geom_3.0-3   
+     [94] lattice_0.21-8         Matrix_1.6-1           vctrs_0.6.3           
+     [97] pillar_1.9.0           lifecycle_1.0.3        spatstat.geom_3.0-3   
     [100] lmtest_0.9-40          RcppAnnoy_0.0.20       data.table_1.14.6     
-    [103] cowplot_1.1.1          irlba_2.3.5.1          httpuv_1.6.8          
+    [103] cowplot_1.1.1          irlba_2.3.5.1          httpuv_1.6.9          
     [106] patchwork_1.1.2        R6_2.5.1               promises_1.2.0.1      
-    [109] KernSmooth_2.23-20     gridExtra_2.3          parallelly_1.33.0     
-    [112] codetools_0.2-18       MASS_7.3-58.1          assertthat_0.2.1      
+    [109] KernSmooth_2.23-20     gridExtra_2.3          parallelly_1.36.0     
+    [112] codetools_0.2-19       MASS_7.3-60            assertthat_0.2.1      
     [115] withr_2.5.0            sctransform_0.3.5      parallel_4.1.2        
-    [118] hms_1.1.2              grid_4.1.2             rmarkdown_2.20        
+    [118] hms_1.1.2              grid_4.1.2             rmarkdown_2.21        
     [121] googledrive_2.0.0      Rtsne_0.16             spatstat.explore_3.0-5
     [124] shiny_1.7.4            lubridate_1.9.0       

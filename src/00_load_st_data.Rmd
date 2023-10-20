@@ -154,6 +154,18 @@ a2 <- map(sample_id, ~xml2::as_list( read_xml( paste0( input_dir,"/",.x,"/",.x,"
 dd <- map(a2, ~as.numeric( strsplit( attributes(.x$svg)$viewBox , " ")[[1]] ))
 dd2 <- map(sample_id, ~dim(DATA@images[[.x]]@image))
 
+# sample_id <- "P031"
+# a2 <- a2[["P031"]]
+# dd <- dd[["P031"]]
+# dd2 <- dd2[["P031"]]
+
+# add image coordinates to the seurat object
+get_img_coord <- function(DATA, sample_id){
+  img_coord <- DATA@images[[sample_id]]@coordinates
+  DATA@images[[sample_id]]@coordinates <<- img_coord 
+}
+
+# add manual spatial annotation
 get_sp_annot <- function(a2, dd, dd2, sample_id){
   scale.factor <- DATA@images[[sample_id]]@scale.factors$hires
   img_coord <- DATA@images[[sample_id]]@coordinates
@@ -208,7 +220,6 @@ get_sp_annot <- function(a2, dd, dd2, sample_id){
   
   return(list(coord=annot_coord, annot=sp_annot))
 }
-
 annot <- list(a2, dd, dd2, names(a2)) %>%
   pmap(., ~get_sp_annot(..1, ..2, ..3, ..4)) %>%
   set_names(., names(a2))
@@ -347,7 +358,7 @@ DATA
 ```{r final-sp_annot, fig.height=8, fig.width=5}
 # dev.new(width=5, height=2, noRStudioGD = TRUE)
 DATA %>%
-  filter(orig.ident == "P118" | orig.ident == "P097") %>%
+  #filter(orig.ident == "P118" | orig.ident == "P097") %>%
   plot_st_meta.fun(.,  
           assay="RNA",
           feat = "sp_annot",
