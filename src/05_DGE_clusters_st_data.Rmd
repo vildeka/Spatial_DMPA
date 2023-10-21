@@ -1,6 +1,6 @@
 ---
 title: "Differential gene expression clusters"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+date: "`r Sys.time()`"
 format:
   html:
     embed-resources: true
