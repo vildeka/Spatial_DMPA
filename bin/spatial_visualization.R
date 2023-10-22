@@ -1,14 +1,15 @@
 #################
 # GEOM SPATIAL #
 ################
-geom_spatial <-  function(mapping = NULL,
-                          data = NULL,
-                          stat = "identity",
-                          position = "identity",
-                          na.rm = FALSE,
-                          show.legend = NA,
-                          inherit.aes = FALSE,
-                          ...) {
+geom_spatial <-  function(
+    mapping = NULL,
+    data = NULL,
+    stat = "identity",
+    position = "identity",
+    na.rm = FALSE,
+    show.legend = NA,
+    inherit.aes = FALSE,
+    ...) {
   
   GeomCustom <- ggproto(
     "GeomCustom",
@@ -312,7 +313,14 @@ my_theme <-
 # VIOLIN PLOT #
 ################
 # https://stackoverflow.com/questions/35717353/split-violin-plot-with-ggplot2
-violin.fun <- function(obj, feature, facet="orig.ident", fill="sample_name", col_pal=NULL, txt_size=7,n=1){
+violin.fun <- function(
+    obj, 
+    feature, 
+    facet="orig.ident", 
+    fill="sample_name", 
+    col_pal=NULL, 
+    txt_size=7,
+    n=1){
   if(is.null(col_pal)){col_pal <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC") }
   m <- max(obj[[feature]])/n # try e.g 2
   obj %>%
