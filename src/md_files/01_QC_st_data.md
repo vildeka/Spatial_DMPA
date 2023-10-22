@@ -234,12 +234,12 @@ DATA@meta.data %>%
 ### Plotting QC before and after filtering
 
 ``` r
-# dev.new(width=6, height=3, noRStudioGD = TRUE)
+# dev.new(width=6, height=5, noRStudioGD = TRUE)
 ################################
 # VIOLIN PLOT BEFORE FILTERING #
 ################################
 feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
-p_ <-  map(feature, ~violin.fun(temp, feature="nCount_RNA", fill="orig.ident", col_pal=friendly_cols, txt_size=20))
+p_ <-  map(feature, ~violin.fun(temp, feature=.x, fill="orig.ident", col_pal=friendly_cols, txt_size=20))
 # plot_grid(plotlist=p_, ncol = 1)
 
 ################################
