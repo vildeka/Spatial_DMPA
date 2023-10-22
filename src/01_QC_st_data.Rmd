@@ -1,6 +1,6 @@
 ---
 title: "Quality Control Spatial data"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+date: "`r Sys.time()`"
 format:
   html:
     embed-resources: true
@@ -83,7 +83,7 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
 #################
 # COLOUR PALLET #
 #################
-friendly_cols <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733", "#332288", "#AA4499", "#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#F8D0A4", "#E3E6AD", "#be6a7d", "#f1a6b1", "#A8EDFC", "#7fe2e9", "#c4ce96", "#9aacce", "#e7b993", "#ffc8d9")
+friendly_cols <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC") 
 ```
 
 ```{r 01a_Feature_and_counts}
@@ -162,60 +162,41 @@ d %>%
 ```{r 01b_sp_mt_plot, fig.height=3.5, fig.width=7}
 # dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 # percentage of mitochondria
-plots <- DATA %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  pmap(., 
-    ~plot_spatial.fun(..2,
-      assay="RNA",
-      sampleid = ..1,
-      geneid = "percent_mito",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+(plots_m <- DATA %>%
+  plot_spatial.fun(., 
+      sampleid = unique(.$orig.ident),
+      geneid = "percent_mito",
       zoom = "zoom",
+      ncol = 4,
       img_alpha = 0,
       point_size = .5)
     )
-legend <- get_legend(plots[[1]] + theme(legend.position="right"))
-combined <- wrap_plots(plots, ncol=4) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .17)) 
-combined
 ```
 
 ```{r 01c_sp_feat_plot, fig.height=3.5, fig.width=7}
 # number of genes per spot
-plots_f <- DATA %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  pmap(., 
-    ~plot_spatial.fun(..2,
-      samplei = ..1,
+(plots_f <- DATA %>%
+  plot_spatial.fun(., 
+      sampleid = unique(.$orig.ident),
       geneid = "nFeature_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
       zoom = "zoom",
+      ncol = 4,
       img_alpha = 0,
       point_size = .5)
     )
-legend <- get_legend(plots_f[[1]] + theme(legend.position="right"))
-combined <- wrap_plots(plots_f, ncol=4) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .175)) 
-combined
 ```
 
 ```{r 01d_sp_count_plot, fig.height=3.5, fig.width=7}
 # number of reads per spot
-plots_c <- DATA %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  pmap(., 
-    ~plot_spatial.fun(..2,
-      sampleid = ..1,
+(plots_c <- DATA %>%
+  plot_spatial.fun(., 
+      sampleid = unique(.$orig.ident),
       geneid = "nCount_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
       zoom = "zoom",
+      ncol = 4,
       img_alpha = 0,
       point_size = .5)
     )
-legend <- get_legend(plots_c[[1]] + theme(legend.position="right"))
-combined <- wrap_plots(plots_c, ncol=4) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .17)) 
-combined
 ```
 
 ## Filtering
@@ -259,38 +240,36 @@ sapply(DATA@meta.data[feature], summary) %>%
   knitr::kable(digits = 1)
 
 #########################
-# SUMMARY STATS CLUS 10 #
+# SUMMARY STATS GROUPS #
 #########################
 DATA@meta.data %>%
-  filter(Clusters == "10") %>%
-  .[feature] %>%
-  sapply(., summary) %>% 
-  as_tibble(rownames = "stat") %>% 
+  split(.$groups, drop = T) %>% 
+  map(., ~.x %>%
+        select(., any_of(feature[1:2])) %>%
+        map(summary) %>%
+        bind_rows(.id = "stat")
+        #tibble(.x, .name_repair="unique")
+      ) %>%
+  bind_rows(., .id = "groups") %>%
+  arrange(stat) %>%
   knitr::kable(digits = 1)
+  
 ```
 
 ### Plotting QC before and after filtering
-```{r 01e_QC_plot_filtered, fig.height=15}
-# dev.new(width=8, height=10, noRStudioGD = TRUE)
-################
-# SEURAT PLOT #
-################
-# VlnPlot(DATA, features = c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo"), 
-#         pt.size = 0.1, ncol = 1, y.max =100000) + NoLegend()
-# 
-# FeatureScatter(DATA, "nCount_RNA", "nFeature_RNA", group.by = "sample_name", pt.size = 0.5)
-
+```{r 01e_QC_plot_filtered, fig.height=20, fig.width=12}
+# dev.new(width=6, height=3, noRStudioGD = TRUE)
 ################################
 # VIOLIN PLOT BEFORE FILTERING #
 ################################
 feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
-p_ <-  map(feature, ~violin.fun(temp, feature=.x, fill="orig.ident", col_pal=friendly_cols))
+p_ <-  map(feature, ~violin.fun(temp, feature="nCount_RNA", fill="orig.ident", col_pal=friendly_cols, txt_size=20))
 # plot_grid(plotlist=p_, ncol = 1)
 
 ################################
 # VIOLIN PLOT AFTER FILTERING #
 ################################
-p <-  map(feature, ~violin.fun(DATA, feature=.x, fill="orig.ident", col_pal=friendly_cols, n=1))
+p <-  map(feature, ~violin.fun(DATA, feature=.x, fill="orig.ident", col_pal=friendly_cols, n=1, txt_size=20))
 plot_grid(plotlist=c(p_, p), nrow = 5, byrow = F)
 ```
 
@@ -305,23 +284,17 @@ temp %>%
 ```
 
 ### Plot filtered spots
-```{r 01f_filtered_spots, fig.height=8, fig.width=7}
-# dev.new(width=7, height=8, noRStudioGD = TRUE)
-plots <- temp %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  pmap(., 
-    ~plot_spatial.fun(..2,
-      sampleid = ..1,
+```{r 01f_filtered_spots, fig.height=3.5, fig.width=7}
+# dev.new(width=7, height=3.5, noRStudioGD = TRUE)
+(plots <- temp %>%
+  plot_spatial.fun(., 
+      sampleid = unique(.$orig.ident),
       geneid = "filt",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
       zoom = "zoom",
+      ncol = 4,
       img_alpha = 0,
-      point_size = 0.8)
+      point_size = 0.5)
     )
-legend <- get_legend(plots[[1]] + theme(legend.position="right"))
-combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
-combined
 
 ```
 

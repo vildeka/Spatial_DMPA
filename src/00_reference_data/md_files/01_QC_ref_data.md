@@ -1,4 +1,8 @@
-## Load data and libraries
+Quality Control of refrence single-cell data
+================
+4/22/23
+
+### Load data and libraries
 
 ``` r
 ##################
@@ -9,11 +13,13 @@ library(Seurat)
 library(tidyseurat)
 library(cowplot)
 
+source("../../bin/plotting_functions.R")
+
 #########
 # PATHS #
 #########
 input_dir <- "../../results/00_load_ref_data/"
-result_dir <- "../../results/02_QC_ref_data/"
+result_dir <- "../../results/01_QC_ref_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 
 #############
@@ -22,28 +28,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 seuratObj <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
 ```
 
-``` r
-my_theme <-
-  list(
-    #scale_fill_manual(values = friendly_cols),
-    #scale_color_manual(values = friendly_cols),
-    theme_bw() +
-      theme(
-        panel.border = element_blank(),
-        axis.line = element_line(),
-        panel.grid.major = element_line(size = 0.2),
-        panel.grid.minor = element_line(size = 0.1),
-        text = element_text(size = 12),
-        legend.position = "bottom",
-        #aspect.ratio = 1,
-        strip.background = element_blank(),
-        axis.title.x = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10)),
-        axis.title.y = element_text(margin = margin(t = 10, r = 10, b = 10, l = 10))
-      )
-  )
-```
-
-## Features and counts histogram QC plots
+### Features and counts histogram QC plots
 
 ``` r
 ###########################################
@@ -72,9 +57,10 @@ plot_grid(ncol = 1,
           p1 + p2 + p3 + p4)
 ```
 
-<img src="./Figures/01a_Feature_and_counts.png" style="display: block; margin: auto;" />
+<img src="../Figures/01/01a_Feature_and_counts.png"
+data-fig-align="center" />
 
-## QC violin plots
+### QC violin plots
 
 ``` r
 ################################
@@ -116,9 +102,9 @@ tidyseurat::ggplot(aes(sample_name, .data[[feature]], fill=.data[[fill]])) +
  plot_grid(plotlist=p, ncol = 1)
 ```
 
-<img src="./Figures/01b_QC_plots.png" style="display: block; margin: auto;" />
+<img src="../Figures/01/01b_QC_plots.png" data-fig-align="center" />
 
-## Filtering
+### Filtering
 
 ``` r
 ##########################
@@ -143,11 +129,11 @@ seuratObj <- seuratObj_ %>%
 table(seuratObj$sample_name)
 ```
 
-    ## 
-    ##  CX1  CX2  CX3  CX4  CX5 CX6A CX6B CX7A CX7B  CX8   N1   N2   N3   N4   N5 
-    ## 1800 1587 3129 4197 2889 1141  663 2154 1334 1645 3257 4122 3290 2394 4346
 
-## Replotting QC after filtering
+     CX1  CX2  CX3  CX4  CX5 CX6A CX6B CX7A CX7B  CX8 hg19   N1   N2   N3   N4   N5 
+    1800 1587 3129 4197 2889 1141  660 2154 1333 1645 2698 3257 4120 3287 2393 4344 
+
+### Replotting QC after filtering
 
 ``` r
 ############################
@@ -157,9 +143,9 @@ table(seuratObj$sample_name)
  plot_grid(plotlist=p_, ncol = 1)
 ```
 
-<img src="./Figures/01c_plot_filtered.png" style="display: block; margin: auto;" />
+<img src="../Figures/01/01c_plot_filtered.png" data-fig-align="center" />
 
-## Plot top abundant genes
+### Plot top abundant genes
 
 ``` r
 # C = seuratObj@assays$RNA@counts
@@ -212,9 +198,10 @@ col = (scales::hue_pal())(20)[20:1]
    NoLegend() + coord_flip() )
 ```
 
-<img src="./Figures/01d_top_abundante_genes.png" style="display: block; margin: auto;" />
+<img src="../Figures/01/01d_top_abundante_genes.png"
+data-fig-align="center" />
 
-## Save seurat object
+### Save seurat object
 
 ``` r
 ##################################
@@ -230,64 +217,64 @@ saveRDS(seuratObj, paste0(result_dir,"seuratObj_filtered.RDS"))
 sessionInfo()
 ```
 
-    ## R version 4.1.2 (2021-11-01)
-    ## Platform: x86_64-apple-darwin13.4.0 (64-bit)
-    ## Running under: macOS Catalina 10.15.7
-    ## 
-    ## Matrix products: default
-    ## BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.18.dylib
-    ## 
-    ## locale:
-    ## [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
-    ## 
-    ## attached base packages:
-    ## [1] stats     graphics  grDevices utils     datasets  methods   base     
-    ## 
-    ## other attached packages:
-    ##  [1] cowplot_1.1.1      tidyseurat_0.5.1   ttservice_0.1.2    SeuratObject_4.0.4
-    ##  [5] Seurat_4.1.0       forcats_0.5.1      stringr_1.4.0      dplyr_1.0.8       
-    ##  [9] purrr_0.3.4        readr_2.1.2        tidyr_1.2.0        tibble_3.1.6      
-    ## [13] ggplot2_3.3.5      tidyverse_1.3.1   
-    ## 
-    ## loaded via a namespace (and not attached):
-    ##   [1] readxl_1.3.1          backports_1.4.1       plyr_1.8.7           
-    ##   [4] igraph_1.3.0          lazyeval_0.2.2        splines_4.1.2        
-    ##   [7] listenv_0.8.0         scattermore_0.8       digest_0.6.29        
-    ##  [10] htmltools_0.5.2       fansi_1.0.3           magrittr_2.0.3       
-    ##  [13] tensor_1.5            cluster_2.1.2         ROCR_1.0-11          
-    ##  [16] tzdb_0.2.0            globals_0.14.0        modelr_0.1.8         
-    ##  [19] matrixStats_0.61.0    spatstat.sparse_2.1-0 colorspace_2.0-3     
-    ##  [22] rvest_1.0.2           ggrepel_0.9.1         haven_2.4.3          
-    ##  [25] xfun_0.30             crayon_1.5.1          jsonlite_1.8.0       
-    ##  [28] spatstat.data_2.1-4   survival_3.2-13       zoo_1.8-9            
-    ##  [31] glue_1.6.2            polyclip_1.10-0       gtable_0.3.0         
-    ##  [34] leiden_0.3.9          future.apply_1.8.1    abind_1.4-5          
-    ##  [37] scales_1.1.1          DBI_1.1.2             spatstat.random_2.2-0
-    ##  [40] miniUI_0.1.1.1        Rcpp_1.0.8.3          viridisLite_0.4.0    
-    ##  [43] xtable_1.8-4          reticulate_1.24       spatstat.core_2.4-2  
-    ##  [46] htmlwidgets_1.5.4     httr_1.4.2            RColorBrewer_1.1-3   
-    ##  [49] ellipsis_0.3.2        ica_1.0-2             pkgconfig_2.0.3      
-    ##  [52] farver_2.1.0          sass_0.4.1            uwot_0.1.11          
-    ##  [55] dbplyr_2.1.1          deldir_1.0-6          utf8_1.2.2           
-    ##  [58] tidyselect_1.1.2      labeling_0.4.2        rlang_1.0.2          
-    ##  [61] reshape2_1.4.4        later_1.3.0           munsell_0.5.0        
-    ##  [64] cellranger_1.1.0      tools_4.1.2           cli_3.2.0            
-    ##  [67] generics_0.1.2        broom_0.7.12          ggridges_0.5.3       
-    ##  [70] evaluate_0.15         fastmap_1.1.0         yaml_2.3.5           
-    ##  [73] goftest_1.2-3         knitr_1.38            fs_1.5.2             
-    ##  [76] fitdistrplus_1.1-8    RANN_2.6.1            pbapply_1.5-0        
-    ##  [79] future_1.24.0         nlme_3.1-157          mime_0.12            
-    ##  [82] xml2_1.3.3            compiler_4.1.2        rstudioapi_0.13      
-    ##  [85] plotly_4.10.0         png_0.1-7             spatstat.utils_2.3-0 
-    ##  [88] reprex_2.0.1          bslib_0.3.1           stringi_1.7.6        
-    ##  [91] highr_0.9             lattice_0.20-45       Matrix_1.4-1         
-    ##  [94] vctrs_0.4.0           pillar_1.7.0          lifecycle_1.0.1      
-    ##  [97] spatstat.geom_2.4-0   lmtest_0.9-40         jquerylib_0.1.4      
-    ## [100] RcppAnnoy_0.0.19      data.table_1.14.2     irlba_2.3.5          
-    ## [103] httpuv_1.6.5          patchwork_1.1.1       R6_2.5.1             
-    ## [106] promises_1.2.0.1      KernSmooth_2.23-20    gridExtra_2.3        
-    ## [109] parallelly_1.31.0     codetools_0.2-18      MASS_7.3-56          
-    ## [112] assertthat_0.2.1      withr_2.5.0           sctransform_0.3.3    
-    ## [115] mgcv_1.8-40           parallel_4.1.2        hms_1.1.1            
-    ## [118] grid_4.1.2            rpart_4.1.16          rmarkdown_2.11       
-    ## [121] Rtsne_0.15            shiny_1.7.1           lubridate_1.8.0
+    R version 4.1.2 (2021-11-01)
+    Platform: x86_64-apple-darwin13.4.0 (64-bit)
+    Running under: macOS Big Sur 10.16
+
+    Matrix products: default
+    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.21.dylib
+
+    locale:
+    [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
+
+    attached base packages:
+    [1] stats     graphics  grDevices utils     datasets  methods   base     
+
+    other attached packages:
+     [1] cowplot_1.1.1      tidyseurat_0.5.3   ttservice_0.2.2    SeuratObject_4.1.3
+     [5] Seurat_4.3.0       forcats_1.0.0      stringr_1.5.0      dplyr_1.1.1       
+     [9] purrr_1.0.1        readr_2.1.3        tidyr_1.3.0        tibble_3.2.1      
+    [13] ggplot2_3.4.2      tidyverse_1.3.2   
+
+    loaded via a namespace (and not attached):
+      [1] readxl_1.4.1           backports_1.4.1        plyr_1.8.8            
+      [4] igraph_1.4.1           lazyeval_0.2.2         sp_1.5-1              
+      [7] splines_4.1.2          listenv_0.9.0          scattermore_0.8       
+     [10] digest_0.6.31          htmltools_0.5.5        fansi_1.0.4           
+     [13] magrittr_2.0.3         tensor_1.5             googlesheets4_1.0.1   
+     [16] cluster_2.1.4          ROCR_1.0-11            tzdb_0.3.0            
+     [19] globals_0.16.2         modelr_0.1.10          matrixStats_0.63.0    
+     [22] timechange_0.2.0       spatstat.sparse_3.0-0  colorspace_2.1-0      
+     [25] rvest_1.0.3            ggrepel_0.9.3          haven_2.5.1           
+     [28] xfun_0.38              crayon_1.5.2           jsonlite_1.8.4        
+     [31] progressr_0.13.0       spatstat.data_3.0-0    survival_3.5-5        
+     [34] zoo_1.8-11             glue_1.6.2             polyclip_1.10-4       
+     [37] gtable_0.3.3           gargle_1.2.1           leiden_0.4.3          
+     [40] future.apply_1.10.0    abind_1.4-5            scales_1.2.1          
+     [43] DBI_1.1.3              spatstat.random_3.0-1  miniUI_0.1.1.1        
+     [46] Rcpp_1.0.10            viridisLite_0.4.1      xtable_1.8-4          
+     [49] reticulate_1.28        htmlwidgets_1.6.2      httr_1.4.5            
+     [52] RColorBrewer_1.1-3     ellipsis_0.3.2         ica_1.0-3             
+     [55] pkgconfig_2.0.3        farver_2.1.1           uwot_0.1.14           
+     [58] dbplyr_2.2.1           deldir_1.0-6           utf8_1.2.3            
+     [61] tidyselect_1.2.0       labeling_0.4.2         rlang_1.1.0           
+     [64] reshape2_1.4.4         later_1.3.0            munsell_0.5.0         
+     [67] cellranger_1.1.0       tools_4.1.2            cli_3.6.1             
+     [70] generics_0.1.3         broom_1.0.4            ggridges_0.5.4        
+     [73] evaluate_0.20          fastmap_1.1.1          yaml_2.3.7            
+     [76] goftest_1.2-3          knitr_1.42             fs_1.6.1              
+     [79] fitdistrplus_1.1-8     RANN_2.6.1             pbapply_1.7-0         
+     [82] future_1.32.0          nlme_3.1-162           mime_0.12             
+     [85] xml2_1.3.3             compiler_4.1.2         rstudioapi_0.14       
+     [88] plotly_4.10.1          png_0.1-8              spatstat.utils_3.0-1  
+     [91] reprex_2.0.2           stringi_1.7.12         lattice_0.20-45       
+     [94] Matrix_1.5-3           vctrs_0.6.1            pillar_1.9.0          
+     [97] lifecycle_1.0.3        spatstat.geom_3.0-3    lmtest_0.9-40         
+    [100] RcppAnnoy_0.0.20       data.table_1.14.6      irlba_2.3.5.1         
+    [103] httpuv_1.6.9           patchwork_1.1.2        R6_2.5.1              
+    [106] promises_1.2.0.1       KernSmooth_2.23-20     gridExtra_2.3         
+    [109] parallelly_1.35.0      codetools_0.2-19       MASS_7.3-58.3         
+    [112] assertthat_0.2.1       withr_2.5.0            sctransform_0.3.5     
+    [115] parallel_4.1.2         hms_1.1.2              grid_4.1.2            
+    [118] rmarkdown_2.21         googledrive_2.0.0      Rtsne_0.16            
+    [121] spatstat.explore_3.0-5 shiny_1.7.4            lubridate_1.9.0       
