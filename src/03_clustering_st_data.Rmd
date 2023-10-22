@@ -1,6 +1,6 @@
 ---
 title: "Clustering filtered spatial data"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+date: "06/11/2023"
 format:
   html:
     embed-resources: true
@@ -351,6 +351,19 @@ combined
 saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 # DATA <- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
 ```
+
+The log2 count can work as a proxy for cell density. Here we see the distribution of counts per cluster
+```{r log2count-per-cluster}
+clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#377EB8","#CD9600","#7CAE00", "#e0e067","#FFFF33","#FF61CC","#F781BF", "#999999")
+clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
+DATA %>%
+  mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
+  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
+ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
+
+
+```
+
 
 ### Session info
 ```{r}
