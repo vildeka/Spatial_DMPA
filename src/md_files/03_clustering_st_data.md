@@ -1,6 +1,6 @@
 Clustering filtered spatial data
 ================
-6/11/23
+10/22/23
 
 ### Load data and libraries
 
@@ -271,240 +271,20 @@ DATA <- DATA %>%
 mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
 ```
 
-### Subset SeuratObj
+The log2 count can work as a proxy for cell density. Here we see the
+distribution of counts per cluster
 
 ``` r
-DATA_nest <- DATA %>%
-  nest(data = -sp_annot)
+clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#377EB8","#CD9600","#7CAE00", "#e0e067","#FFFF33","#FF61CC","#F781BF", "#999999")
+clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
+
+DATA %>%
+  mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
+  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
+ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
 ```
 
-## Identify Highly Variable Genes (HVG) in each subset
-
-``` r
-library(harmony)
-#########################################
-# FIND HIGLY VARIABLE GENES PER SUBSET #
-#########################################
-hig_var.fun <- function(Obj){
-  hig_var <- Obj@assays$RNA@var.features %>%
-    # remove all VDJ-genes from list of HVG:
-    setdiff(., str_subset(., "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG"))
-  Obj@assays$RNA@var.features <- hig_var
-  return(Obj)
-}
-
-###########################
-# DIMENTIONAITY REDUCTION #
-###########################
-DATA_nest <- DATA_nest %>%
-  mutate(data = map(
-    data, ~ .x %>%
-      FindVariableFeatures(verbose = FALSE) %>%
-      hig_var.fun(.) %>%
-      RunPCA(npcs = 30, verbose = FALSE) %>%
-      RunHarmony(group.by.vars = "orig.ident", 
-             reduction = "pca", 
-             dims.use = 1:30, 
-             assay.use = "RNA") %>%
-      RunUMAP(reduction = "harmony", dims = 1:30, 
-              n.components = 2L, verbose = FALSE) %>%
-      FindNeighbors(verbose = FALSE, reduction = "harmony", dims = 1:20) )) #%>%
-      #FindClusters( verbose = FALSE, resolution = 0.8)
-```
-
-## Clustering of Susetted DATA
-
-``` r
-##################################
-# EVALUATE CLUSTERING RESOLUTION #
-##################################
-DATA_nest <- DATA_nest %>%
-  mutate(data = map(data, ~FindNeighbors(.x, reduction = "harmony", 
-                                         dims = 1:30, k.param = 15, 
-                                         prune.SNN = 1/15))) 
-
-# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.5, 1, 1.5, 2)) {
-    DATA_nest$data[[2]] <- FindClusters(DATA_nest$data[[2]], resolution = res, algorithm = 1)
-}
-```
-
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 1911
-    Number of edges: 89036
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.9232
-    Number of communities: 2
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 1911
-    Number of edges: 89036
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.8014
-    Number of communities: 5
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 1911
-    Number of edges: 89036
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7107
-    Number of communities: 7
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 1911
-    Number of edges: 89036
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.6396
-    Number of communities: 11
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 1911
-    Number of edges: 89036
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.5912
-    Number of communities: 13
-    Elapsed time: 0 seconds
-
-``` r
-# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.5, 1, 1.5, 2)) {
-    DATA_nest$data[[1]] <- FindClusters(DATA_nest$data[[1]], resolution = res, algorithm = 1)
-}
-```
-
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 4687
-    Number of edges: 221552
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.9141
-    Number of communities: 2
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 4687
-    Number of edges: 221552
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.7475
-    Number of communities: 6
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 4687
-    Number of edges: 221552
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.6542
-    Number of communities: 11
-    Elapsed time: 0 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 4687
-    Number of edges: 221552
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.5893
-    Number of communities: 16
-    Elapsed time: 1 seconds
-    Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
-
-    Number of nodes: 4687
-    Number of edges: 221552
-
-    Running Louvain algorithm...
-    Maximum modularity in 10 random starts: 0.5376
-    Number of communities: 18
-    Elapsed time: 0 seconds
-
-``` r
-# each time you run clustering, the data is stored in meta data columns:
-# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
-# resolution you test.
-```
-
-### UMAP of cluster resolutions
-
-``` r
-# dev.new(width=6.6929133858, height=3.3, noRStudioGD = TRUE)
-res <- c("RNA_snn_res.0.5", "RNA_snn_res.1")
-p <- map2(res, list(clus_1,clus_1.5),
-          ~plot_clusters.fun(DATA_nest$data[[2]], cluster=.x, txt_size = 10, dot_size = 0.2,
-                             color = .y, red = "harmony") + xlab("UMAP 1") + ylab("UMAP 2")) 
-
-p <- map2(res, list(clus_1,clus_1.5),
-          ~plot_clusters.fun(DATA_nest$data[[1]], cluster=.x, txt_size = 10, dot_size = 0.2,
-                             color = .y, red = "harmony") + xlab("UMAP 1") + ylab("UMAP 2")) 
-plot_grid(ncol = 2, 
-          plotlist = p)
-```
-
-<img src="../Figures/03/03c_plot_subset_resolution.png"
-data-fig-align="center" />
-
-### Cluster resolutions on tissue
-
-``` r
-# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
-clus_1 <- c("#E41A1C", "#C77CFF","#984EA3","#FF61CC",
-             "#FF7F00","#FFFF33", "#CD9600", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-plots <- DATA_nest$data[[2]] %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  mutate( "res_1" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.5", 
-                      point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
-  mutate( "res_2" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1",
-                      point_size = 0.8, zoom="zoom", colors = clus_1.5)))
-
-legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
-legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
-combined
-```
-
-<img src="../Figures/03/03d_plot_resolutions_on_tissue.png"
-data-fig-align="center" />
-
-### Cluster resolutions on tissue
-
-``` r
-# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
-clus_1 <- c( "#00BFC4", "#00A9FF","#7CAE00", "#e0e067", "#377EB8",
-              "#CD9600","#FF7F00","#FFFF33", "#F781BF", "#999999","#E41A1C", "#C77CFF","#984EA3","#FF61CC")
-plots <- DATA_nest$data[[1]] %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  mutate( "res_1" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.5", 
-                      point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
-  mutate( "res_2" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1",
-                      point_size = 0.8, zoom="zoom", colors = clus_1.5)))
-
-legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
-legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
-combined
-```
-
-<img src="../Figures/03/03e_plot_resolutions_on_tissue.png"
+<img src="../Figures/03/log2count-per-cluster.png"
 data-fig-align="center" />
 
 ## Save seurat object
@@ -516,17 +296,6 @@ data-fig-align="center" />
 saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 # DATA <- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
 ```
-
-``` r
-clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#377EB8","#CD9600","#7CAE00", "#e0e067","#FFFF33","#FF61CC","#F781BF", "#999999")
-clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
-DATA %>%
-  mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
-  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
-ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
-```
-
-<img src="../Figures/03/unnamed-chunk-1.png" data-fig-align="center" />
 
 ### Session info
 
@@ -548,11 +317,10 @@ sessionInfo()
     [1] stats     graphics  grDevices utils     datasets  methods   base     
 
     other attached packages:
-     [1] harmony_0.1.1      Rcpp_1.0.10        patchwork_1.1.2    cowplot_1.1.1     
-     [5] tidyseurat_0.5.3   ttservice_0.2.2    SeuratObject_4.1.3 Seurat_4.3.0      
-     [9] forcats_1.0.0      stringr_1.5.0      dplyr_1.1.2        purrr_1.0.1       
-    [13] readr_2.1.3        tidyr_1.3.0        tibble_3.2.1       ggplot2_3.4.3     
-    [17] tidyverse_1.3.2   
+     [1] patchwork_1.1.2    cowplot_1.1.1      tidyseurat_0.5.3   ttservice_0.2.2   
+     [5] SeuratObject_4.1.3 Seurat_4.3.0       forcats_1.0.0      stringr_1.5.0     
+     [9] dplyr_1.1.2        purrr_1.0.1        readr_2.1.3        tidyr_1.3.0       
+    [13] tibble_3.2.1       ggplot2_3.4.3      tidyverse_1.3.2   
 
     loaded via a namespace (and not attached):
       [1] readxl_1.4.1           backports_1.4.1        plyr_1.8.8            
@@ -570,31 +338,31 @@ sessionInfo()
      [37] gtable_0.3.4           gargle_1.2.1           leiden_0.4.3          
      [40] future.apply_1.10.0    abind_1.4-5            scales_1.2.1          
      [43] DBI_1.1.3              spatstat.random_3.0-1  miniUI_0.1.1.1        
-     [46] viridisLite_0.4.2      xtable_1.8-4           reticulate_1.28       
-     [49] htmlwidgets_1.6.2      httr_1.4.5             RColorBrewer_1.1-3    
-     [52] ellipsis_0.3.2         ica_1.0-3              pkgconfig_2.0.3       
-     [55] farver_2.1.1           uwot_0.1.14            dbplyr_2.2.1          
-     [58] deldir_1.0-6           utf8_1.2.3             tidyselect_1.2.0      
-     [61] labeling_0.4.3         rlang_1.1.1            reshape2_1.4.4        
-     [64] later_1.3.0            munsell_0.5.0          cellranger_1.1.0      
-     [67] tools_4.1.2            cli_3.6.1              generics_0.1.3        
-     [70] broom_1.0.4            ggridges_0.5.4         evaluate_0.21         
-     [73] fastmap_1.1.1          yaml_2.3.7             goftest_1.2-3         
-     [76] knitr_1.42             fs_1.6.2               fitdistrplus_1.1-8    
-     [79] RANN_2.6.1             pbapply_1.7-0          future_1.32.0         
-     [82] nlme_3.1-163           mime_0.12              xml2_1.3.3            
-     [85] compiler_4.1.2         rstudioapi_0.14        plotly_4.10.1         
-     [88] png_0.1-8              spatstat.utils_3.0-1   reprex_2.0.2          
-     [91] stringi_1.7.12         lattice_0.21-8         Matrix_1.6-1          
-     [94] vctrs_0.6.3            pillar_1.9.0           lifecycle_1.0.3       
-     [97] spatstat.geom_3.0-3    lmtest_0.9-40          RcppAnnoy_0.0.20      
-    [100] data.table_1.14.6      irlba_2.3.5.1          httpuv_1.6.9          
-    [103] R6_2.5.1               promises_1.2.0.1       KernSmooth_2.23-20    
-    [106] gridExtra_2.3          parallelly_1.36.0      codetools_0.2-19      
-    [109] MASS_7.3-60            assertthat_0.2.1       withr_2.5.0           
-    [112] sctransform_0.3.5      parallel_4.1.2         hms_1.1.2             
-    [115] grid_4.1.2             rmarkdown_2.21         googledrive_2.0.0     
-    [118] Rtsne_0.16             spatstat.explore_3.0-5 shiny_1.7.4           
-    [121] lubridate_1.9.0       
+     [46] Rcpp_1.0.10            viridisLite_0.4.2      xtable_1.8-4          
+     [49] reticulate_1.28        htmlwidgets_1.6.2      httr_1.4.5            
+     [52] RColorBrewer_1.1-3     ellipsis_0.3.2         ica_1.0-3             
+     [55] pkgconfig_2.0.3        farver_2.1.1           uwot_0.1.14           
+     [58] dbplyr_2.2.1           deldir_1.0-6           utf8_1.2.3            
+     [61] tidyselect_1.2.0       labeling_0.4.3         rlang_1.1.1           
+     [64] reshape2_1.4.4         later_1.3.0            munsell_0.5.0         
+     [67] cellranger_1.1.0       tools_4.1.2            cli_3.6.1             
+     [70] generics_0.1.3         broom_1.0.4            ggridges_0.5.4        
+     [73] evaluate_0.21          fastmap_1.1.1          yaml_2.3.7            
+     [76] goftest_1.2-3          knitr_1.42             fs_1.6.2              
+     [79] fitdistrplus_1.1-8     RANN_2.6.1             pbapply_1.7-0         
+     [82] future_1.32.0          nlme_3.1-163           mime_0.12             
+     [85] xml2_1.3.3             compiler_4.1.2         rstudioapi_0.14       
+     [88] plotly_4.10.1          png_0.1-8              spatstat.utils_3.0-1  
+     [91] reprex_2.0.2           stringi_1.7.12         lattice_0.21-8        
+     [94] Matrix_1.6-1           vctrs_0.6.3            pillar_1.9.0          
+     [97] lifecycle_1.0.3        spatstat.geom_3.0-3    lmtest_0.9-40         
+    [100] RcppAnnoy_0.0.20       data.table_1.14.6      irlba_2.3.5.1         
+    [103] httpuv_1.6.9           R6_2.5.1               promises_1.2.0.1      
+    [106] KernSmooth_2.23-20     gridExtra_2.3          parallelly_1.36.0     
+    [109] codetools_0.2-19       MASS_7.3-60            assertthat_0.2.1      
+    [112] withr_2.5.0            sctransform_0.3.5      parallel_4.1.2        
+    [115] hms_1.1.2              grid_4.1.2             rmarkdown_2.21        
+    [118] googledrive_2.0.0      Rtsne_0.16             spatstat.explore_3.0-5
+    [121] shiny_1.7.4            lubridate_1.9.0       
 
 ## Paulo’s Code

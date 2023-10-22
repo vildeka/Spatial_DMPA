@@ -1,6 +1,6 @@
 ---
 title: "Clustering filtered spatial data"
-date: "06/11/2023"
+date: "`r format(Sys.time(), '%d %m %Y')`"
 format:
   html:
     embed-resources: true
@@ -215,132 +215,16 @@ DATA <- DATA %>%
 mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
 ```
 
-### Subset SeuratObj
-```{r subset_cells, eval=params$re.run}
-DATA_nest <- DATA %>%
-  nest(data = -sp_annot)
-```
+The log2 count can work as a proxy for cell density. Here we see the distribution of counts per cluster
+```{r log2count-per-cluster}
+clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#377EB8","#CD9600","#7CAE00", "#e0e067","#FFFF33","#FF61CC","#F781BF", "#999999")
+clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 
-## Identify Highly Variable Genes (HVG) in each subset
-```{r HVG, eval=params$re.run}
-library(harmony)
-#########################################
-# FIND HIGLY VARIABLE GENES PER SUBSET #
-#########################################
-hig_var.fun <- function(Obj){
-  hig_var <- Obj@assays$RNA@var.features %>%
-    # remove all VDJ-genes from list of HVG:
-    setdiff(., str_subset(., "^IGH|^IGK|^IGL|^TRA|^TRB|^TRD|^TRG"))
-  Obj@assays$RNA@var.features <- hig_var
-  return(Obj)
-}
+DATA %>%
+  mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
+  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
+ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
 
-###########################
-# DIMENTIONAITY REDUCTION #
-###########################
-DATA_nest <- DATA_nest %>%
-  mutate(data = map(
-    data, ~ .x %>%
-      FindVariableFeatures(verbose = FALSE) %>%
-      hig_var.fun(.) %>%
-      RunPCA(npcs = 30, verbose = FALSE) %>%
-      RunHarmony(group.by.vars = "orig.ident", 
-             reduction = "pca", 
-             dims.use = 1:30, 
-             assay.use = "RNA") %>%
-      RunUMAP(reduction = "harmony", dims = 1:30, 
-              n.components = 2L, verbose = FALSE) %>%
-      FindNeighbors(verbose = FALSE, reduction = "harmony", dims = 1:20) )) #%>%
-      #FindClusters( verbose = FALSE, resolution = 0.8)
-
-
-```
-
-## Clustering of Susetted DATA
-```{r Morf-clustering-resolution}
-##################################
-# EVALUATE CLUSTERING RESOLUTION #
-##################################
-DATA_nest <- DATA_nest %>%
-  mutate(data = map(data, ~FindNeighbors(.x, reduction = "harmony", 
-                                         dims = 1:30, k.param = 15, 
-                                         prune.SNN = 1/15))) 
-
-# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.5, 1, 1.5, 2)) {
-    DATA_nest$data[[2]] <- FindClusters(DATA_nest$data[[2]], resolution = res, algorithm = 1)
-}
-
-# Clustering with louvain (algorithm 1) or leiden (algorithm 4)
-for (res in c(0.1, 0.5, 1, 1.5, 2)) {
-    DATA_nest$data[[1]] <- FindClusters(DATA_nest$data[[1]], resolution = res, algorithm = 1)
-}
-
-# each time you run clustering, the data is stored in meta data columns:
-# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
-# resolution you test.
-
-```
-
-### UMAP of cluster resolutions
-```{r 03c_plot_subset_resolution, fig.asp=5/10}
-# dev.new(width=6.6929133858, height=3.3, noRStudioGD = TRUE)
-res <- c("RNA_snn_res.0.5", "RNA_snn_res.1")
-p <- map2(res, list(clus_1,clus_1.5),
-          ~plot_clusters.fun(DATA_nest$data[[2]], cluster=.x, txt_size = 10, dot_size = 0.2,
-                             color = .y, red = "harmony") + xlab("UMAP 1") + ylab("UMAP 2")) 
-
-p <- map2(res, list(clus_1,clus_1.5),
-          ~plot_clusters.fun(DATA_nest$data[[1]], cluster=.x, txt_size = 10, dot_size = 0.2,
-                             color = .y, red = "harmony") + xlab("UMAP 1") + ylab("UMAP 2")) 
-plot_grid(ncol = 2, 
-          plotlist = p)
-```
-
-### Cluster resolutions on tissue
-```{r, 03d_plot_resolutions_on_tissue, fig.height=14, dev = c("png", "pdf")}
-# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
-clus_1 <- c("#E41A1C", "#C77CFF","#984EA3","#FF61CC",
-             "#FF7F00","#FFFF33", "#CD9600", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-plots <- DATA_nest$data[[2]] %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  mutate( "res_1" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.5", 
-                      point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
-  mutate( "res_2" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1",
-                      point_size = 0.8, zoom="zoom", colors = clus_1.5)))
-
-legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
-legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
-combined
-```
-
-### Cluster resolutions on tissue
-```{r, 03e_plot_resolutions_on_tissue, fig.height=14, dev = c("png", "pdf")}
-# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
-clus_1 <- c( "#00BFC4", "#00A9FF","#7CAE00", "#e0e067", "#377EB8",
-              "#CD9600","#FF7F00","#FFFF33", "#F781BF", "#999999","#E41A1C", "#C77CFF","#984EA3","#FF61CC")
-plots <- DATA_nest$data[[1]] %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  mutate( "res_1" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.0.5", 
-                      point_size = 0.8, zoom="zoom", colors = clus_1))) %>%
-  mutate( "res_2" = pmap(., 
-    ~plot_spatial.fun(..2, sampleid=..1, geneid="RNA_snn_res.1",
-                      point_size = 0.8, zoom="zoom", colors = clus_1.5)))
-
-legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
-legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
-combined
 ```
 
 ## Save seurat object
@@ -350,18 +234,6 @@ combined
 ##################################
 saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 # DATA <- readRDS(paste0(result_dir,"seuratObj_clustered.RDS"))
-```
-
-The log2 count can work as a proxy for cell density. Here we see the distribution of counts per cluster
-```{r log2count-per-cluster}
-clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#377EB8","#CD9600","#7CAE00", "#e0e067","#FFFF33","#FF61CC","#F781BF", "#999999")
-clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
-DATA %>%
-  mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
-  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
-ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
-
-
 ```
 
 
