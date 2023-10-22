@@ -188,7 +188,7 @@ DATA
 ```
 
     # A Seurat-tibble abstraction: 6,700 × 5
-    # [90mFeatures=36601 | Cells=6700 | Active assay=RNA | Assays=RNA[0m
+    # [90mFeatures=36601 | Cells=6700 | Active assay=RNA | Assays=RNA[0m
        .cell                 orig.ident nCount_RNA nFeature_RNA sp_annot
        <chr>                 <chr>           <dbl>        <int> <chr>   
      1 P031_AAACGAGACGGTTGAT P031              463          356 SubMuc  
@@ -351,7 +351,7 @@ DATA
 ```
 
     # A Seurat-tibble abstraction: 6,612 × 7
-    # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
+    # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
        .cell            groups sp_annot orig.ident nCount_RNA nFeature_RNA sp_annot2
        <chr>            <chr>  <chr>    <chr>           <dbl>        <int> <chr>    
      1 P031_AAACGAGACG… ctrl   SubMuc   P031              463          356 SubMuc   
