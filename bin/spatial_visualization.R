@@ -312,7 +312,8 @@ my_theme <-
 # VIOLIN PLOT #
 ################
 # https://stackoverflow.com/questions/35717353/split-violin-plot-with-ggplot2
-violin.fun <- function(obj, feature, facet="orig.ident", fill="sample_name", col_pal=friendly_cols, n=1){
+violin.fun <- function(obj, feature, facet="orig.ident", fill="sample_name", col_pal=NULL, txt_size=7,n=1){
+  if(is.null(col_pal)){col_pal <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC") }
   m <- max(obj[[feature]])/n # try e.g 2
   obj %>%
     tidyseurat::ggplot(aes(.data[[facet]], .data[[feature]], fill=.data[[fill]])) +
@@ -320,7 +321,8 @@ violin.fun <- function(obj, feature, facet="orig.ident", fill="sample_name", col
     geom_jitter(width = 0.3, alpha = 0.2, size=.1) +
     scale_fill_manual(values = col_pal) +
     my_theme + NoLegend() + ylim(c(0, m)) +
-    theme(axis.text.x = element_text(angle = 30, hjust=1),
+    theme(text = element_text(size = txt_size),
+          axis.text.x = element_text(angle = 30, hjust=1),
           plot.title = element_text(hjust = 0.5),
           axis.title.y = element_blank(),
           axis.title.x = element_blank()) 
