@@ -284,7 +284,7 @@ DATA %>%
 ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
 ```
 
-<img src="../Figures/03/03d_log2count-per-cluster.png"
+<img src="../Figures/03/03d_log2count_per_cluster.png"
 data-fig-align="center" />
 
 ## Save seurat object
