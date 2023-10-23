@@ -216,7 +216,7 @@ mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
 ```
 
 The log2 count can work as a proxy for cell density. Here we see the distribution of counts per cluster
-```{r log2count-per-cluster}
+```{r 03d_log2count_per_cluster}
 clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#377EB8","#CD9600","#7CAE00", "#e0e067","#FFFF33","#FF61CC","#F781BF", "#999999")
 clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 
