@@ -1,6 +1,6 @@
 ---
 title: "Differential gene expression"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+date: "`r format(Sys.time(), '%d %m %Y')`"
 format:
   html:
     embed-resources: true
@@ -82,7 +82,7 @@ PlosPath_DGEs <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/B
 # LODA DATA #
 #############
 DATA <- readRDS(paste0(input_dir,"seuratObj_deconvolution_scdc.RDS"))
-# DATA <- readRDS(paste0("../results/03_clustering_st_data/","seuratObj_clustered.RDS"))
+# DATA_ <- readRDS(paste0("../results/03_clustering_st_data/","seuratObj_clustered.RDS"))
 DGEs_PP <- read_csv(PlosPath_DGEs)
 epi_clus <- "^5$|^6$|^7|^9" # non-filt
 
@@ -101,7 +101,7 @@ gr_col <- c("#88CCEE", "#CC6677")
 # obj <- DATA_sub$data[[1]]
 # condition <- 'groups'
 # subgroup <- "Clusters"
-DEGs_fun <- function(obj, condition, subgroup){
+DEGs_fun <- function(obj, condition, subgroup, test="wilcox", random.efct=NULL){
   obj <- SetIdent(obj, value = condition)
   
   DATA_degs <- obj %>%
@@ -109,7 +109,8 @@ DEGs_fun <- function(obj, condition, subgroup){
   nest(data = -c("clus")) %>%
   mutate( DEGs = map(data, 
         ~FindAllMarkers(.x,
-                       test.use = "wilcox",
+                       test.use = test,
+                       # latent.vars = random.efct,
                        only.pos = F,
                        return.thresh = 1,
                        max.cells.per.ident = Inf,
@@ -135,29 +136,45 @@ DEGs_fun <- function(obj, condition, subgroup){
 ####################################
 # SUBSET SEURAT OBJECT PER CLUSTER #
 ####################################
-# creating a subseted object with 25 spots per sampleID for each cluster
+# creating a subseted object with; 
+# 25 epithelial spots per sampleID for each cluster
+# 50 submucosal spots per sampleID for each cluster
 set.seed(1)
 DATA_sub <- DATA %>%
   mutate(gr = .$groups) %>%
   mutate(ID = .$orig.ident) %>%
-  nest(., data=-c(gr, orig.ident)) %>%
-  mutate(epi =  map(data, ~filter(.x, !(sp_annot == "SubMuc"))),
-         subMuc =  map(data, ~filter(.x, sp_annot == "SubMuc"))) %>%
-  select(-data) %>%
-  mutate(across(c("epi", "subMuc"), ~map(., ~table(.x$Clusters)), .names = "{.col}_n_before")) %>%
-  mutate(epi = map(epi, ~filter(.x, .cell %in% WhichCells(., downsample = 25)))) %>%
-  mutate(subMuc = map(subMuc, ~filter(.x, .cell %in% WhichCells(., downsample = 50)))) %>%
-  mutate(across(c("epi", "subMuc"), ~map(., ~table(.x$Clusters)), .names = "{.col}_n_after")) %>%
-  mutate(across(contains("_n_"), ~set_names(.x, paste0(.data[["gr"]],"_",.data[["orig.ident"]]))))
+  mutate(sp = .$sp_annot) %>%
+  nest(., data=-c(gr, orig.ident, sp)) %>%
+  mutate(downsample = ifelse(.$sp == "epi", 25, 50)) %>%
+  mutate(downsample_morf = ifelse(.$sp == "epi", 25, 25)) %>%
+  mutate(subset = map2(data, .$downsample, ~filter(.x, .cell %in% WhichCells(., downsample = .y))), .after="downsample") %>%
+  mutate(subset_morf = map2(data, .$downsample_morf, ~filter(.x, .cell %in% WhichCells(., downsample = .y)))) %>%
+  mutate(across(c("data", "subset", "subset_morf"), ~map(., ~table(.x$layers)), .names = "n_{.col}")) %>%
+  mutate(across(contains("n_"), ~set_names(.x, paste0(.data[["gr"]],"_",.data[["orig.ident"]])))) %>%
+  mutate(across(contains("n_subset_morf"), ~set_names(.x, paste0(.data[["gr"]],"_",.data[["orig.ident"]],"_", .data[["sp"]])))) %>%
+  select(-data)
 
-bind_cols(DATA_sub$epi_n_after, "Clus" = paste0("**",names(table(DATA$Clusters)),"**")) %>%
+
+##############
+# EPITHELIUM #
+##############
+DATA_sub %>%
+  filter(sp == "epi") %>% 
+  .$n_subset %>%
+  bind_cols(., "Clus" = paste0("**",names(table(DATA$layers)),"**")) %>%
   rowwise() %>% 
   mutate(DMPA_sum = sum(c_across(starts_with("DMPA_"))),
          ctrl_sum = sum(c_across(starts_with("ctrl_")))) %>%
   select(sort(colnames(.)[1:8]), everything()) %>%
   knitr::kable(., caption = "Distribution of epithelial spots per cluster per subject")
 
-bind_cols(DATA_sub$subMuc_n_after, "Clus" = paste0("**",names(table(DATA$Clusters)),"**")) %>%
+#############
+# SUBMUCOSA #
+#############
+DATA_sub %>%
+  filter(sp == "SubMuc") %>% 
+  .$n_subset %>%
+  bind_cols(., "Clus" = paste0("**",names(table(DATA$layers)),"**")) %>%
   rowwise() %>% 
   mutate(DMPA_sum = sum(c_across(starts_with("DMPA_"))),
          ctrl_sum = sum(c_across(starts_with("ctrl_")))) %>%
@@ -171,37 +188,92 @@ bind_cols(DATA_sub$subMuc_n_after, "Clus" = paste0("**",names(table(DATA$Cluster
 # DGEs BETWEEN CONDITION FOR EACH SUBGROUPS #
 ##############################################
 DEGs_table_epi <- DATA_sub %>%
-  unnest(epi) %>%
+  filter(sp == "epi") %>%
+  unnest(subset) %>%
   filter(grepl(epi_clus, .$Clusters)) %>%
   DEGs_fun(., "groups", "Clusters") %>%
   filter(cluster == "DMPA") 
 
 DEGs_table_subMuc <- DATA_sub %>%
-  unnest(subMuc) %>%
+  filter(sp == "SubMuc") %>%
+  unnest(subset) %>%
   filter(!(grepl(epi_clus, .$Clusters))) %>%
   DEGs_fun(., "groups", "Clusters") %>%
   filter(cluster == "DMPA") 
 
 DEGs_table <- bind_rows(DEGs_table_epi, DEGs_table_subMuc)
 
+DEGs_table_E2lvl_e <- DATA_sub %>%
+  filter(sp == "epi") %>%
+  unnest(subset) %>%
+  filter(grepl(epi_clus, .$Clusters)) %>%
+  mutate(E2_lvl = ifelse(grepl("P114|P107", .$orig.ident), "high", "low")) %>%
+  filter(groups == "DMPA") %>%
+  DEGs_fun(., "E2_lvl", "Clusters") %>%
+  filter(cluster == "low") 
+
+DEGs_table_E2lvl_s <- DATA_sub %>%
+  filter(sp == "SubMuc") %>%
+  unnest(subset) %>%
+  filter(!(grepl(epi_clus, .$Clusters))) %>%
+  mutate(E2_lvl = ifelse(grepl("P114|P107", .$orig.ident), "high", "low")) %>%
+  filter(groups == "DMPA") %>%
+  DEGs_fun(., "E2_lvl", "Clusters") %>%
+  filter(cluster == "low") 
+
+DEGs_table_E2lvl <- bind_rows(DEGs_table_E2lvl_e, DEGs_table_E2lvl_s)
+
+DEGs_table_cond_E2high <- DATA_sub$DATA_sub %>%
+  filter(sp == "epi") %>%
+  unnest(subset) %>%
+  filter(grepl(epi_clus, .$Clusters)) %>%
+  filter(!(grepl("P097|P108", .$orig.ident))) %>%
+  DEGs_fun(., "groups", "Clusters") %>%
+  filter(cluster == "DMPA") 
+```
+
+```{r}
 ###################
 # ADD ANNOTATION #
 ##################
-ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
-ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
-epi_layers <- set_names(ord1, ord2)
+ord1 <- c("Superficial","Upper IM","Lower IM","Basal","8","3","4","0","1","2","10")
+ord2 <- c("6", "9", "7", "5","8","3","0","4","1","2","10")
+l <- set_names(ord1, ord2)
 
-DEGs_table <- DEGs_table %>%
-  filter(cluster == "DMPA") %>%
-  mutate(subgroup = factor(.$subgroup, levels = ord2)) %>%
-  mutate(layers = factor(epi_layers[as.character(.$subgroup)], levels = ord1)) %>% 
-  mutate(morf = ifelse(grepl(epi_clus, .$subgroup), "epi", "SubMuc"))
+DEGs_l <- list("Condition"=DEGs_table, "E2"=DEGs_table_E2lvl)
+
+DEGs_l <- map(DEGs_l, ~ .x %>%
+  dplyr::select(-any_of(c("layers"))) %>%
+  #filter(cluster == "DMPA") %>%
+  mutate(., subgroup = factor(.$subgroup, levels = ord2)) %>%
+  mutate(., layers = factor(l[as.character(.$subgroup)], levels = ord1)) %>%
+  mutate(Regulation = ifelse(avg_log2FC > 0 & p_val_adj < 0.05, "UP",
+                            ifelse(avg_log2FC < 0 & p_val_adj < 0.05,"DOWN", "NOT SIG."))) %>%
+  mutate(Regulation = factor(.$Regulation, levels = c("UP", "DOWN", "NOT SIG."))) %>%
+  mutate(., Morphology = ifelse(grepl(epi_clus, .$subgroup), "epi", "SubMuc")) %>%
+  split(., ~Morphology) %>%
+  map(., ~arrange(.x, Regulation, layers))
+) 
+
+sig_n <- function(x, patt){x[grep( patt, names(x) )]}
+order_df <- function(df){
+  temp <- df %>%
+    split(., ~Regulation+layers) 
+    
+  df_ <- list(sig_n(temp, "^UP|^DOWN+"), sig_n(temp, "^NOT+")) %>% 
+    list_flatten() %>% 
+    bind_rows()
+  return(df_)
+  }
+DEGs_table <- bind_rows(DEGs_l[[1]]) %>% order_df()
+DEGs_table_E2lvl <- bind_rows(DEGs_l[[2]]) %>% order_df()
 ```
 
 ### Save DEGs tables
 ```{r save_DGEs, include=TRUE, eval=params$run.dgea, results='hide'}
-saveRDS(list(DATA_sub=DATA_sub, DEGs_table=DEGs_table), paste0(result_dir, "DATA_sub.RDS"))
+saveRDS(DATA_sub, paste0(result_dir, "DATA_sub.RDS"))
 write_csv(DEGs_table, paste0(result_dir, "DGEs_condition_wilcox", ".csv"))
+write_csv(DEGs_table_E2lvl, paste0(result_dir, "DGEs_condition_E2lvl", ".csv"))
 
 write.xlsx(DEGs_table, keepNA=TRUE, na.string="NA", overwrite=TRUE,
            file=paste0(result_dir,"DGEs_condition_wilcox.xlsx"))
@@ -209,18 +281,12 @@ write.xlsx(DEGs_table, keepNA=TRUE, na.string="NA", overwrite=TRUE,
 
 ### Load allready saved data
 ```{r get_DEGs, eval=isFALSE(params$run.dgea)}
-ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
-ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
-epi_layers <- set_names(ord1, ord2)
-
 # Load data
 DATA_sub <- readRDS(paste0(result_dir, "DATA_sub.RDS"))
 # DATA_sub <- DATA_sub$DATA_sub 
-DEGs_table <- read_csv(paste0(result_dir, "DGEs_condition_wilcox", ".csv")) %>%
-  mutate(subgroup = factor(.$subgroup, levels = ord2)) %>%
-  mutate(layers = factor(.$layers, levels = ord1))
 
 DEGs_table <- read_csv(paste0("../results/06_DGE_condition_st_data/","DGEs_condition_wilcox.csv"))
+DEGs_table_E2lvl <- read_csv(paste0("../results/06_DGE_condition_st_data/","DGEs_condition_E2lvl.csv")) 
 ```
 
 ### Volcano plots of differentially expressed genes per cluster
@@ -256,15 +322,95 @@ Volcano.fun_logFC(DEGs_filt, "layers", y.axis="p-value",
   ylab("avg. Log2 fold change")
 ```
 
+```{r top-tables}
+top_aggregate.fun <- function(DEGs, n=40) {
+  top <- DEGs %>%
+    filter(p_val_adj <= 0.05) %>%
+    mutate("Sig. in" = paste0(.$layers[cur_group_rows()], collapse = "|"), .by="gene") %>%
+    {. ->> temp} %>%
+    slice_max(n=n, order_by = tibble(abs(avg_log2FC), p_val), by="Regulation") %>%
+    arrange(desc(avg_log2FC))
+  
+  # summary of regulation
+  sig_count_uniqe <- temp %>% 
+    dplyr::select(., gene, Regulation) %>% 
+    unique() %>% group_by(Regulation) %>% 
+    add_tally() %>%
+    mutate(layers = "uniq total")
+  
+  sig_count <- temp %>% 
+    dplyr::select(., gene, Regulation, layers) %>% 
+    unique() %>% 
+    group_by(layers, Regulation) %>% 
+    add_tally(., ) %>% 
+    bind_rows(sig_count_uniqe, .) %>%
+    dplyr::select(., -gene) %>% 
+    unique() %>% 
+    pivot_wider( names_from = Regulation, values_from = n)
+  
+  g <- set_names(top$gene, top$Regulation) %>% .[!duplicated(.)]
+
+  entz <- unlist(mget(org.Hs.egSYMBOL2EG, x=g, ifnotfound=NA))
+  gene_name <- AnnotationDbi::select(org.Hs.eg.db, keys=entz, 
+                                     columns=c("GENENAME"), keytype="ENTREZID") %>%
+    bind_cols(gene = names(entz), .) 
+  
+  top <- top %>%
+    filter(., gene %in% c(g[names(g)=="UP"][1:15], g[names(g)=="DOWN"][1:15])) %>%
+    #bind_cols(., dplyr::select(gene_name,gene,"Gene name"="GENENAME")) %>%
+    left_join(., dplyr::select(gene_name,gene,"Gene name"="GENENAME"), by="gene") %>%
+    filter(n()==1 | n()>1 & p_val==max(p_val), .by="gene") %>% # filter duplicate genes 
+    dplyr::select(gene, "Gene name", Cluster=layers, everything(), -c(1:2), 
+                  -any_of(c("pct.1", "pct.2","cluster","log.pct.diff","morf")))
+                  
+  return(list("top15"=top, "sig DEGs"=sig_count))
+}
+
+library(org.Hs.eg.db)
+top <- map_depth(DEGs_l,2, ~top_aggregate.fun(.x))
+
+suppressWarnings({detach("package:org.Hs.eg.db", unload = TRUE)
+                  detach("package:AnnotationDbi", unload = TRUE)})
+
+# count of significant genes 
+n <- c("Epithelial sig. genes", "Submucosal sig. genes", "E2 hig vs low sig. genes (epi)", "E2 hig vs low sig. genes (sub)")
+top %>% 
+  map_depth(., 2, ~pluck(.x, "sig DEGs")) %>% 
+  flatten() %>% set_names(., n) %>% 
+  imap(., ~add_row(.x, layers = c("", .y), .before = 1 )) %>% 
+  bind_rows() %>%
+  { . ->> tab_sig } %>%
+  knitr::kable()
+
+n <- c("Epithelium", "Submucosa", "E2_low_vs_high (epi)", "E2_low_vs_high (sub)", "Sum sig. DEGS", "DEGs condition", "DEGs E2 lvl")
+top %>% 
+  map_depth(., 2, ~pluck(.x, "top15")) %>% 
+  flatten() %>% 
+  append(., list(tab_sig, DEGs_table, DEGs_table_E2lvl)) %>% set_names(., n) %>%
+  write.xlsx(., keepNA=TRUE, na.string="", overwrite=TRUE,
+           file=paste0(result_dir, paste0("Supplemental Table 4.xlsx")))
+
+# table with top 15 up and down DEGs
+knitr::kable(top_epi$top15, caption = "Top 15 down and upregulated genes sorted by logFC")
+```
+
+
 ### Compare DEGs in spatial data with DEGs on bulk data 
 ```{r top_sig_genes}
 # Significant genes from the PlosPath study
-# Genes with FDR-adjustedP-values<0.05 were considered significant
+# Genes with FDR-adjusted P-values<0.05 were considered significant
 PP_sig <- DGEs_PP %>%
   filter(DE != 0) %>%
   {. ->> sig_PP } %>%
   group_by(DE) %>%
-  top_n(15, abs(logFC))
+  top_n(15, abs(logFC)) %>%
+  arrange(logFC) %>%
+  ungroup() %>%
+  mutate(symbol = factor(.$symbol, levels=unique(.$symbol)))
+
+# Zalenskya sig DEGs
+Zal_DEGs <- read_xlsx("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Bulk_data/Zalenskaya_DEGs.xlsx", 
+                         sheet = 'DMPA-vs-BL', col_names = TRUE, skip = 1 )
 
 # top 15 genes sorted by logFC for each epithelial layer
 sig_nest <- DEGs_table %>%
@@ -275,14 +421,567 @@ sig_nest <- DEGs_table %>%
   #top_n(15, abs(avg_log2FC)) %>% 
   #top_n(-30, p_val) %>% 
   nest() %>% mutate(n = map_dbl(data, nrow)) %>%
-  arrange(layers, Direction)
+  arrange(layers, Direction) %>%
+  ungroup()
 
 sig_nest_epi <- sig_nest %>% ungroup() %>% filter(grepl("_", .$layers))
 sig_genes_epi <- unnest(sig_nest_epi, c(layers, Direction, data))
+sig_genes <- unnest(sig_nest, c(layers, Direction, data))
 
-sig_nest
 #knitr::kable(sig_nest)
 ```
+
+```{r sample-batch-effect}
+# check for sample Batch effects
+DAT <- DATA %>%
+  mutate(gr = paste0(.$groups, "_", .$orig.ident))
+
+library(patchwork)
+violin_plot.fun <- function(obj, gene_list, split.by, group.by, txt_size = 9, ncol=6){
+  
+  
+  plots <- VlnPlot(obj, features = gene_list, adjust = 1/2, cols =  c("#CC6677", "#CC6677", "#CC6677","#CC6677", "#88CCEE","#88CCEE","#88CCEE","#88CCEE"),
+                   split.plot = FALSE, split.by = split.by, group.by = group.by, 
+                   pt.size = 0, combine = FALSE) 
+  plots <- map(plots, ~.x + #geom_point(alpha = .3, size=.1, show.legend = F,position = position_jitterdodge(jitter.width=.5)) +
+                 theme(axis.title.x = element_blank(),
+                       axis.text = element_text(size = txt_size),
+                       text = element_text(size = txt_size)))
+  p <- wrap_plots(plots, ncol = ncol) + plot_layout(guides = "collect")
+  h <- round(length(plots)/ncol)*2.5
+return(tibble(plot=list(p), height = list(h)))
+}
+
+t$genes %>% set_names(., t$layers) %>% .[c(3:8)] 
+##########################
+# VIOLIN PLOT PER SAMPLE #
+##########################
+sample_id <- c("P118", "P080", "P031", "P105", "P107", "P114", "P097", "P108")
+plots <- DATA %>%
+  mutate(orig.ident = factor(.$orig.ident, levels=sample_id)) %>%
+  violin_plot.fun(., unique(sig_table$gene), split.by=NULL, group.by="orig.ident")
+#pmap(plots, ~ggsave(paste0(result_dir,"top_DEGs_violin_top_rank",".jpeg"), plot=..1, width = 10, height = ..2))
+plots$plot
+
+# dev.new(width=14, height=5, noRStudioGD = TRUE)
+pmap(plots, ~ggsave(paste0(result_dir,"Sample_batch_effect",".pdf"), plot=..1, width = 14, height = ..2, limitsize = FALSE))
+######################
+# DOTPLOT PER SAMPLE #
+######################
+# dev.new(width=7, height=8.2, noRStudioGD = TRUE)
+sig <- sig_table %>% nest(data = -layers) %>% mutate(sig = pmap(., ~unique(..2$gene)))
+# get order of marker genes to seperate clusters
+top <- niceRplots::getcluster(DAT, top, "gr")
+
+dot_sig <- DATA %>%
+  mutate(., layers = factor(l[as.character(.$Clusters)], levels = ord1)) %>%
+  mutate(orig.ident = factor(.$orig.ident, levels=sample_id)) %>%
+  nest(data = -layers) %>%
+  arrange(layers) %>%
+  filter(!(layers == "10")) %>%
+  mutate(sig_genes = sig$sig) %>%
+  mutate(h = map_dbl(.$sig_genes, ~length(.x)*0.3+1)) %>%
+  mutate( dot_plot = pmap(., ~DotPlot(..2, features = ..3,
+      group.by = "orig.ident", assay = "RNA") + coord_flip() + labs(title = ..1) +
+      theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black")) )) 
+
+p <- wrap_plots(dot_sig$dot_plot, ncol = 1, heights = dot_sig$h)
+ggsave("./Figures/06/Sample_batch_effect_dotplot_.pdf", p, width = 7, height = sum(dot_sig$h ), limitsize = F)
+```
+
+```{r pseudo-bulk}
+library(edgeR)
+pseudo.bulk <- function(DATA, sample_id, groups){
+  # get the count matrix for all cells
+  sparse_mtrx <- DATA@assays$RNA@counts
+  
+  # Compute pseudobulk
+  mm <- Matrix::sparse.model.matrix(~0 + DATA$orig.ident)
+  pseudobulk <- sparse_mtrx %*% mm
+  colnames(pseudobulk) <- str_extract(colnames(pseudobulk), "P\\d\\d\\d")
+  pseudobulk <- pseudobulk[, sample_id]
+  
+  # define the groups
+  bulk.labels = groups
+  
+  dge.list <- DGEList(counts = pseudobulk, group = factor(bulk.labels))
+  keep <- filterByExpr(dge.list)
+  dge.list <- dge.list[keep, , keep.lib.sizes = FALSE]
+  
+  dge.list <- calcNormFactors(dge.list)
+  design = model.matrix(~bulk.labels)
+  
+  dge.list <- estimateDisp(dge.list, design)
+  
+  fit <- glmQLFit(dge.list, design)
+  qlf <- glmQLFTest(fit, coef = 2)
+  toptable <- topTags(qlf, n = Inf)[[1]] %>% as_tibble(., rownames = "symbol")
+  return(toptable) 
+  #return(list(toptable, design))
+}
+
+sample_id <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")
+groups <- c( "DMPA","DMPA","DMPA","DMPA","ctrl","ctrl","ctrl","ctrl")
+# sample_id <- c( "P108", "P097","P118", "P105", "P080", "P031")
+# groups <- c( "DMPA","DMPA","ctrl","ctrl","ctrl","ctrl")
+
+# remove specified genes:
+remove_genes <- function(x, gene_name) x[!(grepl(gene_name, rownames(x[["RNA"]]))), ]
+
+# pseudo bulk all spots no clusters
+pseudo_DEGs <- DATA %>%
+  pseudo.bulk(., sample_id, groups)
+  
+# pseudo bulk per cluster
+pseudo_DEGs <- DATA %>%
+  nest(data = -c(layers)) %>%
+  #filter(!(grepl("P114|P107", .$orig.ident))) %>%
+  filter(layers != "10") %>%
+  #remove_genes(., "^MT-|^IGHG|^IGHM$|^IGHD|^IGHA|^IGK|^IGL|JCHAIN") %>% # "^MT-|MALAT1|^HB[^(P)]"
+  mutate(test = pmap(., ~pseudo.bulk(..2, sample_id, groups))) %>%
+  select(-data) %>%
+  mutate(sig_pval = map_int(test, ~ nrow(filter(.x, PValue <= 0.001)))) %>%
+  mutate(sig_FDR = map_int(test, ~ nrow(filter(.x, FDR <= 0.05))))
+
+
+write.xlsx(set_names(pseudo_DEGs$test,pseudo_DEGs$layers), 
+           keepNA=TRUE, na.string="NA", overwrite=TRUE,
+           file=paste0(result_dir,"Pseudobulk_cluster_DEGs.xlsx"))
+```
+
+```{r}
+###########################
+# SPATIAL PSEUDOBULK DATA #
+###########################
+# get the count matrix for all cells
+  sparse_mtrx <- DATA@assays$RNA@counts
+# Compute pseudobulk
+  mm <- Matrix::sparse.model.matrix(~0 + DATA$orig.ident)
+  pseudobulk <- sparse_mtrx %*% mm
+  colnames(pseudobulk) <- str_extract(colnames(pseudobulk), "P\\d\\d\\d")
+  pseudobulk <- pseudobulk[, sample_id]
+  
+  # define the groups
+  bulk.labels = groups
+  
+  dge.list <- DGEList(counts = pseudobulk)
+  keep <- filterByExpr(dge.list)
+  #dge.list <- dge.list[keep, , keep.lib.sizes = FALSE]
+  
+  dge.list <- calcNormFactors(dge.list)
+  cpm <- cpm(dge.list, log=T) %>% as_tibble(., rownames = "symbol")
+
+#############
+# BULK DATA #
+#############
+trx_csv <- read_csv(paste0("/Users/vilkal/Raw_data/Bulk_Transcriptomics/Visit_3/Raw_counts_matrix_v3",".csv"))
+sample_id <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031") %>% set_names()
+
+bulk <- trx_csv %>% 
+  select(symbol, all_of(sample_id)) %>%
+  filter(rowSums(across(where(is.numeric)))!=0) %>%
+  filter(!(is.na(.$symbol))) #%>%
+  #filter(symbol %in% cpm$symbol)
+
+# check for duplicated symbols
+bulk %>% group_by(symbol) %>% summarize(n(), .groups='drop_last') %>% filter(`n()`>1)  %>% .$symbol
+
+bulk_norm <- DGEList(bulk[,2:9], genes = bulk$symbol) %>%
+  calcNormFactors(method = "TMM") %>%
+  cpm(log=T) %>%
+  as_tibble() %>%
+  bind_cols(symbol = bulk$symbol, .) 
+
+comp <- map(sample_id, ~full_join(select(cpm, symbol, ST_data=.x), select(bulk_norm, symbol, bulk_data=.x)) ) %>%
+  bind_rows(., .id = "sample") %>%
+  mutate(sample = factor(.$sample, levels = sample_id))
+
+library(ggpubr) 
+ggplot( comp, aes( y=ST_data, x=bulk_data ))+ 
+  geom_point(pch = 1)+ 
+  stat_cor(method = "pearson") + # , label.x = -0.5, label.y = 15
+  geom_smooth(method=lm) + 
+  #stat_regline_equation(color="blue", label.y = 13) +#geom_ +
+  facet_wrap("sample", ncol = 4, strip.position = "top", shrink = F) +
+  theme_light() + theme(text = element_text(size = 17)) 
+
+```
+
+
+```{r}
+Zal_DEGs <- read_xlsx("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Bulk_data/Zalenskaya_DEGs.xlsx", 
+                         sheet = 'DMPA-vs-BL', col_names = TRUE, skip = 1 )
+Zal_DEGs_ <- readRDS( "../data/Bulk_data/lmer_Zalenskaya.RDS")
+Zal_DEGs_ <- Zal_DEGs_ %>% select(symbol="Symbol", everything(), -data,-effect,-group,-std.error,-df,-statistic)
+
+DEGs_int_all <- intersect(intersect(Zal_DEGs$Symbol, DGEs_PP$symbol), DEGs_table_cond$gene)
+
+Zal_sig <- Zal_DEGs_ %>%
+  #mutate(logFC = log2(abs(`Fold-change`))) %>%
+  #mutate(logFC = ifelse(`Fold-change`<0, -(.$logFC), .$logFC)) %>%
+  filter(uniq_symbol %in% Zal_DEGs$symbol) %>%
+  mutate(logFC = estimate) %>%
+  mutate(layers = "Zalenskaya") %>%
+  mutate(sig = ifelse(.$p.adj < 0.05, "yes", "no")) %>%
+  select(symbol, logFC, layers, sig) %>%
+  {. ->> Zal_DEGs} %>%
+  mutate(Direction = ifelse(logFC > 0, "UP", "DOWN")) %>%
+  group_by(Direction) %>%
+  slice_max(n=15, abs(logFC), with_ties = F) 
+
+st_DEGs <- DEGs_table_cond %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  filter(., grepl("_", .$layers)) %>%
+  #filter(p_val < 0.001) %>%
+  # unnest(., data) %>%
+  arrange(avg_log2FC) %>%
+  rename(logFC="avg_log2FC") %>%
+  mutate(symbol = factor(.$gene, levels=unique(.$gene))) %>%
+  mutate(sig = ifelse(.$p_val_adj < 0.05, "yes", "no")) %>%
+  select(symbol, logFC, layers, sig) 
+
+PP_DEGs <- DGEs_PP %>%
+  mutate(layers = "PlosPath") %>%
+  select(symbol, logFC, layers) 
+
+DEGs_int <- intersect(intersect(Zal_sig$symbol, DGEs_PP$symbol), DEGs_table_cond$gene)
+
+top_st <- unique(sig_genes_epi$gene)
+top_Zal <- Zal_sig$symbol
+top_PP <- PP_sig$symbol
+top_E2 <- unique(DEGs_table_E2lvl$gene)[1:30]
+
+DEGs_int <- unique(c(top_Zal, top_PP, top_st))
+
+DEGs_top15 <- bind_rows(Zal_DEGs, st_DEGs, PP_DEGs, .id ="study" ) %>% 
+  filter(symbol %in% DEGs_int_all) %>%
+  mutate(Direction = ifelse(logFC > 0, "UP", "DOWN")) %>%
+  group_by(Direction, study) %>%
+  slice_max(n=15, abs(logFC), with_ties = F) %>%
+  group_by(study) %>%
+  nest()
+  # mutate(facet = ifelse(symbol %in% top_Zal, "ZAL", 
+  #                       ifelse(symbol %in% top_st, "ST", "PP"))) %>%
+  
+
+DEGs_all <- bind_rows(Zal_DEGs, st_DEGs, PP_DEGs, .id ="study" )
+  
+DEGs_df <- DEGs_top15$data %>% 
+  map(., ~filter(DEGs_all, symbol %in% .x$symbol)) %>%
+  #map2(., seq_along(.), ~mutate(.x, facet = paste0("facet_",.y))) %>%
+  bind_rows(., .id = "facet") %>%
+  arrange(logFC) %>%
+  ungroup() %>%
+  mutate(symbol = factor(.$symbol, levels=unique(.$symbol)))
+  
+DGEs_PP %>% filter(symbol %in% DEGs_int)
+DEGs_table_cond %>% filter(gene %in% DEGs_int)
+
+c(PP_sig$symbol, sig_genes_epi$gene, Zal)
+
+
+unique(c("OLFM4","GABRP PCDH8","CAPN14","DUSP4","SLC15A2","STS CYP4B1","RDH10","KRT19","KRT18","RPTN DSG1","TGM3","LEE3D WISP2","CD36","DMKN ALOX12B","KRT10","PGR","AADACL2","PRSS23","HAL","SERPINB7","LOR","SPINK6","CYP26B1","GY52","SPRR2C","VCAN","KRT14","SBSN","KRT1","KDTER"))
+  
+
+ggplot2::ggplot(data=DEGs_df, aes(x=symbol, y=logFC)) +
+  geom_point(aes(col=layers)) +
+  theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black")
+  )+ facet_wrap("facet", ncol = 3, strip.position = "left", scales = "free_x")
+
+ggplot2::ggplot(data=sig_nest_, aes(x=gene, y=avg_log2FC)) +
+  geom_point(aes(col=layers)) +
+  theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black")
+  )
+
+```
+
+```{r E2-lvl-differences}
+# get higest logFC values from top sig genes list
+filter_hig_pval.fun <- function(df, n){
+  top_u <- df %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  slice_max(n=n, order_by = tibble(abs(avg_log2FC), p_val), by="Direction", with_ties = F) %>%
+  filter(n()==1 | n()>1 & p_val==max(p_val), .by="gene") # filter duplicate genes
+
+  g <- set_names(top_u$gene, top_u$Direction) %>% .[!duplicated(.)]
+
+  DEGs <- top_u %>%  
+    filter(., gene %in% c(g[names(g)=="UP"][1:15], g[names(g)=="DOWN"][1:15]))
+return(DEGs)
+}
+
+DEGs_E2lvl <- filter_hig_pval.fun(DEGs_table_E2lvl, n=30)
+DEGs_E2high <- filter_hig_pval.fun(DEGs_table_cond_E2high, n=30)
+
+# top_df <- DEGs_E2high
+# genes <- DEGs_E2high$gene
+top_df <- DEGs_E2lvl
+genes <- DEGs_E2lvl$gene
+
+df <- DATA %>%
+  mutate(E2_lvl = ifelse(grepl("P114|P107", .$orig.ident), "high", 
+                         ifelse(grepl("P097|P108", .$orig.ident), "low", "ctrl"))) %>%
+  mutate(E2_lvl = ifelse(grepl("P031|P105", .$orig.ident), "ctrl_high", .$E2_lvl)) %>%
+  mutate(., FetchData(., vars = c(genes), slot = "counts")) %>%
+  filter(sp_annot == "epi") %>%
+  as_tibble() %>%
+  select(1:5, E2_lvl, layers, all_of(genes)) %>%
+  pivot_longer(cols = any_of(genes), names_to = "gene", values_to = "values") %>%
+  group_by( E2_lvl, gene) %>%
+  summarize(sum_counts = sum(values), .groups="drop") %>%
+  mutate("sum_counts(log10)" = log10(.$sum_counts)) %>%
+  left_join(., select(top_df, Direction, gene), by="gene") %>%
+  arrange(`sum_counts(log10)`) %>%
+  mutate(gene = factor(.$gene, levels=unique(.$gene)))
+
+col <- c("ctrl_high"="#FF7F00", "ctrl"="#FED9A6", "high"="#6A51A3", "low"="#9E9AC8" )
+
+ggplot2::ggplot(data=df, aes(x=gene, y=`sum_counts(log10)`)) +
+  geom_point(aes(col=E2_lvl)) +
+  scale_colour_manual(values = col) +
+  theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black")
+  ) + facet_wrap("Direction", ncol = 2, strip.position = "top", scales = "free_x", shrink = F)
+  
+```
+
+```{r}
+clusterCorPlot <- function(seurObj, cluster.id, gene.list, assay='RNA', slot='data') {
+  gene.dat <- getAssayData(
+      subset(seurObj, seurat_cluster == cluster.id), 
+       assay=assay, 
+       slot=slot)[gene.list,]
+  ggcorrplot(as.data.frame(t(gene.dat)))
+}
+clusterCorPlot()
+```
+
+
+```{r proteases}
+protase_path <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Protease_antiprotease.xlsx"
+sheets <- c("Proteases", "Cathepsin-L,L2,S,K", "Protease Inhibitors") %>% set_names()
+protase_df <- map(sheets, ~read_xlsx(protase_path, sheet = .x, col_names = TRUE, skip = 0 )) %>% 
+    map(., ~dplyr::select(.x, 1:2, gene="ABBREVIATED NAME", any_of(c(type2="CATALYTIC TYPE", type2="INHIBITS CATALYTIC TYPE")))) %>% 
+    map(., ~unique(.x)) %>%
+    bind_rows(., .id = "type") %>%
+    mutate(type2 = paste0(.$type2[cur_group_rows()], collapse = ", "), .by="gene") %>%
+    unique() %>%
+    mutate(type = ifelse(.$type == "Cathepsin-L,L2,S,K", "Proteases", .$type)) %>%
+    add_row(., type = c("Proteases","Proteases","Protease Inhibitors"), 
+              gene = c("CAPN14","PRSS23","SPINK6"),
+              type2 = c("Cysteine", "Serine", "Serine"), .before = 1)
+
+
+
+intersect(protase_df$gene, unique(DEGs_table_cond$gene))
+
+DEGs_protease <- DEGs_table %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  #filter(!(grepl("_", .$layers))) %>%
+  filter(gene %in% protase_df$gene) %>%
+  left_join(., select(protase_df, gene, type, type2), by="gene") %>%
+   order_df()
+
+write.xlsx(DEGs_protease, keepNA=TRUE, na.string="NA", overwrite=TRUE,
+           file=paste0(result_dir,"Protease_and_Inhibitors.xlsx"))
+
+top_df <- DEGs_protease
+genes <- DEGs_protease$gene
+
+df <- DATA %>%
+  mutate(E2_lvl = ifelse(grepl("P114|P107", .$orig.ident), "high", 
+                         ifelse(grepl("P097|P108", .$orig.ident), "low", "ctrl"))) %>%
+  mutate(E2_lvl = ifelse(grepl("P031|P105", .$orig.ident), "ctrl_high", .$E2_lvl)) %>%
+  mutate(., FetchData(., vars = c(genes), slot = "counts")) %>%
+  filter(grepl("_", .$layers)) %>%
+  as_tibble() %>%
+  select(groups, 1:5, E2_lvl, layers, all_of(genes)) %>%
+  pivot_longer(cols = any_of(genes), names_to = "gene", values_to = "values") %>%
+  
+  group_by( groups, layers, gene) %>%
+  summarize(sum_counts = sum(values), .groups="drop") %>%
+  mutate("sum_counts(log10)" = log10(.$sum_counts)) %>%
+  mutate("sum_counts(log10)" = ifelse(`sum_counts(log10)` == -Inf, 0, .$`sum_counts(log10)`)) %>%
+  mutate(low =  layers[sum_counts == min(sum_counts)][1], .by="gene") %>%
+  # group_by(gene, groups) %>%
+  # nest()
+  mutate(low_n =  min(`sum_counts(log10)`), .by=c("gene")) %>%
+  #left_join(., select(top_df, Direction, gene, type), by="gene") %>%
+  left_join(., select(protase_df, gene, type), by="gene") %>%
+  
+  mutate(gene =  fct_reorder2(gene, low, low_n)) %>%
+  #arrange(`sum_counts(log10)`) %>%
+  arrange(low, low_n) %>%
+  mutate(gene = factor(.$gene, levels=unique(.$gene)))
+
+# plot of proteases vs inhibitors that have a differential expression between groups pval < 0.001
+col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
+# dev.new(width=10, height=4, noRStudioGD = TRUE)
+ggplot2::ggplot(data=df, aes(x=gene, y=`sum_counts(log10)`)) +
+  geom_point(aes(col=layers, shape=groups)) +
+  scale_colour_manual(values = col) + theme_minimal() +
+  theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black")
+  ) + facet_wrap("type", ncol = 3, strip.position = "top", scales = "free_x", shrink = F)
+
+```
+
+
+```{r Protase-and_inhibitors}
+DEGs_protease <- DEGs_table %>%
+  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
+  #filter(!(grepl("_", .$layers))) %>%
+  filter(gene %in% protase_df$gene) %>%
+  left_join(., select(protase_df, gene, type, type2), by="gene")
+
+DEGs_protease <- set_names(c("Serine", "Metallo", "Cysteine")) %>%
+  map(., ~filter(DEGs_protease, grepl(.x, DEGs_protease$type2)) ) 
+
+p <- DEGs_protease %>%
+  bind_rows() %>%
+  filter(p_val_adj <= 0.05)
+
+genes <- unique(DEGs_protease$gene)
+intersect(rownames(DATA), genes)
+
+getdf.fun <- function(DATA, genes, filt="_"){
+  rects <- DATA %>%
+    filter(grepl(filt, .$layers)) %>%
+    group_by(layers) %>%
+    summarise(., ystart=min(spatial_dist, na.rm=T), yend=max(spatial_dist, na.rm=T),
+              Q1=quantile(spatial_dist, probs = 0.009, na.rm=T),
+              Q3=quantile(spatial_dist, probs = 0.90, na.rm=T)) %>%
+    filter(!(is.infinite(.$ystart))) %>%
+    mutate(Q1 = ifelse(.$Q1 == min(.$Q1), 0,.$Q1)) %>%
+    mutate(Q3 = ifelse(.$Q3 == max(.$Q3), max(.$yend),.$Q3)) %>%
+    mutate(Q3 = ifelse(.$layers == "Basal_2", .$Q3+.3,.$Q3)) %>%
+    arrange(ystart) %>% ungroup()
+  
+  df <- DATA %>%
+  mutate(E2_lvl = ifelse(grepl("P114|P107", .$orig.ident), "high", 
+                         ifelse(grepl("P097|P108", .$orig.ident), "low", "ctrl"))) %>%
+  mutate(E2_lvl = ifelse(grepl("P031|P105", .$orig.ident), "ctrl_high", .$E2_lvl)) %>%
+  filter(grepl(filt, .$layers)) %>%
+  mutate(., FetchData(., vars = c(genes), slot = "data")) %>%
+  as_tibble() %>%
+  dplyr::select(groups, 1:5, spatial_dist, E2_lvl, layers, all_of(genes)) %>%
+  pivot_longer(cols = any_of(genes), names_to = "gene", values_to = "values") %>%
+  left_join(., select(protase_df, gene, type), by="gene") 
+  return(list("df"=df, "rects"=rects))
+}
+lists <- map(DEGs_protease, ~getdf.fun(DATA, unique(.x$gene), filt=".+")) 
+
+df <- lists %>% map(., ~pluck(.x, "df"), .y) %>% bind_rows(., .id = "name")
+rects <- lists[1]$Serine$rects
+
+ym <- max(df$values) 
+xm <- max(rects$yend) 
+
+# Protease and Protease inhibitors faceted by type of protease ("Serine", "Metallo", "Cysteine")
+col <- c( "#FCBE93", "#0080A4", "#5D9289","#ACDDC0", "#5EC3B5")
+clus_col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3")
+library(ggnewscale)
+ggplot2::ggplot() +
+  # Cluster bar annnotation
+  geom_rect(aes(xmin = Q1, xmax = Q3,
+                ymin=-.6, ymax=-.4,
+                fill = layers),data=rects,alpha = 1,show.legend=F) +  
+  scale_fill_manual(values = clus_col) + #scale_x_reverse() +
+  
+  new_scale_fill() +
+  geom_point(data=df, aes(x=spatial_dist, y=values, col=type, shape=groups), alpha=.4) +
+  scale_colour_manual(values = col) + 
+  theme_minimal() + theme(text = element_text(size = 17)) +
+  geom_smooth(data = filter(df, values != 0), n=1000, aes(x=spatial_dist, y=values, col=type)) + 
+  coord_flip(clip="off", ylim=c(-.6, ym), xlim=c(xm,0), expand = F ) + 
+  facet_wrap("name", ncol = 3, strip.position = "top", shrink = F) 
+
+
+# Protease and Protease inhibitors smooth by groups (DMPA, ctrl)
+df <- df %>% mutate(smooth = paste0( .$groups, " ", .$type))
+col <- c( "#B9E0EF", "#B9E0EF","#E8838F","#E8838F",  "#5D9289","#ACDDC0", "#5EC3B5", "#A5D7EB", "#1F6A87")
+
+ggplot2::ggplot() +
+  # Cluster bar annnotation
+  geom_rect(aes(xmin = Q1, xmax = Q3,
+                ymin=-.6, ymax=-.4,
+                fill = layers),data=rects,alpha = 1,show.legend=F) +  
+  scale_fill_manual(values = clus_col) + #scale_x_reverse() +
+  
+  new_scale_fill() +
+  geom_point(data=df, aes(x=spatial_dist, y=values, col=type, shape=groups), alpha=.4) +
+  scale_colour_manual(values = col) + 
+  theme_minimal() + theme(text = element_text(size = 17)) +
+  geom_smooth(data = filter(df, values != 0 ), aes(x=spatial_dist, y=values, col=smooth)) + 
+  coord_flip(clip="off", ylim=c(-.6, ym), xlim=c(xm,0), expand = F ) + 
+  facet_wrap("name", ncol = 3, strip.position = "top", shrink = T, scales = "free_x") 
+
+ggplot2::ggplot(data=df, aes(x=spatial_dist, y=values)) +
+  geom_point(aes(col=type, shape=groups), alpha=.4) +
+  scale_colour_manual(values = col) +
+  theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black")
+  ) + geom_smooth(data = filter(df, values != 0 ), aes(col=smooth)) + theme_minimal() +
+  facet_wrap("name", ncol = 3, strip.position = "top", shrink = F)
+
+
+```
+
+```{r}
+# check number of protease/inhibitors present in Zalenskaya
+proteases <- c(protase_df$gene, "CAPN14", "PRSS23", "SPINK6")
+Z_p <- Zal_DEGs %>% filter(symbol %in% protase_df$gene) %>% 
+  mutate(logFC = log2(abs(`Fold-change`))) %>%
+  mutate(logFC = ifelse(`Fold-change` < 0, -.$logFC, .$logFC)) %>%
+  select(symbol, FDR="p-value", logFC) %>%
+  left_join(., select(protase_df, gene, type, type2), by=c("symbol"="gene")) %>%
+  mutate(study = "Zalenskaya")
+
+B_p <- DGEs_PP %>% filter(symbol %in% protase_df$gene) %>% 
+  filter(FDR <= 0.05) %>%
+  select(symbol, FDR, logFC) %>%
+  left_join(., select(protase_df, gene, type, type2), by=c("symbol"="gene")) %>%
+  mutate(study = "Bradley")
+
+S_p <- DEGs_table %>% filter(gene %in% protase_df$gene) %>% 
+  filter(p_val_adj <= 0.05) %>%
+  select(symbol="gene", FDR="p_val_adj", logFC="avg_log2FC", layers) %>%
+  left_join(., select(protase_df, gene, type, type2), by=c("symbol"="gene")) %>%
+  mutate(study = "Spatial")
+
+protease_study <- bind_rows(Z_p, B_p, S_p)
+intersect(Z_p$symbol, intersect(Z_p$symbol, B_p$symbol))
+
+DATA <- readRDS(paste0("../results/08_spatial_dist/","seuratObj_spatial_dist_SM.RDS"))
+list <- getdf.fun(DATA, unique(S_p$symbol), filt=".+") 
+
+df <- list$df # %>% split(., ~type)
+rects <- list$rects %>% filter(layers != "10")
+
+ym <- max(df$values) 
+xm <- max(rects$yend) 
+
+# Protease and Protease inhibitors faceted by type of protease ("Serine", "Metallo", "Cysteine")
+col <- c( "#FCBE93", "#0080A4", "#5D9289","#ACDDC0", "#5EC3B5")
+col <- c( "#e0e067","#7CAE00","#CD9600","#00A9FF","#377EB8","#984EA3","#E41A1C","#C77CFF","#00BFC4","#FF7F00","#FFFF33", "#FCBE93", "#0080A4")
+clus_col <- c("#E41A1C","#FF7F00","#C77CFF","#984EA3","#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#00BFC4","#FFFF33")
+gen_col <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7","#FCBE93", "#BAB0AC") 
+library(ggnewscale)
+df <- df %>% mutate(smooth = paste0( .$groups, " ", .$type))
+ggplot2::ggplot() +
+  # Cluster bar annnotation
+  geom_rect(aes(xmin = Q1, xmax = Q3,
+                ymin=-.6, ymax=-.4,
+                fill = layers),data=rects,alpha = 1,show.legend=F) +
+  scale_fill_manual(values = set_names(clus_col, ord1)) + #scale_x_reverse() +
+  
+  new_scale_fill() +
+  geom_point(data=df, aes(x=spatial_dist, y=values, col=gene, shape=groups), alpha=.4) +
+  scale_colour_manual(values = gen_col) + 
+  theme_minimal() + theme(text = element_text(size = 17)) +
+  #new_scale_fill() +
+  geom_smooth(data = filter(df, values != 0), n=1000, aes(x=spatial_dist, y=values, col=gene)) + 
+  coord_flip(clip="off", ylim=c(-.6, ym), xlim=c(xm,0), expand = F ) + 
+  facet_wrap("type", ncol = 3, strip.position = "top", shrink = F) 
+```
+
 
 ```{r violplot_sig_DEGs, fig.height=7, eval=FALSE, include=FALSE}
 #########################
@@ -319,50 +1018,8 @@ s2 <- sig_table %>%
   (s2[[1]] | s2[[2]])
 ```
 
-### Check overlapping genes
-```{r, 06c_Overlapping_genes_venn}
-######################
-# CHECK GENE OVERLAP #
-######################
-intersect(PP_sig$symbol, sig_genes_epi$gene)
-intersect(sig_PP$symbol, sig_genes_epi$gene)
-
-# common DGEs between bulk and individual spatial clusters
-t <- sig_table %>% 
-  # filter(grepl("_", .$layers)) %>%
-  group_by(layers) %>%
-  nest() %>%
-  ungroup() %>%
-  mutate(layers = ifelse(grepl("_", .$layers), as.character(.$layers), paste0("Clus_",.$layers))) %>%
-  mutate(genes = map( data, ~pluck(.x, "gene"))) %>% 
-  mutate(genes = setNames(.[["genes"]], .$layers)) %>%
-  arrange(layers) %>%
-  mutate(direction = map( data, ~pluck(.x, "Direction"))) %>%
-  mutate(direction = setNames(.[["direction"]], .$layers)) 
-
-# all significant (FDR <0.05) genes overlap for each epi layer 
-overlap <- map(t$genes, ~intersect(sig_PP$symbol, .x) )
-
-#######################
-# PLOTS VENN DIAGRAM #
-######################
-# "./Figures/06/"
-library(nVennR)
-d <- plotVenn(t$genes[c(3:8)], 
-         sNames = names(t$genes[c(3:8)]),
-         outFile=paste0(params$fig.path, "Venn_SubMuc_sig.svg")
-         )
-
-d <- plotVenn(t$genes[-c(3:8)], 
-         sNames = names(t$genes[-c(3:8)]),
-         outFile=paste0(params$fig.path, "Venn_epi_sig.svg")
-         )
-
-# showSVG(d)
-knitr::include_graphics(paste0(params$fig.path, "Venn_epi_sig.svg"))
-```
-
-```{r display-intersecting-genes}
+### Check overlapping genes (clusters)
+```{r display-intersecting-genes-between-clusters}
 # gives a different results than than getVennOverlap!?
 
 #####################################
@@ -436,6 +1093,353 @@ ggplot(data, aes(x = variable, stratum = value, alluvium = gene, fill = value)) 
 
 ```
 
+### Check overlapping genes (bulk data)
+```{r, 06c_Overlapping_genes_with_bulk}
+######################
+# CHECK GENE OVERLAP #
+######################
+E2 <- DEGs_table_E2lvl %>% filter(p_val_adj < 0.05) # %>% filter(!(grepl(epi_clus, .$subgroup)))
+Z <- intersect(Zal_DEGs$symbol, sig_genes$gene)
+B <- intersect(sig_PP$symbol, sig_genes$gene)
+intersect(Z, B)
+intersect(E2$gene, sig_genes$gene)
+intersect(Zal_DEGs$symbol, E2$gene)
+intersect(sig_PP$symbol, E2$gene)
+setdiff(sig_genes$gene, E2$gene)
+setdiff(E2$gene, sig_genes$gene)
+intersect(sig_genes$gene, E2$gene)
+intersect(E2$gene, sig_PP$symbol)
+
+# Estrogen idenpendent genes
+non_E2 <- setdiff(sig_genes$gene, E2$gene)
+
+# Estrogen dependent genes
+E2_dep <- setdiff(E2$gene, sig_genes$gene)
+
+g <- intersect(E2_dep, Zal_DEGs$symbol)
+intersect(E2_dep, sig_PP$symbol)
+
+
+#####################################
+# TABLES WITH DEGs FROM ALL STUDIES #
+#####################################
+t <- list(Brad=sig_PP$symbol, Zal=Zal_DEGs$symbol, ST=sig_genes$gene, E2=E2$gene) %>%
+  tibble(sig_DEGs=., study=names(.))
+
+# Create table with DEGs from all clinical DMPA studies
+# NB! Zalenskaya use fold change not -logFC
+All_DEGs <- list(ST=sig_genes, Zal=Zal_DEGs, Brad=sig_PP, E2=E2) %>%
+  map(., ~dplyr::select(.x, symbol=matches("symbol|gene"),
+                            FDR=matches("p_val_adj|value"),
+                            logFC=matches("FC|Fold"), cluster=matches("subgroup") )) %>%
+  bind_rows(., .id = "study") %>%
+  mutate(logFC = ifelse(.$study == "Zal"& .$logFC < 0, -log2(abs(.$logFC)),
+                      ifelse(.$study == "Zal"& .$logFC > 0, log2(.$logFC), .$logFC)) )
+
+#### GENES THAT ARE UNIQELY OVERLAPING ####
+getVennOverlap <- function(lsvenn) {
+  
+  ItemsList <- gplots::venn(lsvenn, show.plot = FALSE)
+  print(lengths(attributes(ItemsList)$intersections))
+  return(attributes(ItemsList)$intersections)
+}
+int_genes <- t$sig_DEGs[2:4] %>%
+  getVennOverlap() %>% 
+  tibble(name = names(.), Uniqe_int = .) %>%
+  mutate(n = map_dbl(.$Uniqe_int, ~length(.x)), .after="name")
+
+# not used, but gives a list of DEGs with names corresponding to uniqe intersections
+list_all <- unnest(int_genes, cols = c(Uniqe_int)) 
+l <- setNames(list_all$Uniqe_int, list_all$name) 
+# which(l == "KRT10")
+
+#### ALL OVERLAPING GENES FOR EVERY COMBINATION ####
+# Get all combinations of layers
+study_combinations <- map(c(2, 3, 4), ~combn(t$study, .x, simplify = FALSE)) %>% 
+  flatten() %>% 
+  set_names(., map(., ~paste(., collapse = ":")))
+
+# Find intersections for each combination
+intersections <- function(df, comb) {
+  genes_comb <- df$sig_DEGs[df$study %in% comb]
+  Reduce(intersect, genes_comb)
+}
+int <- map(study_combinations, ~intersections(t, .x))
+
+# Combine combinations and intersections into a data frame
+intersections_df <- tibble(name = names(int), all_intersections = int) %>%
+  mutate(n = map_dbl(.$all_intersections, ~length(.x)), .after="name")
+
+
+#### SAVE TABLES ####
+list(All_DEGs=All_DEGs, uniq_intersects=int_genes, all_intersects=intersections_df) %>%
+  write.xlsx(.,  keepNA=TRUE, na.string="", overwrite = T, file=paste0(result_dir,"Clinical_DMPA_Study_DEGs.xlsx"))
+
+# sheets <- c("All_DEGs", "uniq_intersects", "all_intersects")
+# map(sheets, ~read_xlsx(paste0(result_dir,"Clinical_DMPA_Study_DEGs.xlsx"), sheet = .x, col_names = TRUE, skip = 0 )) 
+
+#######################
+# PLOTS VENN DIAGRAM #
+######################
+venn_input.fun <- function(sig_table, gr_col){
+  t <- sig_table %>% 
+  # filter(grepl("_", .$layers)) %>%
+  group_by({{gr_col}}) %>%
+  nest() %>%
+  ungroup() %>%
+  mutate(layers = ifelse(grepl("_", .$layers), as.character(.$layers), paste0("Clus_",.$layers))) %>%
+  mutate(genes = map( data, ~pluck(.x, "gene"))) %>% 
+  mutate(genes = setNames(.[["genes"]], {{gr_col}})) %>%
+  arrange({{gr_col}}) %>%
+  mutate(direction = map( data, ~pluck(.x, "Direction"))) %>%
+  mutate(direction = setNames(.[["direction"]], {{gr_col}})) 
+  return(t)}
+
+t <- venn_input.fun(sig_table, layers) # cluster overlaps
+
+# all significant (FDR <0.05) genes overlap for each epi layer 
+# common DGEs between bulk and individual spatial clusters
+overlap <- map(t$genes, ~intersect(sig_PP$symbol, .x) )
+
+
+# "./Figures/06/"
+library(nVennR)
+d <- plotVenn(t$genes[c(3:8)], 
+         sNames = names(t$genes[c(3:8)]),
+         outFile=paste0(params$fig.path, "Venn_SubMuc_sig.svg")
+         )
+
+d <- plotVenn(t$genes[-c(3:8)], 
+         sNames = names(t$genes[-c(3:8)]),
+         outFile=paste0(params$fig.path, "Venn_epi_sig.svg")
+         )
+
+# showSVG(d)
+knitr::include_graphics(paste0(params$fig.path, "Venn_epi_sig.svg"))
+```
+
+```{r E2-lvl-gene-heatmap}
+library(ComplexHeatmap)
+library(circlize)
+E2_lvl_ord <- c("P118", "P080", "P031", "P105", "P107", "P114","P097", "P108")
+
+################
+# SELECT GENES #
+################
+int_genes <- t$sig_DEGs[2:4] %>%
+  getVennOverlap() %>% 
+  tibble(name = names(.), Uniqe_int = .) %>%
+  mutate(n = map_dbl(.$Uniqe_int, ~length(.x)), .after="name")
+
+E2_split <- DEGs_table_E2lvl %>% 
+  filter(p_val_adj < 0.05) %>% 
+  mutate(morf = ifelse(grepl(epi_clus, .$subgroup), "epi", "submuc")) %>%
+  split(., ~morf) 
+
+# Epi
+g_Z <- intersect(E2_split$epi$gene, Zal_DEGs$symbol)
+g_B <- intersect(E2_split$epi$gene, sig_PP$symbol)
+g <- intersect(g_Z, c(int_genes$Uniqe_int[[5]], int_genes$Uniqe_int[[7]]))
+# SubMuc
+g_Z <- intersect(E2_split$submuc$gene, Zal_DEGs$symbol)
+g_B <- intersect(E2_split$submuc$gene, sig_PP$symbol)
+g <- intersect(g_Z, c(int_genes$Uniqe_int[[5]], int_genes$Uniqe_int[[7]]))
+
+cat(paste(g))
+genes <-c("PDZK1IP1","CXCL14", "MAOA", "H19")  g
+morf <- "epi"
+morf <- "subMuc"
+  
+E2_lvl_ord <- c("P114", "P107", "P108", "P097", "P118", "P080", "P105","P031")
+# lvl_layers <- c("Sup_1","Sup_2","Basal_2","Basal_1","8","3","0","4","1","2" ,"10")
+lvl_layers <- c("Superficial","Upper IM","Lower IM","Basal","8","3","0","4","1","2","10")
+
+###############
+# GET MATRIX #
+###############
+meta_df <- DATA %>% as_tibble() %>% dplyr::select(1:4, layers) 
+# expression ctrl vs DMPA
+tbl <- DATA %>% 
+  FetchData(vars = genes ) %>% 
+  cbind(., "id"=meta_df$orig.ident,"groups"=meta_df$groups, "layers"=meta_df$layers) %>%
+  mutate(id=factor(.$id, levels=E2_lvl_ord)) %>%
+  {if(morf=="epi") filter(., !(grepl("\\d+", .$layers))) else .} %>%
+  {if(morf=="subMuc") filter(., grepl("8|3|^0", .$layers)) else .} %>% # select epithelium only |8|4|^0
+  #filter(., grepl("8|3|^0", .$layers)) %>% 
+  as_tibble(., rownames = "cell_id") 
+
+# select column grouping
+matx <- tbl %>%
+  # group_by(groups, layers) %>% # summed by group + layer
+  mutate(id = factor(.$id, levels = E2_lvl_ord)) %>%
+  group_by(id, groups, layers) %>% # summed by id + group +layer
+  summarise(across(-cell_id, ~sum(.)), .groups = "keep") %>%
+  mutate(gr = pmap_chr(cur_group(), paste, sep = "_"), .before = "id") %>%
+  #mutate(groups = paste0(.$groups,"_", .$layers)) %>%
+  arrange(id) %>%
+  arrange(groups) %>%
+  arrange(layers) %>%
+  ungroup() %>%
+  {. ->> meta_df} %>%
+  dplyr::select(gr, any_of(genes)) %>%
+  column_to_rownames(var = "gr") %>%
+  as.matrix() %>% scale() %>% t()
+
+##############
+# ANNOTATION #
+##############
+annot_row <- E2 %>%
+  select(gene, layers) %>%
+  #filter(layers %in% tbl$layers) %>%
+  mutate(row = .$gene, rown= 1) %>%
+  #mutate(Z = ifelse(.$genes %in% g_Z, "Z", NA)) %>%
+  mutate(B = ifelse(.$gene %in% sig_PP$symbol, "B", NA)) %>%
+  mutate(ST = ifelse(.$gene %in% sig_genes$gene, "ST", NA)) %>%
+  pivot_wider(., names_from = "layers", values_from = "rown", values_fill = NA) %>%
+  column_to_rownames(var = "row") %>%
+  .[genes, ] # arranges the rows in same order as matx
+
+left_anno_row <- rowAnnotation(df = annot_row %>% select(all_of(sort(unique(tbl$layers)))),
+  simple_anno_size = unit(.1, "cm"),
+  #"Superficial" = annot_row$Superficial, "Upper IM" = annot_row$`Upper IM`, "Lower IM" = annot_row$`Lower IM`,"Basal" = annot_row$`Basal`,
+  #"8" = annot_row$`8`, "3" = annot_row$`3`, "0" = annot_row$`0`,
+  na_col = "white",
+  show_legend = FALSE, show_annotation_name = FALSE,
+  col = list("Superficial" = c("1"="#E41A1C"),"Upper IM" = c("1"="#FF7F00"),"Lower IM" = c("1"="#C77CFF"),"Basal" = c("1"="#984EA3"),
+            "8" = c("1"="#00BFC4"),"3" = c("1"="#00A9FF"),"0" = c("1"="#CD9600")) )
+
+right_anno_row <- rowAnnotation(
+  simple_anno_size = unit(.25, "cm"),
+  "B" = annot_row$B,
+  "ST" = annot_row$ST,
+  na_col = "white",
+  show_legend = FALSE,
+  col = list("ST" = c("ST"="#FFDACC"), "B" = c("B"="#99CEC6")) )
+
+annot_col <- meta_df %>%
+  dplyr::select(1:4) %>%
+  filter(layers %in% tbl$layers) %>%
+  mutate(gr = paste0(.$layers, "_",.$groups)) %>%
+  mutate(E2_lvl = ifelse(grepl("P114|P107", .$id), "high", 
+                         ifelse(grepl("P097|P108", .$id), "low", "ctrl"))) %>%
+  mutate(E2_lvl = ifelse(grepl("P031|P105", .$id), "ctrl_high", .$E2_lvl))
+
+column_labels = structure(str_extract(colnames(matx), "P\\d\\d\\d"), names = colnames(matx))
+
+################
+# DRAW HEATMAP #
+################
+col = c("#364B9A", "#4A7BB7", "#6EA6CD", "#98CAE1", "#C2E4EF", "white", "#FEDA8B", "#FDB366", "#F67E4B", "#DD3D2D", "#A50026")
+col_E2 <- c("ctrl_high"="#FF7F00", "ctrl"="#FED9A6", "high"="#6A51A3", "low"="#9E9AC8" )
+quantile(matx, c(0.1, 0.95))
+# average expression:
+set.seed(123)
+(H <- Heatmap(matx, name = " ",
+             row_split = 5,  # hierarchical static
+             #row_km = 6, #column_km = 2, # kmeans change every time you run it
+             column_labels = column_labels,
+             column_split =  as.character(annot_col$layers), #factor(as.character(annot_col$layers), levels = lvl_layers[5:7]), # factor(annot_col$gr),
+             col = circlize::colorRamp2(c(min(matx), 0, 4), c("#440154FF", "#21908CFF", "#FDE725FF")), # c("#d8b365","#f5f5f5","#5ab4ac")
+             right_annotation = right_anno_row, left_annotation = left_anno_row,
+             top_annotation = 
+               columnAnnotation(E2=annot_col$E2_lvl, 
+                                col=list( E2= set_names(c("#6A51A3","#9E9AC8","#FED9A6","#FF7F00"), unique(annot_col$E2_lvl)) ) ),
+             cluster_columns = F
+             ) )#colorRampPalette(c(col))(10) 
+
+
+# set.seed(1) Tassos seed
+HM <- draw(H, annotation_legend_side = "right")
+######################
+# CLUSTERING RESULTS #
+######################
+# get clusters from HM object
+get_clustering.fun <- function(annot_df, HM, row = T){
+  if(row==TRUE){
+    l <- HM@ht_list[[1]]@row_order_list
+    lab <- HM@ht_list[[1]]@row_names_param[["labels"]]
+  }else{l <- HM@ht_list[[1]]@column_order_list
+        lab <- HM@ht_list[[1]]@column_names_param[["labels"]]}
+  #l <- purrr::set_names(unlist(l), unlist(imap(l, ~rep(.y, length(.x)))))
+  l <- purrr::set_names(lab, unlist(imap(l, ~rep(.y, length(.x)))))
+  clus <- map_chr(rownames(annot_df), ~names(l)[which(l == as.character(.x))])
+  return(clus)
+}
+
+annot_col <- mutate(annot_col, k_clus = get_clustering.fun(annot_col, HM, row=F)) 
+annot_row <- mutate(annot_row, k_clus = get_clustering.fun(annot_row, HM, row=T))
+
+################
+# SAVE RESULTS #
+################
+dev.new(width=8.5, height=8, noRStudioGD = TRUE,  res = 300)
+png(file=paste0("./Figures/07/", "E2lvl_heatmap_Sub_Zal.png"), 
+    units = "in", res = 300,
+    #width = 8.5, height = 10 # Epi
+    width = 8.5, height = 8 # Sub
+)
+HM	
+dev.off()
+
+```
+
+```{r Venn-E2}
+#######################
+# PLOTS VENN DIAGRAM #
+######################
+# "./Figures/06/"
+library(nVennR)
+t <- list(Brad=sig_PP$symbol, Zal=Zal_DEGs$symbol, ST=sig_genes$gene, E2=E2$gene) %>%
+  tibble(sig_DEGs=., study=names(.))
+
+getVennOverlap <- function(lsvenn) {
+  
+  ItemsList <- gplots::venn(lsvenn, show.plot = FALSE)
+  print(lengths(attributes(ItemsList)$intersections))
+  return(attributes(ItemsList)$intersections)
+}
+int_genes <- t$sig_DEGs %>%
+  getVennOverlap() %>% 
+  tibble(name = names(.), Uniqe_int = .) %>%
+  mutate(n = map_dbl(.$Uniqe_int, ~length(.x)))
+
+# all four comparisons
+d <- plotVenn(t$sig_DEGs, 
+              labelRegions=FALSE,
+              sNames = names(t$sig_DEGs), systemShow=T) %>%
+  showSVG(., 
+         setColors = c('#ca0020','#f4a582',"#018571",'#0571b0'),
+         labelRegions=FALSE,
+         showNumbers=FALSE,
+         fontScale = 1,
+         systemShow=T
+         #outFile=paste0("./Figures/06/", "Venn_E2.svg")
+         )
+
+# showSVG(d, labelRegions = T)
+knitr::include_graphics(paste0("./Figures/06/", "Venn_E2.svg"))
+
+# Zalenskaya, ST and E2
+d <- plotVenn(t$sig_DEGs[2:4], 
+              labelRegions=FALSE,
+              sNames = names(t$sig_DEGs), systemShow=T) %>%
+  showSVG(., 
+         setColors = c('#ca0020','#f4a582','#0571b0'),
+         labelRegions=FALSE,
+         showNumbers=FALSE,
+         fontScale = 2,
+         systemShow=T
+         #outFile=paste0("./Figures/06/", "Venn_E2.svg")
+         )
+```
+
+```{r}
+KEGG_database[["KEGG_RETINOL_METABOLISM"]]
+
+i <- intersect(All_DEGs$symbol, KEGG_database[["KEGG_RETINOL_METABOLISM"]])
+print(intersect(All_DEGs$symbol, KEGG_database[["KEGG_RETINOL_METABOLISM"]]))
+a <- filter(All_DEGs, symbol %in% i)
+```
 
 ```{r 06d_sig_adj_genes_upsetplot}
 ##############
@@ -604,7 +1608,7 @@ violin_split.fun <- function(obj, gene_list, split.by, group.by, txt_size = 9, n
   plots <- VlnPlot(obj, features = gene_list, adjust = 1/2, cols =  gr_col,
                    split.plot = TRUE, split.by = split.by, group.by = group.by, 
                    pt.size = 0, combine = FALSE) 
-  plots <- map(plots, ~.x + geom_point(alpha = .3, size=.1, show.legend = F,
+  plots <- map(plots, ~.x + geom_point(alpha = .3, size=.1, show.<- = F,
                                        position = position_jitterdodge(jitter.width=.5)) +
                  theme(axis.title.x = element_blank(),
                        axis.text = element_text(size = txt_size),
