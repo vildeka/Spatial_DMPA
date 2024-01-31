@@ -94,7 +94,7 @@ h5_files <- list.dirs(path = input_dir,
             grep("P\\d\\d\\d$", ., value = TRUE) %>%
             set_names(., str_extract(., "P\\d\\d\\d$"))
 
-#sample_names <- names(h5_files)
+# h5_files <- h5_files[names(h5_files) %in% sample_id]
 image <- map(h5_files, 
              ~Read10X_Image(
                filter.matrix = T,
@@ -111,9 +111,7 @@ seuratObj_list <- pmap(list(h5_files, image, names(h5_files)),
                          image =  ..2,
                          slice = ..3)) 
 
-sample_id <- c("P031", "P080", "P097", "P105", "P107", "P108", "P114", 
-"P118") %>% set_names()
-
+sample_id <- c("P031", "P080", "P097", "P105", "P107", "P108", "P114", "P118") %>% set_names()
 ```
 
 ### Tidy up the seurat object
