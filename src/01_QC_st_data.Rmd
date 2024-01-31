@@ -78,7 +78,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 #metadata <- read_csv("../data/Clinincal_data_Spatial_DMPA.csv")
 DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
-#sample_names <- unique(DATA$orig.ident)
+sample_id <- c("P118","P080", "P031","P105", "P107","P114" ,"P097","P108" ) %>% set_names()
 
 #################
 # COLOUR PALLET #
@@ -219,6 +219,7 @@ DATA <- DATA %>%
                           percent_mito > 15 ~ 'filt',
                           percent_hb > 10 ~ 'filt',
                               TRUE ~ "keep")) %>%
+  mutate(orig.ident = factor(.$orig.ident, levels = sample_id)) %>%
   {. ->> temp } %>%
   #filter(., percentile(., .$nFeature_RNA)) %>%
   filter(filt == "keep") %>%
