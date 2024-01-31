@@ -76,7 +76,7 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_integrated.RDS"))
 # COLOUR PALLET #
 #################
 clus_1.5 <- c("#F8766D", "#7CAE00", "#CD9600", "#00A9FF", "#984EA3","#C77CFF", "#00BFC4", "#FF7F00",
-              "#FFFF33", "#E41A1C","#377EB8","#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
+              "#FFFF33", "#E41A1C",,"#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
 clus_1 <- c( "#CD9600", "#7CAE00", "#e0e067", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
              "#00BFC4", "#FF7F00","#FFFF33", "#CD9600", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
 
@@ -207,8 +207,8 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
 ###################
 # ADD ANNOTATION #
 ##################
-ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
-ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
+ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","8","3","4","0","1","2","10")
+ord2 <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 epi_layers <- set_names(ord1, ord2)
 
 DATA <- DATA %>%
