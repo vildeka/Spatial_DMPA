@@ -280,12 +280,12 @@ df <- DATA_st@assays$SCDC_clus@data %>%
   left_join(., select(as_tibble(DATA_st),.cell, ID="orig.ident",
                       Clusters, groups, sp_annot), by=".cell") %>%
   #group_by(orig.ident) %>%
-  mutate(Percent = 100 *values/sum(values), .by = "ID") %>%
+  mutate(Percent = 100 *values/sum(values), .by = "ID")  %>%
   mutate(., cell_type = cell_type[as.character(.$clus)]) %>%
   mutate(., cell_annot_1 = cell_annot_1[as.character(.$clus)]) %>%
   mutate(., cell_annot_2 = cell_annot_2[as.character(.$clus)]) %>%
   #mutate(., annot = paste0(.$clus, "_", cell_annot_2)) %>%
-  mutate(clus = factor(clus, levels = as.character(0:28)))
+  mutate(clus = factor(clus, levels = as.character(0:28))) 
 
 # df <- df %>%
 #   mutate(cell_type_2 = case_when(.$cell_type == "epithelial" & .$Clusters == "4" ~ 'ker_s1',
@@ -421,8 +421,8 @@ ggplot(ker, aes(fill=Genes, y=values, x=Clusters)) +
 ```{r subseted-colour-pallet}
 #### colours ####
 # maximum levels in the subgroup is 16
-s_col <- c("#FFD92F","#8DA0CB","#FC8D62","#66C2A5","#E78AC3","#A6D854","#eb6062","#E5C494","#B3B3B3","#377EB8","#4DAF4A","#984EA3","#FF7F00","#FFFF33","#A65628","#F781BF")
-e_col <- c("#FFF2AE","#CBD5E8","#FDCDAC","#B3E2CD","#F4CAE4","#E6F5C9","#FBB4AE","#F1E2CC","#CCCCCC","#B3CDE3","#CCEBC5","#DECBE4","#FED9A6","#FFFFCC","#E5D8BD","#FDDAEC")
+s_col <- c("#FFD92F","#8DA0CB","#FC8D62","#E78AC3","#A6D854","#66C2A5","#B3B3B3","#eb6062","#984EA3","#E5C494","#377EB8","#4DAF4A","#FF7F00","#FFFF33","#A65628","#F781BF")
+e_col <- c("#FFF2AE","#CBD5E8","#FDCDAC","#F4CAE4","#E6F5C9","#B3E2CD","#CCCCCC","#FBB4AE","#DECBE4","#F1E2CC","#B3CDE3","#CCEBC5","#FED9A6","#FFFFCC","#E5D8BD","#FDDAEC")
 
 #### function ####
 ColourPalleteMulti <- function(df, group, subgroup){
@@ -496,7 +496,7 @@ get_legend.fun <- function(df, title, id, colours, txt_size = 10){
 ####################
 meta_group <- "comb"
 subgroup <- "cell_annot_2"
-meta_group_lvl <- c("B cell", "endothelial", "epithelial", "T cell","fibroblasts","immune",  "granulocytes") #dput(sort(unique(df[[meta_group]])))
+meta_group_lvl <- c("B cell", "endothelial", "keratinocyte", "T cell","fibroblasts","immune",  "granulocytes") #dput(sort(unique(df[[meta_group]])))
 
 df <- decon_column_bulk %>%
   mutate(cell_annot_1 = replace_na(.$cell_annot_1, "NA")) %>%
@@ -555,13 +555,14 @@ decon_column_st <- DATA_st@assays[["misc"]][["cell_annot"]] #%>%
 ####################
 meta_group <- "comb"
 subgroup <- "cell_annot_2"
-meta_group_lvl <- c("B cell", "endothelial", "epithelial", "T cell","fibroblasts","immune", "granulocytes") #dput(sort(unique(df[[meta_group]])))
+meta_group_lvl <- c("B cell", "T cell", "keratinocyte", "fibroblast","immune", "endothelial") #, "granulocytes", #dput(sort(unique(df[[meta_group]])))
 
 df <- decon_column_st %>%
   #filter(sp_annot == "epi") %>%
   mutate(ID = str_extract(.cell, "^P\\d+")) %>%
   mutate(Percent_morf = 100 *values/sum(values), .by = c("ID", "sp_annot")) %>%
   mutate(cell_annot_1 = replace_na(as.character(.$cell_annot_1), "NA")) %>%
+  mutate(cell_type = ifelse(.$cell_type == "granulocytes", "immune", .$cell_type)) %>%
   mutate(comb = ifelse( grepl("B cell|T cell", .$cell_annot_1), .$cell_annot_1, .$cell_type))  %>%
   
   
@@ -586,6 +587,47 @@ c <- df %>%
   nest(data = -meta_group) %>%
   mutate(legend = pmap(., ~get_legend.fun(..2, ..1, ".cell", colours, txt_size = 15)))
 
+##########
+# TABLE #
+##########
+round.fun <- function(x){
+    df <- x %>%
+    mutate_if(
+    is.numeric,
+    ~ round(.x, digits = 1))
+  }
+
+decon_percent <- df %>%
+  #nest(data = -meta_group) %>%
+  summarise(sum = sum(Percent_morf), .by = c("sp_annot","meta_group")) %>%
+  arrange(sp_annot) %>%
+  pivot_wider(names_from = c("sp_annot"), values_from = "sum" ) %>%
+  mutate("All spots" = SubMuc+epi)
+  
+t <- list()
+decon_percent <- df %>%
+  mutate( ID = str_extract(.cell, "^P\\d\\d\\d")) %>%
+  #nest(data = -meta_group) %>%
+  summarise(sum = sum(Percent_morf), .by = c("meta_group", "ID")) %>%
+  arrange(ID) %>%
+  pivot_wider(names_from = c("ID"), values_from = "sum") %>% 
+  group_by(meta_group) %>%
+  group_walk(., ~ {t <<- append(t, wilcox.test(data=.x, 
+                                               x=as.double(.x[1:4]), 
+                                               y=as.double(.x[5:8]))$p.value)}) %>%
+  ungroup() %>%
+  mutate(p.value = unlist(t)) %>%
+  left_join(., decon_percent, by="meta_group") %>%
+  mutate(across(-any_of(c("meta_group", "p.value")), ~./sum(.)*100)) %>%
+  mutate(DMPA = rowMeans(.[,2:5]), .before = "p.value" ) %>%
+  mutate(Control = rowMeans(.[,6:9]), .before = "p.value" ) %>%
+  mutate(Average = rowMeans(.[,2:9]), .before = "DMPA" ) %>%
+  round.fun(.) %>%
+  add_column(" " = "", .before = "DMPA") %>%
+  add_column("  " = "", .before = "SubMuc") %>%
+  dplyr::rename("   "="meta_group", "Submucosal spots"="SubMuc", "Epithelial spots"="epi")
+
+write.xlsx(decon_percent, paste0(result_dir, "deconvolution_scdc_percent_.xlsx"))
 #########################################
 # ST CELL TYPE DISTRIBUTION PER SUBJECT #
 #########################################
@@ -599,12 +641,14 @@ bar <- ggplot(df, aes(fill=annot, y=Percent_morf, x=ID)) +
           text = element_text(size = 15),
           legend.position = "none") +
     #facet_wrap(~group ) +
-    facet_grid(cols = vars(groups), rows = vars(sp_annot), scales = "free_x", space = "free_x", switch = "x")
+    facet_grid(cols = vars(groups), rows = vars(sp_annot), 
+               labeller = as_labeller(c(epi='Epithelial spots', SubMuc='Submucosal spots', ctrl="Controls", DMPA="DMPA")),
+               scales = "free_x", space = "free_x", switch = "x")
 
 l <- plot_grid(plotlist = c$legend, nrow =4 , byrow = T , 
                rel_heights = c(.3,.3,.3,.3), rel_widths = c(.5,0.2), align = "hv", axis = "t")
-p <- plot_grid(bar, l ,rel_widths = c(.7,1))
-ggsave("./test.tiff", p, height=10, width=6.6)
+(p <- plot_grid(bar, l ,rel_widths = c(.7,1)))
+ggsave(paste0("./Figures/04/", "decon_bar_plot.png"), p, height=6, width=6.6, bg = "white")
 ```
 
 ## Plotting deconvolution data
@@ -848,7 +892,7 @@ f <- c("matrix.mtx$", "genes.tsv$|features.tsv$", "barcodes.tsv$") %>% set_names
 f_list <- map_df(f, ~list.files(path = data_dir, pattern = .x,
                       full.names = T, recursive = T) ) %>%
   mutate(sample_name = str_match(.$"matrix.mtx$", ".*\\/([^\\/]+).matrix\\.mtx$")[,2]) %>%
-  mutate(sample_id = str_extract(.$sample_name, "(?<=_).+(?=_)"), .$sample_name) 
+  mutate( <- sample_id = str_extract(.$sample_name, "(?<=_).+(?=_)"), .$sample_name) 
 
 matrix_list <- pmap(f_list, ~ReadMtx(mtx = ..1, features = ..2, cells = ..3, 
                                      feature.column = 1) ) %>% # , mtx.transpose=T
