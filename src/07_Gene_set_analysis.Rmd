@@ -65,6 +65,7 @@ library(scales)
 library(niceRplots)
 library(fgsea)
 library(openxlsx)
+library(jsonlite)
 
 source("../bin/plotting_functions.R")
 source("../../broliden_5325/code/enrichment_function.R")
@@ -78,9 +79,8 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 
 #GO_path <- "../../broliden_5325/resources/KEGG_GO_database/c5.bp.v6.2.symbols.gmt.txt"
 #KEGG_path <- "../../broliden_5325/resources/KEGG_GO_database/c2.cp.kegg.v6.2.symbols.gmt.txt"
-#KEGG_path <- "../resources/c2.cp.kegg_medicus.v2023.2.Hs.symbols.gmt"
-KEGG_path <- "../resources/c2.cp.kegg_legacy.v2023.2.Hs.symbols.gmt"
-GO_path <- "../resources/c5.go.bp.v2023.2.Hs.symbols.gmt"
+KEGG_path <- "../resources/c2.cp.kegg_legacy.v2023.2.Hs.json"
+GO_path <- "../resources/c5.all.v2023.2.Hs.json"
 TFT_path <- "../resources/c3.tft.gtrd.v2023.2.Hs.symbols.gmt"
 epi_clus <- "^5$|^6$|^7|^9"
 submuc_remove <- "1|2"
@@ -93,8 +93,14 @@ submuc_remove <- "1|2"
 DEGs_table <- readxl::read_xlsx(paste0(input_dir,"Supplemental Table 4.xlsx"), sheet = "DEGs condition")
 DATA <- readRDS(paste0("../results/04_deconvolution_st_data/","seuratObj_deconvolution_scdc.RDS"))
 
-GO_database <- fgsea::gmtPathways(GO_path)
-KEGG_database <- fgsea::gmtPathways(KEGG_path)
+read_json.fun <- function(db){
+  db <- db %>%
+  map(., ~as_tibble(.x[4])) %>%
+  bind_rows(., .id = "pathway") %>%
+  mutate(db = map(db, ~pluck(.x, "geneSymbols")))
+  return(db)}
+GO_database <- read_json.fun(fromJSON(GO_path))
+KEGG_database <- read_json.fun(fromJSON(KEGG_path))
 TFT_database <- fgsea::gmtPathways(TFT_path)
 
 # set seed for all operations
@@ -314,25 +320,36 @@ leading_edge <- function(res, geneSets, geneList){
     
     res$rank_at_max <- rank
     res$leading_edge <- LE_analysis
-    res$core_enrichment <- sapply(core_enrichment, paste0, collapse='/')
+    res$core_enrichment <- sapply(core_enrichment, paste0, collapse=',')
     return(res)
 
 }
+db_ids <- list("GO" = set_names(GO_database$exactSource, GO_database$pathway),
+               "KEGG" = set_names(KEGG_database$exactSource, KEGG_database$pathway))
 
 db <- c(rep("GO", length(fgseaRes)/2),rep("KEGG", length(fgseaRes)/2))
 fgseaRes_df <-  tibble(Clusters=names(fgseaRes),
                       db = db, fgseaRes = fgseaRes) %>%
-  mutate(fgseaRes = pmap(., ~filter(..3, padj < 0.05) ))
+  mutate(fgseaRes = pmap(., ~mutate(..3, id = db_ids[[..2]][.data[["pathway"]] ], .before="pathway" ) )) %>% # 
+  mutate(fgseaRes = pmap(., ~filter(..3, padj < 0.05) )) %>%
+  filter(unlist(map(.$fgseaRes, ~nrow(.x) > 0)))
 
 fgseaRes_LE <- fgseaRes_df %>% 
-  mutate(fgseaRes = pmap(., ~leading_edge(..3, get(paste0(..2,"_database")), gene_rank_list[[..1]]) )) %>%
+  mutate(fgseaRes = pmap(., ~leading_edge(..3, get(paste0(..2,"_database"))$db, gene_rank_list[[..1]]) )) %>%
   mutate(fgseaRes = set_names(.$fgseaRes, paste0(.data[["Clusters"]]) )) %>%
+  {. ->> fgseaRes_filt} %>%
   group_by(db) %>%
   summarise(fgseaRes = list(fgseaRes), .groups = "drop")
 
+# save object:
+saveRDS(fgseaRes_filt, paste0(result_dir,"fgseaRes_filt_tables.RDS")) 
+# fgseaRes_LE <- readRDS(paste0(result_dir,"fgseaRes_filt_tables.RDS"))
 ```
 
-`Rank at max`The position in the ranked list at which the maximum enrichment score occurred. The more interesting gene sets achieve the maximum enrichment score near the top or bottom of the ranked list; that is, the rank at max is either very small or very large. `Tags` to indicate the percentage of genes contributing to the enrichment score (leadingEdge/size\*100), `List` to indicate where in the list the enrichment score is attained, it reports the percentage of genes before (for positive ES) or after (for negative ES) the peak in the running enrichment score. `Signal` for enrichment signal strength.
+`Rank at max`The position in the ranked list at which the maximum enrichment score occurred. The more interesting gene sets achieve the maximum enrichment score near the top or bottom of the ranked list; that is, the rank at max is either very small or very large. 
+`Tags` to indicate the percentage of genes contributing to the enrichment score (leadingEdge/size*100), 
+`List` to indicate where in the list the enrichment score is attained, it reports the percentage of genes before (for positive ES) or after (for negative ES) the peak in the running enrichment score. 
+`Signal` for enrichment signal strength.
 
 I think the dependency on ES being negative or positive could be problematic in certain instances where there is an equal balance of negative and positive genes
 
@@ -351,17 +368,17 @@ mappedIds <- function(df, collection, OFFSPRING){
     df
   }
 
-goterms <- tibble("Term"=Term(GOTERM), "id"=names(Term(GOTERM))) %>%
-  mutate(t = paste0("GOBP_", toupper(.$Term)) ) %>%
-  mutate(t = gsub(x = .$t, " |-|, |/","_" ))
-go <- set_names(goterms$Term, goterms$id)
-# GO:0044419
+# goterms <- tibble("Term"=Term(GOTERM), "id"=names(Term(GOTERM))) %>%
+#   mutate(t = paste0("GOBP_", toupper(.$Term)) ) %>%
+#   mutate(t = gsub(x = .$t, " |-|, |/","_" ))
+# go <- set_names(goterms$Term, goterms$id)
 
 slim_df <- fgseaRes_df %>%
   filter(db == "GO") %>%
   mutate(morf = ifelse(grepl("\\d", .$Clusters), "SubMuc", "epi")) %>%
   filter(!(grepl(submuc_remove, .$Clusters))) %>%
-  mutate(go_ids = pmap(., ~left_join(..3, goterms, by=c("pathway"="t"))[["id"]] )) %>%
+  #mutate(go_ids = pmap(., ~left_join(..3, goterms, by=c("pathway"="t"))[["id"]] )) %>%
+  mutate(go_ids = pmap(., ~..3[["id"]])) %>%
   select(morf, go_ids) %>%
   
   # GO slim data:
@@ -498,13 +515,12 @@ m <- get_similarity_matrix(HIV, geneSets=GO_database, semData=d)
 graph <- build_emap_graph(sim_m=m, fgesa_df=HIV, cex_line=1, min_edge=0)
 ```
 
-```{r}
-sig_epi_GO <- fgseaRes[1:4] %>% bind_rows(., .id = "clus") %>% filter(!(grepl("\\d", .$clus))) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
-# sig_epi_GO <- fgseaRes_GO_[1:4] %>% bind_rows(., .id = "clus") %>% filter((grepl("[^\\d]", .$clus))) %>% filter(padj<=0.05)
-sig_sub_GO <- fgseaRes[5:10] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
+```{r fgseaRes-filtered}
+sig_epi_GO <- fgseaRes_filt$fgseaRes[1:4] %>% bind_rows(., .id = "clus") %>% filter(!(grepl("\\d", .$clus))) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
+sig_sub_GO <- fgseaRes_filt$fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
 ```
 
-```{r Similarity_matrix_enrichplot}
+```{r Enrichment-graph-epi}
 # Modified code by YuLab from enrichplot package:
 # https://github.com/YuLab-SMU/enrichplot/blob/devel/R/emapplot_utilities.R
 
@@ -605,12 +621,14 @@ dge <- DEGs_table %>%
 ord1 <- c("Superficial","Upper IM","Lower IM","Basal","8","3","4","0","1","2","10")
 ord2 <- c("Sup_1", "Sup_2", "Basal_2", "Basal_2","8","3","0","4","1","2","10")
 l <- set_names(ord1, ord2)
-GO_comb <- sig_epi_GO %>% 
+
+GO_comb_epi <- sig_epi_GO %>% 
   #mutate(., clus = factor(l[as.character(.$clus)], levels = ord1)) %>%
   add_count(pathway) %>% 
-  left_join(goterms, by=c("pathway"="t")) %>%
+  mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
+  mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
   # filter leading edge by parameters set above:
-  #mutate(leadingEdge = pmap(., ~intersect(..9, dge[[..1]]))) %>%
+  #mutate("p<0.01" = pmap(., ~intersect(..10, dge[[..1]]))) %>%
   # combine same terms from different clusters:
   mutate("leadingEdge_comb" = list(unique(unlist(.$leadingEdge[cur_group_rows()]))), .by="pathway") %>%
   mutate(pathway = paste0(.$clus, ":", .$id)) %>%
@@ -622,8 +640,8 @@ GO_comb <- sig_epi_GO %>%
   
 #### get similarity matrix and create graph ####
 # weight is the percentage overlap between the two terms
-m <- get_similarity_matrix(GO_comb, geneSets=GO_database, semData=d) 
-set.seed(123); graph <- build_emap_graph(sim_m=m, fgesa_df=GO_comb, cex_line=1, min_edge=0.1)
+m <- get_similarity_matrix(GO_comb_epi, geneSets=GO_database, semData=d) 
+set.seed(123); graph <- build_emap_graph(sim_m=m, fgesa_df=GO_comb_epi, cex_line=1, min_edge=0.1)
 # G <- as_tbl_graph(graph$igraph)
 
 #### find number of edges between nodes: ####
@@ -642,7 +660,7 @@ s <- set_names(summary$n_genes, as.character(summary$from))
 # https://bookdown.org/markhoff/social_network_analysis/centrality.html
 set.seed(123);G <- graph$tidy %>% 
   mutate(gene_module = str_extract(as_tibble(.)$pathway, "[^:]+") ) %>%
-  left_join(., select(GO_comb, size, pathway, "Sig. in"), by="pathway") %>%
+  left_join(., select(GO_comb_epi, size, pathway, "Sig. in"), by="pathway") %>%
   mutate(pathway = str_extract(as_tibble(.)$pathway, "GO:\\d+") ) %>%
   mutate(degree = centrality_degree(),
          btwn = centrality_betweenness(),
@@ -664,7 +682,6 @@ set.seed(123);G <- graph$tidy %>%
 
 #### get table version of graph ###
 G_nodes_e <- G_nodes %>% as_tibble() # %>% split(., ~community)
-G_edges <- G_edges %>% as_tibble() 
 Reduce(intersect, as.list(GOBPANCESTOR[na.omit(G_nodes_$pathway)]))
   
 G_edges %>%
@@ -703,7 +720,7 @@ g_table_epi <- G_epi %>% as_tibble() %>%
   mutate(community = factor( .$community, levels = as.character(1:max(as.integer(.$community))) )) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
   filter(count > 4) %>%
-  left_join(., select(GO_comb, Term, ES), by="Term") %>%
+  left_join(., select(GO_comb_epi, Term, ES, "p<0.01"), by="Term") %>%
   slice_max(n=2, order_by = tibble(degree, abs(ES)), by="com", with_ties = F) %>%
   slice_max(n=1, order_by = tibble(abs(ES)), by="com", with_ties = F) %>%
   dplyr::mutate(n = row_number(), .by="community") %>%
@@ -760,18 +777,51 @@ kableExtra::as_image()
 
 ```{r}
 dge <- DEGs_table %>% 
+  filter(grepl("[^\\d]", .$layers)) %>% 
+  #filter(p_val<=0.01) %>%
+  filter(p_val_adj<=0.05) %>%
+  #filter(pct.1 > .4 & p_val < 0.01)  
+  split(., ~layers) %>%  map(., ~.x$gene)
+
+GO_degs <- GO_comb_epi %>% 
+  mutate("p<0.05" = pmap(., ~intersect(..10, dge[[..1]]))) %>% 
+  left_join(., select(G_nodes_e, pathway, degree, community), by=c("id"="pathway")) %>%
+  arrange(community) %>%
+  select(Term, community, `p<0.05`) %>%
+  unnest(cols = c("p<0.05")) %>%
+  mutate(g = paste0(unique(.$`p<0.05`[cur_group_rows()]), collapse = ","), .by="community") %>%
+  select(community, g) %>% unique()
+  summarise(g = sum(weight), # n is number of shared genes with other terms, l is the sum of weights
+            n_genes = sum(weight > 0), .by = "from" )
+  
+  
+GO_degs <- GO_comb_sub %>%
+  mutate("p<0.05" = pmap(., ~intersect(..10, dge[[..1]]))) %>% 
+  left_join(., select(G_nodes_s, pathway, degree, community), by=c("id"="pathway")) %>%
+  arrange(community) %>%
+  select(Term, community, `p<0.05`) %>%
+  unnest(cols = c("p<0.05")) %>%
+  mutate(g = paste0(unique(.$`p<0.05`[cur_group_rows()]), collapse = ","), .by="community") %>%
+  select(community, g) %>% unique()
+
+length(intersect( unique(G_nodes_s$pathway), unique(GO_comb_sub$id)))
+```
+
+
+```{r Enrichment-graph-submuc}
+dge <- DEGs_table %>% 
   filter(grepl("[\\d]", .$layers)) %>% 
   filter(p_val<=0.01) %>%
   #filter(pct.1 > .4 & p_val < 0.01)  
   split(., ~layers) %>%  map(., ~.x$gene)
 
-GO_comb <- sig_sub_GO %>% 
-  filter(!(grepl(submuc_remove, .$clus))) %>%
+GO_comb_sub <- sig_sub_GO %>% 
   #mutate(., clus = factor(l[as.character(.$clus)], levels = ord1)) %>%
   add_count(pathway) %>% 
-  left_join(goterms, by=c("pathway"="t")) %>%
+  mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
+  mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
   # filter leading edge by parameters set above:
-  #mutate(leadingEdge = pmap(., ~intersect(..9, dge[[..1]]))) %>%
+  #mutate("p<0.01" = pmap(., ~intersect(..10, dge[[..1]]))) %>%
   # combine same terms from different clusters:
   mutate("leadingEdge_comb" = list(unique(unlist(.$leadingEdge[cur_group_rows()]))), .by="pathway") %>%
   mutate(pathway = paste0(.$clus, ":", .$id)) %>%
@@ -783,8 +833,8 @@ GO_comb <- sig_sub_GO %>%
   
 #### get similarity matrix and create graph ####
 # weight is the percentage overlap between the two terms
-m <- get_similarity_matrix(GO_comb, geneSets=GO_database, semData=d) 
-set.seed(123); graph <- build_emap_graph(sim_m=m, fgesa_df=GO_comb, cex_line=1, min_edge=0.1)
+m <- get_similarity_matrix(GO_comb_sub, geneSets=GO_database, semData=d) 
+set.seed(123); graph <- build_emap_graph(sim_m=m, fgesa_df=GO_comb_sub, cex_line=1, min_edge=0.1)
 # G <- as_tbl_graph(graph$igraph)
 
 #### find number of edges between nodes: ####
@@ -803,7 +853,7 @@ s <- set_names(summary$n_genes, as.character(summary$from))
 # https://bookdown.org/markhoff/social_network_analysis/centrality.html
 set.seed(123);G <- graph$tidy %>% 
   mutate(gene_module = str_extract(as_tibble(.)$pathway, "[^:]+") ) %>%
-  left_join(., select(GO_comb, size, pathway, "Sig. in"), by="pathway") %>%
+  left_join(., select(GO_comb_sub, size, pathway, "Sig. in"), by="pathway") %>%
   mutate(pathway = str_extract(as_tibble(.)$pathway, "GO:\\d+") ) %>%
   mutate(degree = centrality_degree(),
          btwn = centrality_betweenness(),
@@ -867,15 +917,15 @@ g_table_sub <- G_sub %>% as_tibble() %>%
   select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
   filter(count > 4) %>%
-  left_join(., select(GO_comb, Term, ES), by="Term") %>%
+  left_join(., select(GO_comb_sub, id, ES), by=c("pathway"="id")) %>%
+  # mutate(ES = ) %>%
   slice_max(n=2, order_by = tibble(degree, abs(ES)), by="com", with_ties = F) %>%
   slice_max(n=1, order_by = tibble(abs(ES)), by="com", with_ties = F) %>%
   dplyr::mutate(n = row_number(), .by="community") %>%
   mutate(community = factor( .$community, levels = as.character(1:17)) ) %>%
   #mutate(Term = str_replace(.$Term, "(.{10,}?)\\s", "\\1\n")) %>%
   arrange(community) %>%
-  mutate(Cluster = paste0(.$community,"^",.$n), .after="community" ) %>%
-  select(-com, -count, -n) 
+  mutate(Cluster = paste0(.$community,"^",.$n), .after="community" ) 
 
 #### Plot graph ####
 library(ggnewscale)
@@ -895,7 +945,8 @@ pal_sub <- set_names(col, c)
 
 # 'graphopt', 'stress', 'kk', 'mds', 'lgl', 'backbone', 
 set.seed(1);p <- G_sub %>%
-  left_join(., select(g, pathway, lab="Term", n), by="pathway") %>%
+  left_join(., select(g_table_sub, pathway, lab="Term", n), by="pathway") %>%
+  #filter(!is.na(n)) %>% as_tibble() -> l
   
   ggraph(layout = 'backbone') + # 'graphopt'
   geom_edge_fan(width = .3, aes(colour=width), show.legend = FALSE) +
@@ -951,25 +1002,29 @@ ggsave(paste0(result_dir,"./Sub_enrichment_graph.tiff"), plot = ggtab, width = 6
 
 ```{r enrichment_table}
 # Coloring the table conditionnally using `ggpubr::table_cell_bg()`
-tabel_col.fun<- function(g, pal){
+tabel_col.fun<- function(ggtab, g, pal){
   for(i in 1:nrow(g)){
     #print(i)
     col <- g$community[i]
     #print(col)
     ggtab <- table_cell_bg(ggtab, 
                            row = i+1, column = 1, 
-                           fill = pal[as.character(col)], color = pal_epi[as.character(col)] )
+                           fill = pal[as.character(col)], color = pal[as.character(col)] )
     # ggtab <- table_cell_bg(ggtab, i+1, column = 4, linewidth = 1,
     #                        color = pal_epi[as.character(col)])
     print(ggtab)
   }}
 
 base_size <- 8
-g_table <- list("epi"=g_table_epi, "SubMuc"=G_nodes_s)
+g_table <- list("epi"=g_table_epi, "SubMuc"=g_table_sub)
 pal_list <- list("epi"=pal_epi, "SubMuc"=pal_sub)
+options(scipen=999)
 
-ggtab <- imap(g_table, ~ .x %>%
-  ggtexttable(.[,-1], rows = NULL, 
+ggtab <- imap(g_table, ~ .x[,-1] %>%
+  select(-com, -count, -n) %>%
+  mutate(ES = format(.$ES, digits = 2 ,scientific = FALSE) ) %>%
+  #mutate(ES = factor(.$ES) ) %>%
+  ggtexttable(., rows = NULL, 
             theme = # ttheme("light"))
             ttheme(base_style = "light",
                   base_colour = "#616161",
@@ -978,18 +1033,18 @@ ggtab <- imap(g_table, ~ .x %>%
                   colnames.style = colnames_style(size = base_size+2, fill = "white", color = "#616161"),
                   rownames.style = rownames_style(size = base_size+1),
                   tbody.style = 
-                    tbody_style(color = "#616161", size = base_size, fill = "white", parse = T,
-                                hjust = as.vector(matrix(c(.5, 0, .5, .5, .5), ncol = 5, nrow = nrow(g), byrow = TRUE)),
-                                x = as.vector(matrix(c(0.5, .1, .5,.5, .5), ncol = 5, nrow = nrow(g), byrow = TRUE)) 
-                  ) )) %>%
-  tabel_col.fun(., pal_list) )
+                    tbody_style(
+                      color = "#616161", size = base_size, fill = "transparent", #parse = T,
+                      hjust = as.vector(matrix(c(.5, 0, .5, .5, 1), ncol = 5, nrow = nrow(.), byrow = TRUE)),
+                      x = as.vector(matrix(c(0.5, .1, .5,.5, .9), ncol = 5, nrow = nrow(.), byrow = TRUE)) 
+                  ) ))  %>%
+  tabel_col.fun(., g_table[[.y]], pal_list[[.y]]) )
 
 ggtab[[1]]
 ggtab[[2]]
 
 ggsave(paste0(result_dir,"./Sub_enrichment_graph.tiff"), plot = ggtab, width = 6, height = 5 )
 ```
-
 
 ```{r graph-per-layer}
 m <- set_names(c("#E41A1C","#FF7F00", "#C77CFF","#984EA3"), c("Sup", "Upper", "Lower", "Basal"))
