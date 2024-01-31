@@ -1,6 +1,6 @@
 ---
 title: "Differential gene expression clusters"
-date: "`r Sys.time()`"
+date: "`r format(Sys.time(), '%d %m %Y')`"
 format:
   html:
     embed-resources: true
@@ -105,6 +105,7 @@ DEGs_fun <- function(obj, clusters){
   DEGs_table <- DATA_degs %>%
     as_tibble(.) %>%
     #map2(., comb$comb, ~mutate(.x, Combination = .y)) %>%
+    #left_join(., Avg, by= c("gene")) %>%
     mutate(cluster = paste0(.$cluster, "_all")) %>%
     mutate(pct.diff = -.$pct.2-.$pct.1) %>%
     mutate(log.pct.diff = -log2(.$pct.2/.$pct.1))
@@ -180,33 +181,18 @@ colSums(tab[,c("SubMuc_sum", "epi_sum")]) %>%
   knitr::kable(., caption = "Total number of spots in epi and Submucosa")
 ```
 
-```{r plot_clustering_on_tissue, include=FALSE, eval=FALSE}
-source("../bin/spatial_visualization.R")
-library(patchwork)
-clus <- c(scales::hue_pal()(8),
-             RColorBrewer::brewer.pal(9,"Set1"),
-             RColorBrewer::brewer.pal(8,"Set2"),
-             RColorBrewer::brewer.pal(8,"Accent"),
-             RColorBrewer::brewer.pal(9,"Pastel1"),
-             RColorBrewer::brewer.pal(8,"Pastel2") )
+```{r plot_clustering_on_tissue, fig.height=3.5, fig.width=7, include=FALSE, eval=FALSE}
+plots <- DATA_sub %>%
+  plot_st_meta.fun(.,  
+            assay="RNA",
+            feat = "Clusters",
+            zoom = "zoom",
+            ncol = 4,
+            annot_line = .1,
+            img_alpha = 0,
+            point_size = 0.8
+          )
 
-plots <- DATA %>%
-  mutate(group = orig.ident) %>%
-  nest(., data = -group) %>%
-  pmap(., 
-    ~plot_spatial.fun(..2,
-      sampleid = ..1,
-      colors = clus,
-      geneid = "Clusters",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
-      zoom = "zoom",
-      img_alpha = 0,
-      point_size = 1)
-    )
-
-legend <- get_legend(plots[[1]] + theme(legend.position="right"))
-combined <- wrap_plots(plots, ncol=2) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
-combined
 ```
 
 ### Run differential gene expression analysis
@@ -217,11 +203,13 @@ combined
 DEGs_table_epi <- DATA_sub$epi %>%
   unnest(subset) %>%
   filter(grepl(epi_clus, .$Clusters)) %>%
+  {. ->> DATA_sub_e} %>%
   DEGs_fun(., "Clusters") 
 
-DEGs_table_subMuc <- DATA_sub$subMuc %>%
+DEGs_table_subMuc <- DATA_sub$SubMuc %>%
   unnest(subset) %>%
   filter(!(grepl(epi_clus, .$Clusters))) %>%
+  {. ->> DATA_sub_s} %>%
   DEGs_fun(., "Clusters") 
 
 DEGs_table <- bind_rows(DEGs_table_epi, DEGs_table_subMuc)
@@ -229,15 +217,16 @@ DEGs_table <- bind_rows(DEGs_table_epi, DEGs_table_subMuc)
 ###################
 # ADD ANNOTATION #
 ##################
-ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
-ord2 <- c("6_all","9_all","7_all","5_all","0_all","1_all","2_all","3_all","4_all","8_all","10_all")
-ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
-epi_layers <- set_names(ord1, ord2)
+ord1 <- c("Superficial","Hig_IM","Low_IM","Basal","8","3","4","2","1","0","10")
+ord2 <- c("6_all","9_all","7_all","5_all","8_all","4_all","3_all","2_all","1_all","0_all","10_all")
+ord2 <- c("6","9","7","5","8","3","4","2","1","0","10")
+layers <- set_names(ord1, ord2)
 
 DEGs_table <- DEGs_table %>%
-  mutate(clus = str_extract(.$cluster, "\\d")) %>%
+  select(-layers) %>%
+  mutate(clus = str_extract(.$cluster, "\\d+")) %>%
   mutate(cluster = factor(.$cluster, levels = paste0(ord2, "_all"))) %>%
-  mutate(layers = factor(epi_layers[as.character(.$clus)], levels = ord1)) 
+  mutate(Clusters = factor(layers[as.character(.$clus)], levels = ord1)) 
 ```
 
 ```{r DEGs-SubMuc-vs-epi, include=TRUE, eval=params$re.run}
@@ -247,12 +236,93 @@ DEGs_table <- DEGs_table %>%
 DEGs_table_morf <- DATA_sub$full_subset %>%
   unnest(subset_morf) %>%
   DEGs_fun(., "sp_annot") %>%
-  filter(cluster == "epi_all") 
+  filter(cluster == "epi_all") %>%
+  mutate(Regulation = ifelse(avg_log2FC > 0 & p_val_adj < 0.05, "UP",
+                            ifelse(avg_log2FC < 0 & p_val_adj < 0.05,"DOWN", "NOT SIG.")))
 
-sig_morf <- DEGs_table_morf %>%
-  mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-  group_by(Direction) %>%
-  top_n(10, abs(avg_log2FC))
+top_morf <- DEGs_table_morf %>%
+  filter(p_val_adj < 0.05) %>%
+  {. ->> sig_morf} %>%
+  group_by(Regulation) %>%
+  top_n(15, abs(avg_log2FC)) %>%
+  arrange(desc(avg_log2FC))
+
+summary_morf <- sig_morf %>% 
+  summarise(n = n(), .by = "Regulation") %>%
+  add_case(Regulation="Total", n=sum(.$n))
+
+KRT_morf <- DEGs_table_morf %>%
+  filter(grepl("^KRT", .$gene))
+```
+
+```{r Avg-expression}
+#################################
+# ADD AVERAGE EXPRESSION VALUES #
+#################################
+# https://github.com/satijalab/seurat/issues/5495
+
+avg.fun <- function(obj, grs, long=TRUE){
+  rowMeans_drop0 <- function (obj, name, filt=NULL) {
+    # average expression of spots with values > 0
+    obj <- obj[,filt]
+    dgCMat <- obj@assays[["RNA"]]@data
+    RowInd <- dgCMat@i + 1
+    nnz_per_row <- tabulate(RowInd)
+    nnz_per_row[nnz_per_row == 0] <- 1  ## just avoid doing 0 / 0
+    fix_names <- function(x) gsub("\\s+", name, x)
+    tibble(gene = dgCMat@Dimnames[[1]], "Avg_exp_ " = rowSums(dgCMat) / nnz_per_row, .name_repair = fix_names)
+  }
+  gr <- unique(obj@meta.data[[grs]])
+  
+  # long format
+  Avg_l <- gr %>% set_names() %>%  as.list() %>% 
+    map(., ~rowMeans_drop0(obj, .x, obj[[grs]] == .x )) %>%
+    {. ->> avg} %>%
+    map(., ~rename_with(.x, ~str_replace(.x, "exp_.+", "exp")) ) %>%
+    bind_rows(., .id = "groups") %>%
+    mutate(groups = as.numeric(.$groups))
+  
+  # wide format
+  Avg_w <- avg %>% purrr::reduce(left_join, by = "gene")
+  
+  if(long){Avg <- Avg_l}else{Avg <- Avg_w}
+  return(Avg)
+}
+avg_epi <- avg.fun(DATA_sub_e, "Clusters")
+avg_epi <- avg.fun(DATA_sub_e, "Clusters", long=F)
+avg_SubMuc <- avg.fun(DATA_sub_s, "Clusters", long=F)
+avg <- bind_cols(avg_epi, avg_SubMuc)
+
+Avg_all <- function(db, gr, avg=TRUE){
+  library(rlang)
+   if(avg)
+     {db %>% 
+      mutate(Avg_all = case_when(!!!parse_exprs(
+        paste0('clus == ', gr, '~ rowSums(.[grep("exp_[^', gr, ']", names(.))])/',length(gr) ))) )}
+  
+  else{db %>% 
+      mutate(Avg_diff = case_when(!!!parse_exprs(
+        paste0('clus == ', gr, '~ Avg_exp_', gr, '-Avg_all' ))) )}
+  }
+  
+
+# DEGs_table <- left_join(DEGs_table, avg, by=c("clus"="groups", "gene"))
+
+DEGs_table_epi <- DEGs_table %>%
+  filter(grepl(epi_clus, .$clus)) %>%
+  left_join(., avg_epi, by=c("gene")) %>%
+  Avg_all(., unique(.$clus)) %>%
+  Avg_all(., unique(.$clus), avg=FALSE) 
+
+DEGs_table_sub <- DEGs_table %>%
+  filter(!(grepl(epi_clus, .$clus))) %>%
+  left_join(., avg_SubMuc, by=c("gene")) %>%
+  select(-Avg_exp_10) %>%
+  Avg_all(., unique(.$clus)) %>%
+  Avg_all(., c("8", "4", "0", "3", "1", "2"), avg=FALSE) 
+
+
+  
 ```
 
 ### Save files
@@ -264,30 +334,45 @@ write_csv(DEGs_table, paste0(result_dir, "DGEs_clusters_wilcox.csv"))
 
 DEGs_list <- DEGs_table %>% 
   filter(p_val < 0.9) %>%
-  group_split(., cluster) %>% 
-  set_names(., unique(DEGs_table$cluster))
+  split(., ~layers)
 
-write.xlsx(DEGs_list, keepNA=TRUE, na.string="NA", overwrite=TRUE,
-           file=paste0(result_dir,"DGEs_clusters_wilcox",".xlsx"))
+write.xlsx(DEGs_list, keepNA=TRUE, na.string="NA", overwrite=TRUE, 
+           file=paste0(result_dir,"Supplemental Table 1",".xlsx"))
 
 ###################
 # SAVE MORPHOLOGY #
 ###################
-write_csv(DEGs_table_morf, paste0(result_dir, "DGEs_clusters_morf_25_25.csv"))
+write_csv(DEGs_table_morf, paste0(result_dir, "DGEs_clusters_morf.csv"))
 
-DEGs_filt <- DEGs_table_morf %>% 
-  filter(p_val < 0.9) 
-
-write.xlsx(DEGs_filt, keepNA=TRUE, na.string="NA", overwrite=TRUE,
-           file=paste0(result_dir,"DGEs_epi_vs_Submuc_25_25_wilcox",".xlsx"))
+morf_list <- list("DEGs_Epi_vs_SubMuc"=DEGs_table_morf, "Top_15_Up&Down"=top_morf, 
+                  "Summary"=summary_morf, "Keratins"=KRT_morf ) 
+write.xlsx(morf_list, keepNA=TRUE, na.string="NA", overwrite=TRUE,
+           file=paste0(result_dir,"Supplemental Table 2",".xlsx"))
 ```
 
 ### Load allready saved data
 ```{r get_DEGs, include=FALSE, eval=isFALSE(params$re.run)}
 DEGs_table <- read_csv(paste0(result_dir,"DGEs_clusters_wilcox.csv"))
-DEGs_table_morf <- readxl::read_xlsx(paste0(result_dir,"DGEs_epi_vs_Submuc_25_50_wilcox.xlsx"))
+DEGs_table_morf <- read_csv(paste0(result_dir,"DGEs_clusters_morf.csv"))
+DEGs_table_morf <- readxl::read_xlsx(paste0(result_dir,"DGEs_epi_vs_Submuc_wilcox.xlsx"))
 # DATA_sub <- readRDS(paste0("../results/06_DGE_condition_st_data/", "DATA_sub.RDS"))
 # DATA_sub <- DATA_sub$DATA_sub 
+```
+
+```{r}
+###################
+# ADD ANNOTATION #
+##################
+DEGs_l <- list("Clusters"=DEGs_table, "Morf"=DEGs_table_morf)
+
+DEGs_l <- map(DEGs_l, ~ .x %>%
+  mutate(Regulation = ifelse(avg_log2FC > 0 & p_val_adj < 0.05, "UP",
+                            ifelse(avg_log2FC < 0 & p_val_adj < 0.05,"DOWN", "NOT SIG."))) %>%
+  mutate(Regulation = factor(.$Regulation, levels = c("UP", "DOWN", "NOT SIG.")))
+) 
+
+DEGs_table <- DEGs_l[[1]]
+DEGs_table_E2lvl <- DEGs_l[[2]]
 ```
 
 ### Volcano plot of DEGs for each cluster
@@ -325,8 +410,9 @@ top30 <- DEGs_table_morf %>%
   #filter(pct.1 > 0.2) %>%
   group_by(Direction) %>%
   
-  #top_n(-40, p_val_adj) %>% 
-  top_n(15, abs(avg_log2FC)) %>%
+  
+  top_n(70, abs(avg_log2FC)) %>%
+  top_n(-15, p_val_adj) %>% 
   arrange(avg_log2FC, Direction)
 
 
@@ -376,7 +462,7 @@ get_order <- function(df, markers, markers_id, value){
   value <- enquo(value) 
   
   df <- df %>%
-    mutate(marker_id =  map_chr(.$marker, ~names(m)[which(m == as.character(.x))])) %>%
+    mutate(marker_id =  map_chr(.$marker, ~names(m)[which(m == as.character(.x))][1])) %>%
     nest(., .by=c(groups)) %>%
     mutate(., data = pmap(., ~filter(..2, marker_id == .[[1]]))) %>%
     mutate(., data = pmap(., ~arrange(..2, desc(!!(value))))) %>%
@@ -467,13 +553,14 @@ ggsave(paste0("./Figures/05/","Marker_genes_morf", ".pdf"), plot,  width = 6, he
 ######################################
 filter_top.fun <- function(nested_df, n, var, min_pct = 0){
   if(is.na(n[4])){n[4] = min_pct}
-  res <- nested_df %>% # res <- top20$data[[1]] %>%
+  res <- nested_df %>% # res <- top20_epi$data[[3]] %>%
     #mutate(p_val_adj = 1.000-.$p_val_adj) %>%
     filter(p_val_adj < 0.05) %>%
     arrange(desc(avg_log2FC)) %>%
     filter(pct.1 > n[4]) %>%
     top_n(., n=n[1], abs(!!sym(var[1]))) %>%
     arrange(desc(avg_log2FC)) %>%
+    #top_n(., n=n[2], Avg_exp) %>%
     top_n(., n=n[2], abs(!!sym(var[2]))) %>%
     top_n(., n=n[3], abs(!!sym(var[3]))) 
   print(res)
@@ -481,6 +568,7 @@ filter_top.fun <- function(nested_df, n, var, min_pct = 0){
 }
 
 sel_epi <- list(
+  #Sup_1 = list(n=c(-40, 30, 5),var=c("p_val_adj", "pct.diff", "Avg_exp", "log.pct.diff")),
   Sup_1 = list(n=c(-40, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
   #Sup_1 = list(n=c(-100, 70, 5, 0.5),var=c("pct.diff", "p_val_adj", "log.pct.diff")),
   Sup_2 = list(n=c(-40, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
@@ -491,10 +579,11 @@ sel_epi <- list(
 # Identify the top genes that have a high difference in expression between the clusters
 top20_epi <- DEGs_table %>%
   filter(grepl(epi_clus, .$clus)) %>%
+  arrange(Clusters) %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
   filter(Direction == "UP") %>%
   #filter(!(pct.2 > 0.2)) %>%
-  nest(., .by = "layers") %>%
+  nest(., .by = "Clusters") %>%
   mutate(data = pmap(., ~filter_top.fun(..2, n=sel_epi[[..1]]$n, var=sel_epi[[..1]]$var)) ) %>%
   unnest(., cols=c("data"))
   
@@ -516,7 +605,7 @@ gr_lvl <- rev(c("Sup_1", "Sup_2", "Basal_2", "Basal_1"))
 (plot <- DATA %>%
     filter(grepl(epi_clus, .$Clusters) & sp_annot == "epi") %>%
     get_df_for_dotplot.fun(., markers, groups="layers", gr_col, rect=T, gr_lvl=gr_lvl)  +
-    theme(legend.position="top") )#+ coord_flip(expand=F))
+    theme(legend.position="top") + coord_flip(expand=F))
 
 # dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
 # dev.new(width=5, height=6.5, noRStudioGD = TRUE) # vertical
@@ -528,34 +617,40 @@ gr_lvl <- rev(c("Sup_1", "Sup_2", "Basal_2", "Basal_1"))
 #######################################
 # FILTER BY P-VAL logFC AND pct.diff #
 ######################################
-filter_top.fun <- function(nested_df, n, var, min_pct = 0.001){
-  if(is.na(n[4])){n[4] = min_pct}
-  res <- nested_df %>% # res <- top20$data[[3]] %>%
+filter_top.fun <- function(nested_df, n, var, pct = 0.01, filt=T){
+  if(is.na(n[4])){n[4] = pct}
+  res <- nested_df %>% # res <- top20_sub$data[[3]] %>%
     #mutate(p_val_adj = 1.000-.$p_val_adj) %>%
-    filter(pct.1 > n[4]) %>%
+    #filter(Avg_diff > 0) %>%
+    #filter(pct.2 < n[4]) %>%
     top_n(., n=n[1], abs(!!sym(var[1]))) %>%
     top_n(., n=n[2], abs(!!sym(var[2]))) %>%
+    {if(filt) filter(., between(pct.1, 0.8,0.3) | between(pct.2, 0.1,0.4)) else .} %>%
+    arrange(desc(Avg_exp_3)) %>%
+    arrange(log.pct.diff) %>%
     top_n(., n=n[3], abs(!!sym(var[3]))) 
   print(res)
   return(res[1:n[3],])
 }
 sel_s <- list(
-  "8" = list(n=c(-100, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
-  "3" = list(n=c(-150, 100, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
-  "4" = list(n=c(-100, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
-  "0" = list(n=c(-150, 50, 5, 0.04),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
-  "1" = list(n=c(-150, 50, 5, 0.04),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
-  "2" = list(n=c(-150, 50, 5, 0.04),var=c("p_val_adj", "pct.diff", "log.pct.diff"))
+  "8" = list(n=c(-100, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff"), filt=F),
+  "3" = list(n=c(-90, 30, 5),var=c("p_val_adj", "avg_log2FC", "avg_log2FC"), filt=F),
+  #"3" = list(filt=F, n=c(-150, 100, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff")),
+  "4" = list( n=c(-100, 50, 5),var=c("p_val_adj", "pct.diff", "log.pct.diff"), filt=F),
+  "0" = list( n=c( -50, 30, 5, 0.2),var=c( "p_val_adj", "avg_log2FC", "Avg_diff", "log.pct.diff"), filt=T),
+  "1" = list( n=c(-90, 50, 5, 0.1),var=c("p_val_adj", "pct.diff", "log.pct.diff"), filt=T),
+  "2" = list(n=c(-90, 20, 5, 0.1),var=c("p_val_adj", "avg_log2FC", "avg_log2FC", "pct.diff"), filt=T)
   )
 
 # Identify the top genes that have a high difference in expression between the clusters
-top20_sub <- DEGs_table %>%
-  filter(grepl("^8|^3|^4|^0|1$|^2", .$clus)) %>%
+top20_sub <- DEGs_table_sub %>%
+  #filter((clus == "1")) %>%
+  filter(!(clus == "10")) %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
   filter(Direction == "UP") %>%
   #filter(!(pct.2 > 0.2)) %>%
-  nest(., .by = "layers") %>%
-  mutate(data = pmap(., ~filter_top.fun(..2, n=sel_s[[..1]]$n, var=sel_s[[..1]]$var)) ) %>%
+  nest(., .by = "clus") %>%
+  mutate(data = pmap(., ~filter_top.fun(..2, n=sel_s[[..1]]$n, var=sel_s[[..1]]$var), filt=sel_s[[..1]]$filt)) %>%
   unnest(., cols=c("data"))
   
 ```
@@ -566,20 +661,41 @@ top20_sub <- DEGs_table %>%
 # DOTPLOT TOP 10 MARKER GENES SUBMUC #
 ######################################
 # dev.new(width=6.5, height=3, noRStudioGD = TRUE)
-gr_col <- c("#FBAAB1","#FFDAB8","#F1D2FF","#E6B3E9","#8BCFCE","#92DBFF","#ABC9E1", "#E5C264","#BBD99B", "#E1E2A4", "#FDFFD3")[5:10]
+gr_col <- c("#FBAAB1","#FFDAB8","#F1D2FF","#E6B3E9","#8BCFCE","#92DBFF","#ABC9E1", "#E1E2A4","#BBD99B","#E5C264", "#FDFFD3")[5:10]
 markers <- top20_sub$gene
-markers_id <- top20_sub$layers
+markers_id <- top20_sub$clus
 groups="Clusters"
 gr_lvl <- c("8","3","4","2","1","0")
+library(ggnewscale)
 (plot <- DATA %>%
-    filter(grepl("^8|^3|^4|^0|1$|^2", .$Clusters) & sp_annot == "SubMuc") %>%
-    get_df_for_dotplot.fun(., markers, groups="Clusters", gr_col, rect=T, alpha = .3, gr_lvl=NULL) + 
-    theme(legend.position="top") )#coord_flip(expand = F) )
+    filter(grepl("^8|^3|^4|^0|^1$|^2", .$Clusters) & sp_annot == "SubMuc") %>%
+    mutate(Clusters = factor(.$Clusters, levels = gr_lvl)) %>%
+    get_df_for_dotplot.fun(., markers, groups="Clusters", gr_col, rect=T, alpha = .3, gr_lvl=gr_lvl) + 
+    theme(legend.position="right") + coord_flip(expand = F) )
 
-# dev.new(width=9, height=4, noRStudioGD = TRUE) # horizontal
+# dev.new(width=5, height=8, noRStudioGD = TRUE) # horizontal
 # dev.new(width=6.5, height=3, noRStudioGD = TRUE) # vertical
 # ggsave(paste0("./Figures/05/","Marker_genes_SubMuc", ".pdf"), plot,  width = 6.5, height = 3)
+# ggsave(paste0("./Figures/05/","Marker_genes_SubMuc_final", ".pdf"), plot,  width=5, height = 6.5)
 ```
+
+
+```{r}
+######################################
+# SAVE CLUSTER DEGs AND MARKER GENES #
+######################################
+DEGs_list <- DEGs_table %>% 
+  arrange(Clusters) %>%
+  filter(p_val < 0.9) %>%
+  split(., ~Clusters)
+
+markers <- list(top20_epi, top20_sub) %>% map(., ~select(.x, -clus, -starts_with("Avg"))) %>% bind_rows()
+
+append( list("top_markers_all_clusters"=markers), DEGs_list ) %>%
+  write.xlsx(., keepNA=TRUE, na.string="NA", overwrite=TRUE, 
+           file=paste0(result_dir,"Supplemental Table 3",".xlsx"))
+```
+
 
 ```{r 05g_dotplott_top_DEGs_epi, fig.height=40*.25+2, fig.width=4}
 #| fig-format: pdf
