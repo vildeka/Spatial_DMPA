@@ -716,7 +716,7 @@ plot_cell_pie.fun <- function(
     ct.res = NULL,
     ct.select = NULL,
     radius_adj = 0,
-    lvls = c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031"),
+    lvls = c("P118", "P080","P031", "P105", "P097","P108", "P114", "P107"),
     title = " ",
     image_id = "hires",
     alpha = 1,
@@ -740,23 +740,23 @@ plot_cell_pie.fun <- function(
     cell_annot <- t(spe@assays$celltypeprops@data) %>%
       as_tibble(., rownames = "barcode") 
   }else{
-    cell_annot <- spe@assays$misc$cell_annot %>%
+    cell_annot <- spe@assays$misc$cell_annot %>% 
     filter(grepl(paste0(ID, collapse="|"), .cell)) %>%
     select(barcode=".cell", values, !!(ct.res)) %>%
     pivot_wider(., names_from = !!(ct.res), values_fill = 0,
                 values_from = values, values_fn = function(x) sum(x)) }
   
-    if(is.null(ct.select)){ct.select <- colnames(cell_annot)[2:length(colnames(cell_annot))]}
+    if(is.null(ct.select)){ct.select <- colnames(cell_annot)[2:ncol(cell_annot)]}
   
   # get all spot coordinates:
   scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
   df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
     map2(., scale_fact, ~mutate(.x, scale_fact = .y)) %>%
-    bind_rows() %>%
+    bind_rows(., .id = "orig.ident") %>%
     mutate(imagecol = .$imagecol * .$scale_fact) %>%
     mutate(imagerow = .$imagerow * .$scale_fact) %>%
-    cbind(.,as_tibble(select(spe, "orig.ident"=!!(orig.ident)))) %>%
     rownames_to_column(var = "barcode") %>%
+    select(-any_of(c("epi", "SubMuc")), -contains("_")) %>%
     left_join(., cell_annot, by="barcode") %>%
     #mutate(orig.ident = !!(facet)) %>%
     #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
@@ -831,7 +831,7 @@ plot_cell_pie.fun <- function(
   radius = sqrt(radius) * 0.85
   
   p <- ggplot() +
-    geom_scatterpie(data=df, aes(x=imagecol,y=imagerow, r=radius+radius_adj), cols=ct.select, color=NA) +
+    geom_scatterpie(data=na.omit(df), aes(x=imagecol,y=imagerow, r=radius+radius_adj), cols=ct.select, color=NA) +
     
     colour_pallet +
     spatial_image + 
@@ -841,7 +841,7 @@ plot_cell_pie.fun <- function(
     ylim(l$max_row,l$min_row) +
     geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
     geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
-    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
+    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol,  dir = if(ncol > 2){"h"}else{"v"})
   # facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
   #Hexagon shape:
