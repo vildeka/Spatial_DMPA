@@ -1712,6 +1712,74 @@ ggsave(paste0("./Figures/06/","06_marker_genes_condition_pct.diff", ".pdf"),
        gridExtra::marrangeGrob(grobs=cluster_markers, ncol=1, nrow=1, height = 7))
 ```
 
+```{r UMAP}
+meta <- read_csv("/Users/vilkal/Raw_data/Clinical_data/Clinical_visit_2_3_updateJune2023_wSampleInfo.csv") %>% select(ID, )
+
+#### Tassos r object ####
+umap_obj_Tassos <- readRDS("/Users/vilkal/work/Brolidens_work/Projects/DMPA/data/umap_obj_Tassos.RDS")
+
+#### raw data ####
+PP_DEGs<- read_csv("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Bulk_data/DMPA_PlosPath_DEGs.csv") %>%
+  filter(FDR <= 0.05)
+new_raw <- "/Users/vilkal/Raw_data/Bulk_Transcriptomics/Visit_3/Raw_counts_matrix.csv"
+raw_counts <- read_csv(new_raw) %>%
+  dplyr::select(-entrez, -length) %>%
+  filter(symbol %in% PP_DEGs$symbol) %>% 
+  filter(!(is.na(.$symbol))) %>%
+  column_to_rownames(var = "symbol")
+
+ptc_br <- c('#FB5273', '#4FCEEF')
+
+#### meta data ####
+meta_dt<-tibble(#"X1"=cpm1_3_umap[,1],"X2"=cpm1_3_umap[,2], 
+                       "ML"=ID_to_ML,
+                       "ID"=names(ID_to_ML) ) %>%
+                mutate(group = ML_to_group[.$ML]) %>%
+  mutate(group = ifelse(grepl("P114|P107", .$ID), "DMPA_high", 
+                         ifelse(grepl("P097|P108", .$ID), "DMPA_low",
+                                ifelse(grepl("P031|P105|P118|P080", .$ID), "ST_ctrl", .$group))) ) %>%
+  mutate(txt = ifelse(grepl("high|low|ST_", .$group), .$ID, NA)) %>%
+  #filter(!(is.na(.$txt))) %>%
+  #filter(!(.$ID == "P118")) %>%
+  mutate(group = factor(.$group, levels= c("DMPA", "non", "DMPA_high", "DMPA_low", "ST_ctrl" )))
+
+#### UMAP analysis ####
+set.seed(1)
+countsDmpaAgeSwkDGEcpm1_3_sigV_umap<-uwot::umap(t(cpm(countsDmpaAgeSwkDGEcpm1_3, log=T)[countsDmpaAgeSwkDGEcpm1_3vmlt$DMPA_DE!=0, meta$name]), n_neighbors=4, init="spectral", scale=T)
+cpm1_3_umap<-uwot::umap(t(cpm( raw_counts[,meta_dt$ID], log=T)), 
+                        n_neighbors=15, init="spectral", scale=T)# countsDmpaAgeSwkDGEcpm1_3$counts,
+#prcomp(t(removeBatchEffect(cpm(countsDGE, log=T, prior.count=1)[,smpl[, name]], batch=smpl[, pat])), scale=F)$x[,c("PC1", "PC2")]
+cpm1_3_umap_dt <- cbind("X1"=cpm1_3_umap[,1],"X2"=cpm1_3_umap[,2], meta_dt)
+
+#### use Tassos UMAP ####
+cpm1_3_umap_dt <- umap_obj_Tassos %>% 
+  left_join(., select(meta_dt, ML, txt, st_group="group"), by="ML") %>% 
+  add_row(., X1 = 0.370858994263568, X2 = -1.15998967007587, txt="P118",
+    ML = "ML8310", ID = "P118", group = "non", st_group = "ST_ctrl") 
+  #filter(!(.$ID == "P118")) %>%
+  #filter(!(is.na(.$txt))) 
+
+#### UMAP plotting ####
+txt_df <- cpm1_3_umap_dt[!(is.na(cpm1_3_umap_dt$txt)),] %>%
+  mutate(X2 = X2+c(0, .1, rep(0,6)))
+
+(p <- ggplot(cpm1_3_umap_dt, aes(x=X1, y=X2, fill=st_group))+ 
+  #geom_jitter( shape=21, size=3, color="white", width=.5, height=.5) +  # Tassos used jitter
+  geom_point( shape=21, size=3, color="white", alpha = .7) +  
+  scale_fill_manual(values=c('#FB5273', "#6B51A3","#9D9AC8", '#4FCEEF',"#e68633"), name="Group")+ 
+  geom_text(data=txt_df, aes(x=X1, y=X2, label=txt), 
+            hjust = 0, nudge_x = 0.07, color="gray51") +
+  theme_bw(base_size=14)+ 
+  theme(line=element_blank(), 
+        axis.ticks=element_line(color="black"), 
+        aspect.ratio=1, axis.title=element_blank()) )
+
+ggplotly(p, tooltip=c("group3", "name"))# + geom_text_repel(aes(label=name, color=group), show.legend=F)+ geom_density2d(aes(color=group),contour=T, bins=3) 
+dev.new(height=16.11, width=16.11, units="cm")
+ggsave(paste0("./Figures/09/", "Bulk_UMAP.png"), p)
+
+```
+
 ## Session info
 ```{r}
 sessionInfo()
