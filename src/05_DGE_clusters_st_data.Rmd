@@ -217,9 +217,9 @@ DEGs_table <- bind_rows(DEGs_table_epi, DEGs_table_subMuc)
 ###################
 # ADD ANNOTATION #
 ##################
-ord1 <- c("Superficial","Hig_IM","Low_IM","Basal","8","3","4","2","1","0","10")
+ord1 <- c("Superficial","Upper IM","Lower IM","Basal","8","3","4","0","2","1","10")
 ord2 <- c("6_all","9_all","7_all","5_all","8_all","4_all","3_all","2_all","1_all","0_all","10_all")
-ord2 <- c("6","9","7","5","8","3","4","2","1","0","10")
+ord2 <- c("6","9","7","5","8","3","4","0","2","1","10")
 layers <- set_names(ord1, ord2)
 
 DEGs_table <- DEGs_table %>%
@@ -320,8 +320,6 @@ DEGs_table_sub <- DEGs_table %>%
   select(-Avg_exp_10) %>%
   Avg_all(., unique(.$clus)) %>%
   Avg_all(., c("8", "4", "0", "3", "1", "2"), avg=FALSE) 
-
-
   
 ```
 
@@ -336,8 +334,8 @@ DEGs_list <- DEGs_table %>%
   filter(p_val < 0.9) %>%
   split(., ~layers)
 
-write.xlsx(DEGs_list, keepNA=TRUE, na.string="NA", overwrite=TRUE, 
-           file=paste0(result_dir,"Supplemental Table 1",".xlsx"))
+write.xlsx(DEGs_list[ord1], keepNA=TRUE, na.string="NA", overwrite=TRUE, 
+           file=paste0(result_dir,"Supplemental Table 3",".xlsx"))
 
 ###################
 # SAVE MORPHOLOGY #
@@ -469,6 +467,7 @@ get_order <- function(df, markers, markers_id, value){
     unnest(cols = c("data")) %>%
     #mutate(marker = fct_reorder2(marker, Avg, Pct))
     mutate(row_id = cur_group_rows(), .by=c(groups))
+  
   return(df[["marker"]]) # use rev() to reorder the dots depending on horizontal/vertical 
 }
 get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect=TRUE, alpha=.2, gr_lvl=NULL){
@@ -517,13 +516,13 @@ get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect
                        name = "Average\nexpression") +
     
     
-    theme_bw() +
-    guides(size = guide_legend(override.aes = list(color = "black") ) ) +
+    theme_bw() + labs(size="% expressed") +
+    guides(size = guide_legend(override.aes = list(color = "black") )) +
     theme(axis.text.x = element_text(size=12, angle=45, hjust=1, color="black"),
           axis.text.y = element_text(size=12, color="black",hjust=.9 ),
           legend.text = element_text(size=10),
-          legend.margin=margin(0,0,0,0),
-          legend.box.margin=margin(0,-10,-10,-10),
+          legend.margin=margin(0,0,0,0), #t,r,b,l
+          legend.box.margin=margin(0,-6,-10,-8),
           axis.title = element_blank(),
           #panel.grid.major = element_blank(), 
           #panel.grid.minor = element_blank(), 
@@ -597,19 +596,21 @@ top20_epi <- DEGs_table %>%
 # dev.new(width=6.5, height=3, noRStudioGD = TRUE)
 gr_col <-c("#EB5253","#FA9F50","#D7A1FF","#984EA3")
 markers <- top20_epi$gene
-markers_id <- top20_epi$layers
+markers_id <- top20_epi$Clusters
 #markers <- c("FLG","DUOXA2","DHRS9","SPRR2B","KPRP","LINC02487","CLCA4","CD177","SERPINB2","RPTN","TGM1","TMEM184A","EPHA1","FAM83G","ALOX15B","GALNT5","MUC22","COL7A1","STMN1","FGFR2","LAMA5","MEGF6","MIR205HG")
 #markers_id <- c(rep("Sup_1",5), rep("Sup_2",6),rep("Basal_2",6),rep("Basal_1",6))
 groups="layers"
-gr_lvl <- rev(c("Sup_1", "Sup_2", "Basal_2", "Basal_1"))
+gr_lvl <- rev(c("Superficial", "Upper IM", "Lower IM", "Basal"))
 (plot <- DATA %>%
     filter(grepl(epi_clus, .$Clusters) & sp_annot == "epi") %>%
     get_df_for_dotplot.fun(., markers, groups="layers", gr_col, rect=T, gr_lvl=gr_lvl)  +
-    theme(legend.position="top") + coord_flip(expand=F))
-
+    theme(legend.position="top") + guides(fill = guide_colourbar(barwidth = 7, barheight = .5)) # horizontal
+    #coord_flip(expand=F) + theme(legend.position="right") + guides(fill = guide_colourbar(barwidth = .5, barheight = 10)) # vertical
+  )
 # dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
-# dev.new(width=5, height=6.5, noRStudioGD = TRUE) # vertical
-# ggsave(paste0("./Figures/05/","Marker_genes_epi", ".pdf"), plot,  width = 8, height = 3)
+# dev.new(width=4, height=5.5, noRStudioGD = TRUE) # vertical
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
 ```
 
 ### Identify marker genes to seperate Submucosal clusters
@@ -661,22 +662,24 @@ top20_sub <- DEGs_table_sub %>%
 # DOTPLOT TOP 10 MARKER GENES SUBMUC #
 ######################################
 # dev.new(width=6.5, height=3, noRStudioGD = TRUE)
-gr_col <- c("#FBAAB1","#FFDAB8","#F1D2FF","#E6B3E9","#8BCFCE","#92DBFF","#ABC9E1", "#E1E2A4","#BBD99B","#E5C264", "#FDFFD3")[5:10]
+gr_col <- c("#FBAAB1","#FFDAB8","#F1D2FF","#E6B3E9","#8BCFCE","#92DBFF","#ABC9E1","#E5C264","#E1E2A4","#BBD99B","#FDFFD3")[5:10]
 markers <- top20_sub$gene
 markers_id <- top20_sub$clus
 groups="Clusters"
-gr_lvl <- c("8","3","4","2","1","0")
+gr_lvl <- c("8","3","4","0","2","1")
 library(ggnewscale)
 (plot <- DATA %>%
     filter(grepl("^8|^3|^4|^0|^1$|^2", .$Clusters) & sp_annot == "SubMuc") %>%
     mutate(Clusters = factor(.$Clusters, levels = gr_lvl)) %>%
     get_df_for_dotplot.fun(., markers, groups="Clusters", gr_col, rect=T, alpha = .3, gr_lvl=gr_lvl) + 
-    theme(legend.position="right") + coord_flip(expand = F) )
+    #theme(legend.position="top") + guides(fill = guide_colourbar(barwidth = 10, barheight = .5)) # vertical
+    coord_flip(expand = F) + theme(legend.position="right") + guides(fill = guide_colourbar(barwidth = .5, barheight = 10)) # horizontal
+  )
 
-# dev.new(width=5, height=8, noRStudioGD = TRUE) # horizontal
-# dev.new(width=6.5, height=3, noRStudioGD = TRUE) # vertical
-# ggsave(paste0("./Figures/05/","Marker_genes_SubMuc", ".pdf"), plot,  width = 6.5, height = 3)
-# ggsave(paste0("./Figures/05/","Marker_genes_SubMuc_final", ".pdf"), plot,  width=5, height = 6.5)
+# dev.new(width=5.2, height=7, noRStudioGD = TRUE) # horizontal
+# dev.new(width=7.5, height=3.3, noRStudioGD = TRUE) # vertical
+# ggsave(paste0("./Figures/05/","Marker_genes_SubMuc_v", ".pdf"), plot,  width = 7.5, height = 3.3)
+# ggsave(paste0("./Figures/05/","Marker_genes_SubMuc_h", ".pdf"), plot,  width=5, height = 6.5)
 ```
 
 
