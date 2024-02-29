@@ -1025,8 +1025,8 @@ s2 <- sig_table %>%
 #####################################
 # GENES THAT ARE UNIQELY OVERLAPING #
 #####################################
-o <- t$genes %>% set_names(., t$layers) %>% .[-c(3:8)]
-o <- t$genes %>% set_names(., t$layers) %>% .[c(3:8)] # SubMucosa
+o <- t$genes %>% set_names(., t$layers) %>% .[-c(2:7)]
+o <- t$genes %>% set_names(., t$layers) %>% .[c(2, 5:7)] # SubMucosa
 
 getVennOverlap <- function(lsvenn) {
   
@@ -1034,7 +1034,8 @@ getVennOverlap <- function(lsvenn) {
   print(lengths(attributes(ItemsList)$intersections))
   return(attributes(ItemsList)$intersections)
 }
-int_genes <- getVennOverlap(o) %>% tibble(name = names(.), Uniqe_int = .)
+int_genes <- getVennOverlap(o) %>% tibble(name = names(.), Uniqe_int = .) %>%
+  mutate(n = map_dbl(.$Uniqe_int, ~length(.x)), .after="name")
 
 # int_genes$Uniqe_int
 knitr::kable(int_genes, caption = "Unique gene overlap")
@@ -1128,7 +1129,7 @@ ggplot(data, aes(x = variable, stratum = value, alluvium = gene, fill = value)) 
 ######################
 # CHECK GENE OVERLAP #
 ######################
-E2 <- DEGs_table_E2lvl %>% filter(p_val_adj < 0.05) # %>% filter(!(grepl(epi_clus, .$subgroup)))
+E2 <- DEGs_table_E2lvl %>% filter(p_val_adj < 0.05) %>% filter((grepl(epi_clus, .$subgroup)))
 Z <- intersect(Zal_DEGs$symbol, sig_genes$gene)
 B <- intersect(sig_PP$symbol, sig_genes$gene)
 intersect(Z, B)
@@ -1217,7 +1218,7 @@ venn_input.fun <- function(sig_table, gr_col){
   group_by({{gr_col}}) %>%
   nest() %>%
   ungroup() %>%
-  mutate(layers = ifelse(grepl("_", .$layers), as.character(.$layers), paste0("Clus_",.$layers))) %>%
+  mutate(layers = ifelse(grepl("\\d", .$layers), paste0("Clus_",.$layers), as.character(.$layers) )) %>%
   mutate(genes = map( data, ~pluck(.x, "gene"))) %>% 
   mutate(genes = setNames(.[["genes"]], {{gr_col}})) %>%
   arrange({{gr_col}}) %>%
@@ -1276,7 +1277,7 @@ g_B <- intersect(E2_split$submuc$gene, sig_PP$symbol)
 g <- intersect(g_Z, c(int_genes$Uniqe_int[[5]], int_genes$Uniqe_int[[7]]))
 
 cat(paste(g))
-genes <-c("PDZK1IP1","CXCL14", "MAOA", "H19")  g
+genes <-c("PDZK1IP1","CXCL14", "MAOA", "H19")
 morf <- "epi"
 morf <- "subMuc"
   
