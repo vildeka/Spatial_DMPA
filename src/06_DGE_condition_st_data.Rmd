@@ -1065,6 +1065,36 @@ knitr::kable(intersections_df, caption = "All overlaping genes for all combinati
 
 ```
 
+```{r wordcloud}
+d <- set_names(unlist(t$direction), unlist(t$genes)) %>% .[-c(2:7)]
+int_genes <- getVennOverlap(o) %>% tibble(name = names(.), Uniqe_int = .) %>%
+  mutate(dir = map(.$Uniqe_int, ~d[.x])) %>% unnest(cols = c(Uniqe_int, dir)) %>% 
+  mutate(name = factor(.$name)) %>%
+  nest( .by = "dir")
+
+ovl <- levels(int_genes$data[[1]]$name)
+col <- set_names(c("#FFD92F","#7CAE00","#E41A1C","#377EB8","#4DAF4A","#F781BF","#B3CDE3","#BEAED4","#BF5B17","#CCEBC5","#FBB4AE","#DECBE4","#984EA3","#F8766D","#FED9A6","#66C2A5","#00A9FF")[1:length(ovl)], ovl )
+
+wordcloud(int_genes$data[[1]]$Uniqe_int, ordered.colors = T, scale=c(.9,0.9),
+          colors = col[int_genes$data[[1]]$name], rot.per=0)
+
+library(ggwordcloud)
+ggplot(int_genes, aes(label = Uniqe_int, color = name)) +
+  geom_text_wordcloud() +
+  theme_minimal() +
+  facet_wrap(~dir)
+
+                           Basal                      Basal:Lower IM Basal:Lower    IM:Superficial:Upper IM 
+                          "#FFD92F"                           "#7CAE00"                           "#E41A1C" 
+            Basal:Lower IM:Upper IM          Basal:Superficial:Upper IM                            Lower IM 
+                          "#377EB8"                           "#4DAF4A"                           "#F781BF" 
+      Lower IM:Superficial:Upper IM                   Lower IM:Upper IM                         Superficial 
+                          "#B3CDE3"                           "#BEAED4"                           "#BF5B17" 
+               Superficial:Upper IM                            Upper IM 
+                          "#CCEBC5"                           "#FBB4AE" 
+
+```
+
 ```{r aluvium-plot}
 i <- unnest(int_genes, cols = c(Uniqe_int))
 data <- sig_table %>%
