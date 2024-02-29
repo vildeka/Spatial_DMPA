@@ -1,3 +1,4 @@
+library(RColorBrewer)
 #################
 # GEOM SPATIAL #
 ################
@@ -59,6 +60,7 @@ plot_spatial.fun <- function(
     sampleid = c("P080"),
     geneid = "CD3E",
     title = " ",
+    txt = TRUE,
     image_id = "hires",
     alpha = 1,
     ncol = 2,
@@ -69,17 +71,15 @@ plot_spatial.fun <- function(
     img_alpha = 0,
     zoom = NULL ) {
   
-  # select samples to plot
+  # select samples to plot:
   sampleid <- set_names(sampleid)
-  
-  # filter samples:
-  # spe <- spe %>% filter(., orig.ident %in% sampleid)
+  spe <- spe %>% filter(., orig.ident %in% sampleid)
   
   # Set default assay
   DefaultAssay(spe) <- assay
   
   ## get feature to plot:
-  if (!(as_label(geneid) %in% colnames(spe@meta.data))) {
+  if (!(c(geneid) %in% colnames(spe@meta.data))) {
     spe <- spe %>%
       mutate(., FetchData(., vars = c(geneid)) ) 
   }
@@ -123,8 +123,12 @@ plot_spatial.fun <- function(
     left_join(.,select(spe, barcode=".cell",!!(geneid)), by="barcode") %>%
     as_tibble() 
   
-  gr <- spe@meta.data %>% group_by(groups, orig.ident ) %>% nest() %>% pull(., "groups")
-  text_annot <- tibble(sample_id = sampleid, x=500, y=500, orig.ident = sampleid, gr = gr) 
+  if(txt){
+    gr <- spe@meta.data %>% group_by(groups, orig.ident ) %>% nest() %>% pull(., "groups")
+    text_annot <- tibble(sample_id = sampleid, x=500, y=500, orig.ident = sampleid, gr = gr)
+    txt <- list(geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt), # sample ID
+           geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt))
+  }else{txt <- NULL}
   
   # select viewframe:
   if (!(is.null(zoom))){
@@ -146,11 +150,22 @@ plot_spatial.fun <- function(
   if (!(img_alpha == 0)){
     # set image alpha:
     im <- map(sampleid, ~pluck(spe@images, .x, "image")) 
-    im <- map(im, ~ matrix(
-      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    # im is a 3D matrix, each dimension representing red, green or blue
+    # a 4th dimension can be added to specify the opacity
+    #im[[1]] <- img
+    # img_alpha
+    # im <- map(im, ~ matrix(
+    #   rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    # 
+    # img <- map(im, ~as.raster(.x))
     
-    img <- map(im, ~as.raster(.x))
-    img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
+    # add alpha dimension to the rgb matrix
+    im <- imap(im, ~array(c(.x, DATA@misc$alpha[[.y]]), dim = c(dim(.x)[1:2],4)) )
+    # select the size of the viewbox
+    img_ <- map(im, ~.x[l$min_row:l$max_row,l$min_col:l$max_col,])
+    
+    #img_[[1]] <- g$raster
+    # plot(img_[[1]])
     
     # get grob and save as list
     grob <- map(img_, ~grid::rasterGrob(.x, width=unit(1,"npc"), height=unit(1,"npc")))
@@ -186,8 +201,9 @@ plot_spatial.fun <- function(
     coord_cartesian(expand=FALSE ) + theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
+    txt +
+    #geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
+    #geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
     facet_wrap(~factor(orig.ident, levels = sampleid), ncol = ncol, dir = if(ncol > 2){"h"}else{"v"})
   
   # Hexagon shape:             
