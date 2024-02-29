@@ -1389,57 +1389,88 @@ dev.off()
 ######################
 # "./Figures/06/"
 library(nVennR)
-t <- list(Brad=sig_PP$symbol, Zal=Zal_DEGs$symbol, ST=sig_genes$gene, E2=E2$gene) %>%
+t <- list(Zal=Zal_DEGs$symbol, ST=unique(sig_genes$gene), E2=unique(E2$gene), Brad=sig_PP$symbol) %>%
   tibble(sig_DEGs=., study=names(.))
 
 getVennOverlap <- function(lsvenn) {
-  
   ItemsList <- gplots::venn(lsvenn, show.plot = FALSE)
   print(lengths(attributes(ItemsList)$intersections))
-  return(attributes(ItemsList)$intersections)
+  t <- attributes(ItemsList)$intersections %>%
+    tibble(name = names(.), "Overlapping genes" = .) %>%
+    mutate(n = map_dbl(.$`Overlapping genes`, ~length(.x)), .after="name")
+  return(t)
 }
-int_genes <- t$sig_DEGs %>%
-  getVennOverlap() %>% 
-  tibble(name = names(.), Uniqe_int = .) %>%
-  mutate(n = map_dbl(.$Uniqe_int, ~length(.x)))
-
+col <- set_names(c('#ca0020','#f4a582','#0571b0',"#018571"), t$study)
 # all four comparisons
-d <- plotVenn(t$sig_DEGs, 
-              labelRegions=FALSE,
-              sNames = names(t$sig_DEGs), systemShow=T) %>%
+plotVenn(t$sig_DEGs, 
+         labelRegions=FALSE,
+         #sNames = names(t$sig_DEGs), 
+         systemShow=F) %>%
+  {. ->> d} %>%
   showSVG(., 
-         setColors = c('#ca0020','#f4a582',"#018571",'#0571b0'),
+         setColors = col[names(d$orig)],
          labelRegions=FALSE,
          showNumbers=FALSE,
          fontScale = 1,
-         systemShow=T
-         #outFile=paste0("./Figures/06/", "Venn_E2.svg")
+         systemShow=T,
+         outFile=paste0("./Figures/06/", "Venn_E2_all.svg")
          )
-
-# showSVG(d, labelRegions = T)
-knitr::include_graphics(paste0("./Figures/06/", "Venn_E2.svg"))
+int_genes <- getVennOverlap(t$sig_DEGs) 
 
 # Zalenskaya, ST and E2
-d <- plotVenn(t$sig_DEGs[2:4], 
-              labelRegions=FALSE,
-              sNames = names(t$sig_DEGs), systemShow=T) %>%
+plotVenn(t$sig_DEGs[1:3], 
+         labelRegions=FALSE,
+         sNames = names(t$sig_DEGs), 
+         systemShow=F) %>%
+  {. ->> d} %>%
   showSVG(., 
-         setColors = c('#ca0020','#f4a582','#0571b0'),
+         setColors = col[names(d$orig)],
          labelRegions=FALSE,
          showNumbers=FALSE,
          fontScale = 2,
-         systemShow=T
-         #outFile=paste0("./Figures/06/", "Venn_E2.svg")
+         systemShow=T,
+         outFile=paste0("./Figures/06/", "Venn_E2_Zal.svg")
          )
+
+int_genes <- getVennOverlap(t$sig_DEGs[1:3]) 
+write.xlsx(int_genes, paste0(result_dir, "Venn_table_genes.xlsx"))
+knitr::include_graphics(paste0("./Figures/06/", "Venn_E2_Zal.svg"))
+
+# get genes for the overlaps:
+# getVennRegion(d, c("E2", "Brad"))
 ```
 
 ```{r}
-KEGG_database[["KEGG_RETINOL_METABOLISM"]]
+pathway <- KEGG_database$db[["KEGG_RETINOL_METABOLISM"]]
+pathway <- KEGG_database$db[["KEGG_ARACHIDONIC_ACID_METABOLISM"]]
+pathway <- GO_database$db[["GOBP_EPIDERMAL_CELL_DIFFERENTIATION"]]
 
-i <- intersect(All_DEGs$symbol, KEGG_database[["KEGG_RETINOL_METABOLISM"]])
-print(intersect(All_DEGs$symbol, KEGG_database[["KEGG_RETINOL_METABOLISM"]]))
-a <- filter(All_DEGs, symbol %in% i)
+i <- intersect(All_DEGs$symbol, pathway)
+print(intersect(All_DEGs$symbol, pathway))
+a <- filter(All_DEGs, symbol %in% i) %>% arrange(symbol)
 ```
+
+```{r}
+pathway <- GO_database$db[["GOBP_EPIDERMAL_CELL_DIFFERENTIATION"]] 
+pathway <- GO_database$db[["GOBP_EXTERNAL_ENCAPSULATING_STRUCTURE_ORGANIZATION"]]
+
+i <- intersect(All_DEGs$symbol, pathway) 
+  
+a <- All_DEGs %>%
+  filter(study == "ST") %>%
+  filter(grepl("[0|8|3|4]", .$cluster)) %>%
+  filter(symbol %in% pathway) %>%
+  mutate(Direction = ifelse(logFC > 0, "UP", "DOWN")) %>%
+  split(., ~Direction)
+  
+
+cat(unique(a$DOWN$symbol), sep = ", ")
+cat(unique(a$UP$symbol), sep = ", ")
+cat(c("XIST", "SPINK5", "NEAT1", "CD24", "PABPC1"), sep = ", ")
+l <- c("KRT10", "FLG", "KRT4", "AQP3", "SCEL", "SPRR2A", "SPRR2E", "S100A7", "SPRR2D", "KRT6C", "KRT14", "KRT5", "KRTDAP", "KRT13", "MEG3", "IGKC", "IGHA1", "IGLC1", "IGLC2", "IGLC3", "IGHA2", "IGHG1", "JCHAIN", "OLFM4", "SAMHD1", "XIST", "SPINK5", "NEAT1", "CD24", "PABPC1", "HIST1H4C", "RPS26", "RPS12", "RPL32", "GPM6B", "SPINK5", "ZFHX4", "THBS2","COL1A1", "COL3A1", "COL1A2", "COL5A1", "COL5A2", "COL6A3", "COMP", "LUM", "CTSK", "SERPINH1", "MMP2", "SPARC", "SERPINB4", "SERPINB3", "REV3L", "CD24", "PPIA", "NUCKS1", "IGFBP5", "MT1E", "MT1X", "PTGDS", "PSAP", "SLC7A8", "MT-CO2", "PLPP3", "IL6ST", "ACTG1", "LGALS7", "TMPRSS11B", "CAST", "BOD1L1", "SNHG5")
+setdiff(unique(unlist(dge_sub)), l)
+```
+
 
 ```{r 06d_sig_adj_genes_upsetplot}
 ##############
