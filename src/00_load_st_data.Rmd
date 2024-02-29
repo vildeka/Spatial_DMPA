@@ -62,6 +62,7 @@ library(niceRplots)
 
 library(xml2) # loads the image 
 library(sp)
+library(terra)
 source("../bin/help_functions.R")
 source("../bin/spatial_visualization.R")
 
@@ -95,11 +96,13 @@ h5_files <- list.dirs(path = input_dir,
             set_names(., str_extract(., "P\\d\\d\\d$"))
 
 # h5_files <- h5_files[names(h5_files) %in% sample_id]
+# the new version of seurat v5 does not allow to read in any other than low res img
+# to circumvent this rename the higres to low res and move the lowres file
 image <- map(h5_files, 
              ~Read10X_Image(
                filter.matrix = T,
                image.dir = paste0(.x, "/spatial"),
-               image.name = "tissue_hires_image.png"))
+               image.name = "tissue_lowres_image.png"))
 
 # Read in h5 files and create Seurat Object
 seuratObj_list <- pmap(list(h5_files, image, names(h5_files)),
@@ -132,7 +135,9 @@ seuratObj_list <- seuratObj_list %>%
 # MERGE SAMPLES #
 #################
 # Merge datasets into one single seurat object
+
 DATA  <- merge(seuratObj_list[[1]], y = seuratObj_list[2:length(seuratObj_list)])
+DATA <- JoinLayers(DATA) # Seurat version 5.0
 ```
 
 ### Load morphology annotation
@@ -152,10 +157,10 @@ a2 <- map(sample_id, ~xml2::as_list( read_xml( paste0( input_dir,"/",.x,"/",.x,"
 dd <- map(a2, ~as.numeric( strsplit( attributes(.x$svg)$viewBox , " ")[[1]] ))
 dd2 <- map(sample_id, ~dim(DATA@images[[.x]]@image))
 
-# sample_id <- "P031"
-# a2 <- a2[["P031"]]
-# dd <- dd[["P031"]]
-# dd2 <- dd2[["P031"]]
+# sample_id <- "P097"
+# a2 <- a2[["P097"]]
+# dd <- dd[["P097"]]
+# dd2 <- dd2[["P097"]]
 
 # add image coordinates to the seurat object
 get_img_coord <- function(DATA, sample_id){
@@ -175,6 +180,7 @@ get_sp_annot <- function(a2, dd, dd2, sample_id){
   annot_coord <- id %>%
     map(., ~get_shape(a2$svg[[.x]]) ) %>%
     map(., ~as_tibble(.x, .name_repair="unique"))  %>%
+    # convert the view box from the svg to the pixel dimensions of the raster img:
     map(., ~mutate(.x, x = .x[[1]]*dd2[2]/dd[3],
                        y = .x[[2]]*dd2[1]/dd[4] )) %>%
     map(., ~rowid_to_column(., var = "path_idx")) %>%
@@ -225,7 +231,84 @@ annot <- list(a2, dd, dd2, names(a2)) %>%
 sp <- map(annot, 2) %>% bind_rows()
 DATA <- left_join( DATA, sp, by=c(".cell"="barcodes")) 
 
-DATA 
+DATA
+```
+
+```{r crop-img}
+mask_background.fun <- function(df, im, sampleid){
+  # get polygon coordinates for individual polygons:
+  df <- df %>%
+    select( any_of(c("name","path_idx", "x", "y"))) %>% 
+    filter(grepl("epi|SubMuc", .$name)) %>% 
+    split(~name) 
+  
+  # Function to create SpatialPolygons from a dataframe
+  createSpatialPolygons <- function(df) {
+    # Convert dataframe to SpatialPointsDataFrame
+    #coordinates(df) <- c("y","x")
+    coordinates(df) <- c("x", "y")
+    
+    # Order the points based on 'path_idx'
+    df <- df[order(df$path_idx, decreasing = F), ]
+    #df <- df %>% arrange(desc(path_idx))
+    
+    # Create a SpatialPolygons object
+    poly <- SpatialPolygons(list(Polygons(list(Polygon(df)), ID = df$name[1])))
+    
+    return(poly)
+  }
+  
+  # Apply the function to each element of the list
+  polygons_list <- map(df, ~createSpatialPolygons(.x))
+  
+  # Combine the SpatialPolygons into a single object
+  combined_polygon <- do.call("rbind", polygons_list)
+  
+  # Convert it to a polygon (SpatVector)
+  polygon <- vect(combined_polygon)
+  
+  # get image matrix and convert to rgb before rasterizing
+  img <- matrix(
+      rgb(im[,,1],im[,,2],im[,,3], im[4,,]* 1), nrow=dim(im)[1])
+  raster <- rast(img)
+  
+  rasterized <- rasterize(polygon, raster)
+  rasterized <- flip(rasterized, direction="vertical")
+  
+  # Plot the polygon
+  # plot(polygon)
+
+  # Crop the raster using the polygon
+  cropped_raster <- mask(raster, rasterized, updatevalue=0)
+  
+  # Plot the cropped raster to verify
+  # plot(cropped_raster)
+
+  cropped_raster <- ifel(cropped_raster > 0, 1, cropped_raster)
+  
+  image_array <- as.array(cropped_raster)[,,1] # keep first dim only 
+  #NA_idx <- which(is.na(image_array[,,1]))
+  
+  # minpulate image matrix
+  #im <- replace(im, list = which(image_array != 0)), values = 1)
+  DATA@misc$alpha <<- append(DATA@misc$alpha, set_names(list(image_array), sampleid) )
+}
+
+walk(sample_id, ~mask_background.fun(DATA@tools[[.x]], DATA@images[[.x]]@image, .x) )
+```
+
+```{r 00a_plot_tissue, fig.height=8, fig.width=5}
+# dev.new(width=5, height=8, noRStudioGD = TRUE)
+DATA %>%
+  plot_spatial.fun(., 
+      sampleid=sample_id,
+      txt = F,
+      geneid = "nFeature_RNA",
+      zoom = "zoom",
+      ncol = 2,
+      annot_line = .25,
+      img_alpha = 1,
+      point_size = 0) + theme(legend.position = "none")
 ```
 
 ### Add meta data
@@ -243,7 +326,8 @@ DATA <-  DATA %>%
 
 ```
 
-```{r 00a_plot_sp_annot, fig.height=8, fig.width=7}
+```{r 00b_plot_sp_annot, fig.height=8, fig.width=5}
+# dev.new(width=5, height=8, noRStudioGD = TRUE)
 DATA %>%
   plot_st_meta.fun(.,  
           assay="RNA",
@@ -304,7 +388,7 @@ f <- df %>%
 ```
 
 ### Add missing morphology annotation
-```{r 00b_plot_new_sp_annot, fig.height=8, fig.width=7}
+```{r 00c_plot_new_sp_annot, fig.height=8, fig.width=5}
 # dev.new(width=10, height=10, noRStudioGD = TRUE)
 DATA <-  DATA %>%
   mutate(sp_annot = case_when(colnames(DATA) %in% keep_epi ~ 'epi',
@@ -324,7 +408,7 @@ DATA %>%
 ```
 
 ## Plot spots to be removed
-```{r 00c_plot_spots_to_remove, fig.height=8, fig.width=7}
+```{r 02d_plot_spots_to_remove, fig.height=8, fig.width=5}
 # dev.new(width=10, height=10, noRStudioGD = TRUE)
 
 DATA <-  DATA %>%
@@ -353,7 +437,7 @@ dim(DATA)
 DATA
 ```
 
-```{r final-sp_annot, fig.height=8, fig.width=5}
+```{r 00e_final-sp_annot, fig.height=8, fig.width=5}
 # dev.new(width=5, height=2, noRStudioGD = TRUE)
 DATA %>%
   #filter(orig.ident == "P118" | orig.ident == "P097") %>%
