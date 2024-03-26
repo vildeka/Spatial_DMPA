@@ -32,7 +32,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r background_job, eval=FALSE, include=FALSE}
-source("../bin/render_with_jobs.R")
+source("../../bin/render_with_jobs.R")
 
 # quarto
 # render_html_with_job(out_dir = lab_dir)
@@ -59,12 +59,11 @@ library(SeuratObject)
 library(tidyseurat)
 library(cowplot)
 library(ggrepel)
-#library(ggpubr)
 #library(ggalluvial)
 library(png)
 library(grid)
 library(patchwork)
-library(ggpuber)
+#library(ggpuber)
 library(openxlsx)
 
 source("../../bin/spatial_visualization.R")
@@ -84,7 +83,6 @@ epi_clus <- "^5$|^6$|^7|^9" # non-filt
 # DEGs_table <- read_csv(paste0(input_dir,"subset_100/DGEs_condition_wilcox_epi_100.csv")) %>% filter(groups == "DMPA")
 DEGs_table <- read_csv(paste0("../../results/06_DGE_condition_st_data/","DGEs_condition_wilcox.csv"))
 DATA <- readRDS(paste0(input_dir,"seuratObj_spatial_dist_SM.RDS"))
-img <- readPNG("../../resources/Schematic figure ST.png")
 ihc <- readPNG("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resources/CD20_IHC.png")
 ```
 
@@ -94,8 +92,7 @@ ihc <- readPNG("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resource
 ###########################
 # VOLCANO PLOT SUBMUCOSA #
 ###########################
-ord <- c("Superficial","Upper IM","Lower IM","Basal")
-ord <-  c("8","3","4","0","2","1")
+ord <- c("Superficial","Upper IM","Lower IM","Basal","8","3","4","0","2","1")
 DEGs_filt <- DEGs_table %>% 
   filter((grepl(paste0(ord, collapse = "|^"), .$subgroup))) %>%
   mutate(layers = factor(.$layers, levels = ord)) %>%
@@ -139,7 +136,6 @@ names <- c("Basal", "0", "1", "2", "3", "4", "8", "10")
 clus_1 <- c("#984EA3","#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#00BFC4","#FFFF33") %>% set_names(., names)
 ID <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107")
 col_gr <- set_names(c("#813340", "#AC5A64", "#DA84A4", "#FFB1BA","#125E6B","#3A7D8B", "#80C2D0", "#C0DFEE"),ID)
-keep <- "Basal|8|3|^0"
 
 layer_dotplot.fun <- function(DATA, feat, 
                               facet = TRUE, 
@@ -156,12 +152,12 @@ layer_dotplot.fun <- function(DATA, feat,
     mutate(Q1 = ifelse(.$Q1 == min(.$Q1), 0,.$Q1)) %>%
     mutate(Q3 = ifelse(.$Q3 == max(.$Q3), max(.$yend),.$Q3)) %>%
     #mutate(Q3 = ifelse(.$layers == "Basal_2", .$Q3+.3,.$Q3)) %>%
-    arrange(layers) %>% ungroup() %>%
-    filter(., grepl(keep, .$layers))
+    arrange(layers) %>% ungroup() #%>%
+    #filter(., grepl(keep, .$layers))
   
   DAT <- DATA %>%
     #filter(., grepl("SubMuc", DATA$sp_annot) & !(grepl(epi_clus, DATA$Clusters))) %>%
-    filter(., (grepl(keep, DATA$layers))) %>%
+    #filter(., (grepl(keep, DATA$layers))) %>%
     mutate(., FetchData(., vars = c(feat), slot = "data") ) %>%
     select(groups, ID="orig.ident", layers, all_of(c(feat)), spatial_dist) %>%
     mutate(ID = factor(.$ID, levels = names(col_gr)))
@@ -197,7 +193,7 @@ layer_dotplot.fun <- function(DATA, feat,
     theme(legend.position="top", legend.justification = "left",
           #legend.position = c(.1, 1.15), legend.direction = "horizontal",
           plot.background = element_rect(fill = "transparent", colour = NA),
-          plot.margin = unit(c(2,.0,-2,.5), "lines"),
+          plot.margin = unit(c(2,.2,-2,.3), "lines"),
           panel.border = element_blank(),
           text = element_text(size = txt_size),
           axis.line = element_line(linewidth = .3),
@@ -219,7 +215,7 @@ layer_dotplot.fun <- function(DATA, feat,
 # FILTER DATA #
 ###############
 keep <- "^5|8|3|^0"
-DATA <- DATA %>%
+DAT <- DATA %>%
   filter(grepl(keep, .$Clusters)) %>%
   mutate(groups = if_else(groups =="ctrl", "Control", .$groups))
 
@@ -227,21 +223,24 @@ DATA <- DATA %>%
 # CLUS DOTPLOT PER EPI LAYER #
 ##############################
 # dev.new(height=1.9, width=6.7, noRStudioGD = TRUE)
-# dev.new(height=2.4, width=6.7, noRStudioGD = TRUE) with legend
+# dev.new(height=2.4, width=6.7, noRStudioGD = TRUE)  # with legend
 feat <- c("IGHA2","IGLC1","JCHAIN","OLFM4" )
 dot_fig <- map(feat, 
-               ~layer_dotplot.fun(DATA, .x, 
+               ~layer_dotplot.fun(DAT, .x, 
                                   facet = T, 
                                   txt_size = 9,
                                   col = clus_1)) # , x_max = 6
 # dot_fig[[1]]
-B_1 <- wrap_plots(dot_fig, nrow = 1, guides = "collect" ) + 
+B_1  <- wrap_plots(dot_fig, nrow = 1, guides = "collect" ) + 
   plot_layout(axis_titles = "collect") & 
   theme(#legend.position = c(.1, 1.15), legend.direction = "horizontal",
-        plot.margin = unit(c(1,.0,0,.5), "lines"),
+        plot.margin = unit(c(1,.2,0,.3), "lines"),
         legend.position = 'top', 
-        legend.justification = "left", 
-        legend.box.margin=margin(-30,0,-15,0), 
+        legend.justification = "right", 
+        legend.background = element_rect(colour ="gray", linewidth=.2),
+        legend.margin=margin(1,2,1,1),
+        legend.box.margin=margin(-25,0,-10,0), 
+        #legend.box.margin=margin(-30,0,-15,0), 
         # axis.title.y.left = element_text(margin = margin(r = 5))
         )
 
@@ -288,7 +287,7 @@ p_list <- map(p, ~ .x + theme(plot.margin = unit(c(-25, -10, -10, -15), "pt"), #
 # patchwork does not respect margins when nesting plots, use cowplot instead!
 # dev.new(width=6.7, height=3.4, noRStudioGD = TRUE) 
 c <- plot_grid( plotlist = p_list, ncol = 4, rel_heights = c(1), rel_widths = c(1))
-B_2 <- plot_grid(NULL, c, rel_widths = c(.05,1))
+B_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
 B <- plot_grid( B_1, B_2, ncol=1, rel_heights = c(3,1.1), labels = c('B'))
 
 ggsave("./Figures/06/Fig_06B.png", B, width = 6.7, height = 3.2, bg = "white", dpi = 300)
