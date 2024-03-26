@@ -1,0 +1,455 @@
+---
+title: "Figure 4"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    embed-resources: true
+    code-fold: show
+params:
+  fig.path: "`r paste0(params$fig.path)`" #./Figures/
+  run.gsea: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  fig.width     = 6.6929133858,
+  fig.path      = params$fig.path,#"../Figures/",
+  fig.align     = "center",
+  message       = FALSE,
+  warning       = FALSE,
+  dev           = c("png"),
+  dpi           = 300,
+  fig.process = function(filename){
+    new_filename <- stringr::str_remove(string = filename,
+                                        pattern = "-1")
+    fs::file_move(path = filename, new_path = new_filename)
+    ifelse(fs::file_exists(new_filename), new_filename, filename)
+  }
+  )
+# setwd("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/src/manuscript")
+```
+
+```{r background_job, eval=FALSE, include=FALSE}
+source("../bin/render_with_jobs.R")
+
+# quarto
+# render_html_with_job(out_dir = lab_dir)
+# fs::file_move(path = file, new_path = paste0(lab_dir, file))
+
+# currently using quarto for github and kniter for html due to source code option 
+render_git_with_job(fig_path = "./Figures/FIGURES/")
+system2(command = "sed", stdout = TRUE,
+        args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
+                 paste0("./md_files/", basename("./09_figures.md"))))
+
+# kniter
+knit_html_with_job(out_dir = "../lab_book/09_figures", fig_path = "./Figures/FIGURES/")
+```
+
+### Load data and libraries
+```{r Load_data}
+##################
+# LOAD LIBRARIES #
+##################
+library(tidyverse)
+library(Seurat)
+library(SeuratObject)
+library(tidyseurat)
+library(cowplot)
+library(ggrepel)
+library(png)
+library(grid)
+library(patchwork)
+library(openxlsx)
+
+source("../../bin/spatial_visualization.R")
+source("../../bin/plotting_functions.R")
+
+#########
+# PATHS #
+#########
+input_dir <- "../../results/08_spatial_dist/SM/"
+result_dir <- "../../results/09_figures/"
+if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
+epi_clus <- "^5$|^6$|^7|^9" # non-filt
+
+#############
+# LOAD DATA #
+#############
+# DEGs_table <- read_csv(paste0(input_dir,"subset_100/DGEs_condition_wilcox_epi_100.csv")) %>% filter(groups == "DMPA")
+DEGs_table <- read_csv(paste0("../../results/05_DGE_clusters_st_data/","DGEs_clusters_wilcox.csv"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_spatial_dist_SM.RDS"))
+DATA <- readRDS(paste0(input_dir,"seuratObj_spatial_dist_SM.RDS"))
+```
+
+### UMAP of cluster resolutions
+```{r 03a_plot_resolution, fig.asp=5/10}
+###############
+# FILTER DATA #
+###############
+keep <- "8|3|^0|4|^1$|2"
+epi_clus <- "^5$|^6$|^7|^9|^10$"
+DAT <- DATA %>%
+  arrange(spatial_dist) %>%
+  filter(!(grepl(epi_clus, .$Clusters)))
+
+################
+# COLOR PALLET #
+################
+# centroids2d <- as.matrix(t(t(DAT@reductions$umap_harmony@cell.embeddings) %*% mm)/Matrix::colSums(mm))
+lable_df <- DAT %>%
+    group_by(Clusters) %>%
+    select(Clusters, contains("umapharmony")) %>% 
+    summarize_all(mean)
+
+names <- c("Basal", "0", "1", "2", "3", "4", "8", "10")
+col1 <- c("#984EA3","#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#00BFC4","#FFFF33") %>% set_names(., names)
+col2 <- c("grey90","grey70", "orange3", "firebrick", "purple4")
+
+############
+# PLOTTING #
+############
+p1 <- plot_clusters.fun(DAT, cluster="Clusters", txt_size = 10, dot_size = 0.05,
+                        color = col1, red = "umapharmony", lable_size = 3) + theme_void() +
+  xlab("UMAP 1") + ylab("UMAP 2") +
+  theme(legend.position = "none",
+        panel.border = element_rect(colour = "black", fill=NA),
+        plot.title = element_blank(),
+        text = element_text(size = 7),
+        plot.margin = unit(c(5,2,1,7), "pt"), #t,r,b,l c(.1,.1,-.4,-.1)
+        axis.title.x.bottom = element_blank(),
+        axis.title.y.left = element_text(margin = margin(r = 3), angle = 90)
+      )
+
+p2 <- plot_genes.fun(DAT, gene="spatial_dist_SM", point_size = .05,
+                     col = col2, red = "umapharmony", lable_size = 3) + 
+  xlab("UMAP 1") + ylab("UMAP 2") +
+  theme(panel.border = element_rect(colour = "black", fill=NA),
+        plot.title = element_blank(),
+        text = element_text(size = 7),
+        plot.margin = unit(c(1,2,1,7), "pt"), #t,r,b,l c(.1,.1,-.4,-.1)
+        axis.title.x.bottom = element_text(margin = margin(t = 3)),
+        axis.title.y.left = element_text(margin = margin(r = 3), angle = 90)
+      )
+
+# dev.new(width=1.3, height=1.9, noRStudioGD = TRUE)
+(A <- plot_grid(ncol = 1, #labels = c('A'),
+          plotlist = list(p1, p2)) )
+```
+
+### Plot spatial distance on tissue
+```{r 08b_spatial_trajectory_tissue, fig.height=6, fig.width=4}
+####################
+# SPATIAL DISTANCE #
+####################
+# dev.new(width=2.3, height=1.9, noRStudioGD = TRUE)
+col1 <- c("#984EA3","#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#00BFC4","#FFFF33") %>% set_names(., names)
+col2 <- c("grey90","grey70", "orange3", "firebrick", "purple4")
+scale_color_pseudotime <- function(palette = col2, ...) {
+  # get normalized values of spatial dist
+  pseudotime <- as.data.frame(list("sp"=DAT$spatial_dist_SM))
+  pseudotime <-  arrange(pseudotime, desc(sp))
+  x <- rowMeans(pseudotime)
+  x <- x/max(na.omit(x))
+  
+  # generate colors
+  pal <- palette
+  my_pal <- colorRampPalette(pal)(99)[x * 98 + 1]
+  # map them as ggplot pallet
+  scale_color_gradientn(colors = my_pal, na.value = "grey90", ...)
+}
+
+feat <- list("Clusters", "spatial_dist")
+p <- map(feat,
+          ~plot_spatial.fun(DATA,
+                   geneid = .x,
+                   sampleid = c("P118", "P097"),
+                   zoom = "zoom",
+                   lab = F,
+                   col = col1,
+                   alpha = 1,
+                   ncol = 1, 
+                   #annot_col = "#dbd9d9",
+                   annot_line = .1,
+                   img_alpha = 0,
+                   point_size = .6) + #.3
+    #annotate("text", x = 500, y = 450, size = 4, label = "Control") + # col = "#CB251C",
+    theme(legend.position = "none",
+          panel.spacing.y = unit(-3, "lines"),
+          plot.margin = unit(c(-.3, -.4, -.1, -.9), "lines")) )
+
+p[[2]] <- p[[2]] + scale_color_pseudotime(palette = col2) 
+
+# dev.new(width=2.6, height=1.9, noRStudioGD = TRUE)
+(B <-  ggdraw(p[[2]]) + draw_label("DMPA", x = c(.2), y = c(.48), hjust = 0, size = 9) +
+    draw_label("Control", x = c(.2), y = c( .94), hjust = 0, size = 9) )
+```
+
+```{r}
+# dev.new(width=3.4, height=1.9+3, noRStudioGD = TRUE)
+A_B_C <- plot_grid( A_B, C, ncol=1, rel_heights = c(.6,1))
+
+```
+
+```{r function-marker-genes}
+################################
+# DOTPLOT MARKER GENE FUNCTION #
+################################
+library(ggnewscale)
+get_order <- function(df, markers, markers_id, value){
+  m <- set_names(markers, markers_id)
+  
+  df_ <- df %>%
+    mutate(marker_id =  map_chr(.$marker, ~names(m)[which(m == as.character(.x))][1])) %>%
+    nest(., .by=c(groups)) %>%
+    mutate(., data = pmap(., ~filter(..2, marker_id == .[[1]]))) %>%
+    mutate(., data = pmap(., ~arrange(..2, desc({{value}} )))) %>%
+    unnest(cols = c("data")) %>%
+    #mutate(marker = fct_reorder2(marker, Avg, Pct))
+    mutate(row_id = cur_group_rows(), .by=c(groups))
+  
+  return(df[["marker"]]) # use rev() to reorder the dots depending on horizontal/vertical 
+}
+get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect=TRUE, alpha=.2, gr_lvl=NULL){
+  col <- c("#EFEDF5", "#DADAEB", "#BCBDDC", "#9E9AC8", "#807DBA", "#6A51A3", "#54278F", "#3F007D") # 
+  markers_lvl <- set_names(seq_along(markers), markers)
+  gr <- unique(obj[[groups]])[[1]]
+  gr_lvl <- set_names(seq_along(gr), if(is.null(gr_lvl)){gr}else{gr_lvl})
+  
+  df <- obj %>%
+    mutate(., FetchData(., vars = c(markers)) ) %>%
+    as_tibble() %>%
+    select(., .cell, any_of(c(groups, markers))) %>%
+    pivot_longer(., cols = -c(".cell", groups), 
+                 names_to = "marker", values_to = "values") %>%
+    #mutate(Clusters = factor(.$Clusters, levels=names(clus_lvl))) %>%
+    group_by(!!sym(groups), marker) %>%
+    summarise(Avg = mean(values),
+              Avg_ = mean(values)/max(values), # gives the median as a percentage of max value among spots if .5 you have a normal dist.
+              Pct = sum(values > 0) / length(values) * 100, .groups="drop") %>%
+    #mutate(Pct = .$Pct*) %>% # scaling
+    #group_by(marker) %>%
+    #nest()
+    mutate(Avg_p = Avg/max(Avg), .by = "marker") %>%
+    #arrange(match(.[[groups]], gr_lvl)) %>%
+    mutate(marker = factor(.$marker, levels=get_order(., markers, markers_id, Avg))) %>% 
+    mutate(., ymin = gr_lvl[as.character(.[[groups]])]-.5,
+              ymax = gr_lvl[as.character(.[[groups]])]+.5) %>%
+    mutate(., xmin = markers_lvl[as.character(.$marker)]-0.5,
+              xmax = markers_lvl[as.character(.$marker)]+0.5) %>%
+    mutate(!!sym(groups) := factor(unlist(.[,1]), levels=names(gr_lvl)))
+  
+  df <<- df
+  df_rect <- df %>% select(1, ymin,  ymax) %>% slice_max(., n=1, order_by=ymin, by=groups, with_ties=F)
+  
+  p <- ggplot(df, aes(x=marker, y=.data[[groups]])) +
+    {if(rect == TRUE)
+      list(new_scale_fill(),
+      
+      annotate(geom = "rect", ymin=df_rect$ymin, ymax=df_rect$ymax,
+                  xmin=rep(0, length(gr)), xmax=rep(length(markers_lvl)+1, length(gr)),
+                  fill = gr_col[1:length(gr)], colour = NA, alpha = alpha),
+      coord_cartesian(expand = F) )} +
+    
+    new_scale_fill() +
+    geom_point(aes(size = Pct, fill = Avg_, col = Avg_,), shape = 21) + #"#6A2595"
+    scale_fill_gradientn(colours = col, aesthetics = c("fill","colour"),
+                       guide = guide_colorbar(ticks.colour = "black",
+                                              frame.colour = "black"),
+                       name = "Average\nexpression") +
+    
+    #scale_size(max_size = 3) +
+    scale_size_area(max_size = 3) +
+    theme_bw() + labs(size="% expressed") +
+    guides(size = guide_legend(override.aes = list(color = "black") )) +
+    theme(text =  element_text(size=10),
+          axis.text.x = element_text( angle=45, hjust=1, color="black"),
+          axis.text.y = element_text( color="black",hjust=.9 ),
+          legend.text = element_text(size=4),
+          legend.margin=margin(0,0,0,0), #t,r,b,l
+          legend.box.margin=margin(0,-6,-10,-8),
+          axis.title = element_blank(),
+          #panel.grid.major = element_blank(), 
+          #panel.grid.minor = element_blank(), 
+          axis.ticks.y = element_blank(),
+          plot.margin = unit(c(.2,0,0,0),units = "cm") #trbl
+          ) 
+  return(p)
+}
+```
+
+### Dotplot of epithelial marker genes 
+```{r Marker_genes, fig.height=3, fig.width=8}
+###################################
+# DOTPLOT TOP 10 MARKER GENES EPI #
+###################################
+library(ggnewscale)
+# dev.new(width=6.5, height=3, noRStudioGD = TRUE)
+gr_col <- c("#FBAAB1","#FFDAB8","#F1D2FF","#E6B3E9","#8BCFCE","#92DBFF","#ABC9E1","#E5C264","#E1E2A4","#BBD99B","#FDFFD3")[5:10]
+markers <- c("MT1X", "HSPE1", "AKR1B10", "DAPL1", "COL17A1", "FXYD3", "HLA-DPB1", "DSC3", "JCHAIN", "KRT16", "PECAM1", "ACTA2", "PLVAP", "CCL14", "ACKR1", "LCE3D", "SPRR2E", "FLG", "KCNQ1OT1", "AC245060.5", "PRELP", "HSPB6", "LGI4", "MYH11", "CCL21", "USP8", "SPAG9", "ANKRD17", "PPIG", "PHIP")
+markers_id <- c(rep("8",5), rep("3",5),rep("4",5),rep("0",5),rep("2",5),rep("1",5))
+groups="Clusters"
+gr_lvl <- c("8","3","4","0","2","1")
+
+(C <- DATA %>%
+    filter(grepl("^8|^3|^4|^0|^1$|^2", .$Clusters) & sp_annot == "SubMuc") %>%
+    mutate(Clusters = factor(.$Clusters, levels = gr_lvl)) %>%
+    get_df_for_dotplot.fun(., markers, groups="Clusters", gr_col, rect=T, gr_lvl=gr_lvl, alpha = .3)  +
+    #coord_flip(expand = F) + 
+    theme(legend.position="top") + guides(fill = guide_colourbar(override.aes = list(size=10), barwidth = 5, barheight = .5),
+                                          size = guide_legend( keywidth = .1, keyheight = 1.25, )
+                                             ) +# horizontal
+  theme(#legend.box.margin=margin(-10,0,0,0),
+        panel.border = element_rect(colour = "gray", fill=NA),
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        legend.spacing.x = unit(4, 'pt'),
+        legend.justification = "right",
+        legend.margin=margin(0,2,-8,2), # moves the legend box
+        legend.box.margin=margin(-5,1,-3,-30), # moves the legend
+        axis.text.y = element_text(margin = margin(r = -1)) )  )
+# dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
+# dev.new(width=4, height=5.5, noRStudioGD = TRUE) # vertical
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
+
+# dev.new(width=3.4, height=2, noRStudioGD = TRUE) # horizontal
+C <- plot_grid(C, labels = c('C'), hjust = -.2)
+ggsave("./Figures/04/Fig_04C.png", C_1, width = 6.7, height = 2.4) #, dpi = 300
+```
+
+### Plot dotplot
+```{r dotplot-function}
+####################
+# DOTPLOT FUNCTION #
+####################
+ord <-  c("Superficial","Upper IM","Lower IM","Basal", "8","3","4","0","2","1")
+clus_1 <- c("#984EA3","#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#00BFC4","#FFFF33") %>% set_names(., names)
+ID <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107")
+col_gr <- set_names(c("#813340", "#AC5A64", "#DA84A4", "#FFB1BA","#125E6B","#3A7D8B", "#80C2D0", "#C0DFEE"),ID)
+
+layer_dotplot.fun <- function(DATA, feat, 
+                              facet = TRUE, 
+                              txt_size = 5,
+                              density = FALSE,  
+                              x_max=NULL, 
+                              col){
+  rects <- DATA %>%
+    group_by(layers) %>%
+    summarise(., ystart=min(spatial_dist, na.rm=T), yend=max(spatial_dist, na.rm=T),
+              Q1=quantile(spatial_dist, probs = 0.1, na.rm=T),
+              Q3=quantile(spatial_dist, probs = .9, na.rm=T)) %>%
+    filter(!(is.infinite(.$ystart))) %>%
+    mutate(Q1 = ifelse(.$Q1 == min(.$Q1), 0,.$Q1)) %>%
+    mutate(Q3 = ifelse(.$Q3 == max(.$Q3), max(.$yend),.$Q3)) %>%
+    #mutate(Q3 = ifelse(.$layers == "Basal_2", .$Q3+.3,.$Q3)) %>%
+    arrange(layers) %>% ungroup() #%>%
+    #filter(., grepl(keep, .$layers))
+  
+  DAT <- DATA %>%
+    #filter(., grepl("SubMuc", DATA$sp_annot) & !(grepl(epi_clus, DATA$Clusters))) %>%
+    #filter(., (grepl(keep, DATA$layers))) %>%
+    mutate(., FetchData(., vars = c(feat), slot = "data") ) %>%
+    select(groups, ID="orig.ident", layers, all_of(c(feat)), spatial_dist) %>%
+    mutate(ID = factor(.$ID, levels = names(col_gr)))
+   
+  dens <- ggplot() + 
+    geom_density(data = DAT %>% filter(., .[[feat]] != 0 ), aes(y=spatial_dist, color=ID)) + 
+    scale_y_reverse(expand = c(0, 0)) + ggpubr::clean_theme()+
+    scale_color_manual(values = col_gr) +
+    theme(panel.border = element_blank(), 
+          plot.margin = unit(c(0,0,0,0), "inches"))
+
+  if(facet == TRUE){facets <- facet_wrap(~groups, ncol = 2)
+                    w <- 3}
+  else{facets <- NULL
+       w <- 1}
+  
+  dot <- ggplot() +
+    #ggtitle(feature) +
+    geom_rect(data = rects, alpha = 0.1, show.legend=FALSE,
+              aes(xmin = -Inf, xmax = Inf, ymin = Q1, ymax = Q3, fill = layers)) +
+    geom_jitter(data = DAT, aes(x=.data[[feat]], y=spatial_dist, col=layers), 
+                width = 0.1, alpha = 0.7, size=.3) + #
+    scale_fill_manual(values = col) + 
+    scale_colour_manual(values = col) +
+    coord_cartesian(clip = "off") +
+    guides(col = guide_legend(override.aes = list(size=2), keyheight = .7, keywidth = .7, title = "Cluster")) +
+    #scale_y_reverse(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    #scale_x_continuous(expand = c(0, 0)) +
+    {if(!(is.null(x_max))){xlim(-.5, x_max)}} +
+    facets +
+    my_theme + ylab("Similarity in gene expression") +
+    theme(legend.position="top", legend.justification = "left",
+          #legend.position = c(.1, 1.15), legend.direction = "horizontal",
+          plot.background = element_rect(fill = "transparent", colour = NA),
+          plot.margin = unit(c(2,.2,-2,.3), "lines"),
+          panel.border = element_blank(),
+          text = element_text(size = txt_size),
+          axis.line = element_line(linewidth = .3),
+          #axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.title.x.bottom = element_text(margin = margin(t = .5)),
+          axis.title.y.left = element_text(margin = margin(r = 5)),
+          panel.grid.major = element_line(linewidth = 0.2),
+          panel.grid.minor = element_line(linewidth = 0.1))
+  
+  if(density == TRUE){dot <- dot + dens + plot_layout(ncol=2, nrow=1, widths=c(w, 1), guides = "collect")}
+  
+  return(dot)
+}
+```
+
+```{r Figure-4D}
+###############
+# FILTER DATA #
+###############
+keep <- "Basal|8|3|^0"
+DAT <- DATA %>%
+  filter(grepl(keep, .$layers)) %>%
+  mutate(groups = if_else(groups =="ctrl", "Control", .$groups))
+
+##############################
+# CLUS DOTPLOT PER EPI LAYER #
+##############################
+# dev.new(height=1.9, width=6.7, noRStudioGD = TRUE)
+# dev.new(height=3.2, width=6, noRStudioGD = TRUE) #with legend
+feat <- c("PTPRC","CD4","CD8A","CD3E","NCAM1","MZB1","IGLC2" )
+dot_fig <- map(feat, 
+               ~layer_dotplot.fun(DAT, .x, 
+                                  facet = F, 
+                                  txt_size = 9,
+                                  col = clus_1)) # , x_max = 6
+# dot_fig[[1]]
+D_1 <- wrap_plots(dot_fig, ncol = 7, guides = "collect" ) + 
+  plot_layout(axis_titles = "collect") & 
+  theme(#legend.position = c(.1, 1.15), legend.direction = "horizontal",
+        plot.margin = unit(c(-.2,0,0,.2), "lines"),
+        legend.position = 'top', 
+        legend.justification = "right", 
+        legend.background = element_rect(colour ="gray", linewidth=.2),
+        legend.margin=margin(1,2,1,1), # moves the legend box
+        legend.box.margin=margin(1,1,-3,0), # moves the legend
+        #legend.box.margin=margin(-30,0,-15,0), 
+        # axis.title.y.left = element_text(margin = margin(r = 5))
+        ) 
+
+(D <- plot_grid(D_1, NULL, rel_widths = c(1,.01), labels = c('D'),  hjust = -.2) )
+ggsave("./Figures/04/Fig_04D.png", D_1, width = 6.7, height = 2.4) #, dpi = 300
+
+```
+
+```{r Figure-4}
+#############################
+# COMBINE ALL FIGURE PANELS #
+#############################
+# dev.new(width=7.4, height=2.4, noRStudioGD = TRUE)
+A_B_C <- plot_grid( A, B, C, ncol=3, rel_widths = c(.6,.5,1.65), labels = c('A','B'),  hjust = -.2) 
+
+# dev.new(width=7.4, height=4.8, noRStudioGD = TRUE)
+Figure4 <- plot_grid( A_B_C, D, ncol=1, rel_heights = c(1.1,1.1), hjust = -.2) 
+ggsave("./Figures/04/Figure04.png", Figure4, width = 7.4, height = 4.8, bg = "white", dpi = 300)
+```
