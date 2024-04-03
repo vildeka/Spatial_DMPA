@@ -32,7 +32,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r background_job, eval=FALSE, include=FALSE}
-source("../bin/render_with_jobs.R")
+source("../../bin/render_with_jobs.R")
 
 # quarto
 # render_html_with_job(out_dir = lab_dir)
@@ -45,7 +45,7 @@ system2(command = "sed", stdout = TRUE,
                  paste0("./md_files/", basename("./09_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/09_figures", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_05", fig_path = "./Figures/FIGURES/")
 ```
 
 ### Load data and libraries
@@ -64,7 +64,7 @@ library(ggrepel)
 library(png)
 library(grid)
 library(patchwork)
-library(ggpuber)
+#library(ggpuber)
 library(openxlsx)
 
 source("../../bin/spatial_visualization.R")
@@ -155,6 +155,41 @@ d <- plotVenn(t$genes[c("Basal","Lower IM","Superficial","Upper IM")],
          outFile=paste0("./", "Venn_epi_sig.svg")
          )
 
+# d <- plotVenn(t$genes[-c(5:8)], 
+#          sNames = names(t$genes[-c(5:8)]),
+#          outFile=paste0(params$fig.path, "Venn_epi_sig.svg")
+#          )
+
+# showSVG(d)
+knitr::include_graphics(paste0("./", "Venn_epi_sig.svg"))
+
+# not used includes comparison of Bradley, Zal, ST and E2
+# col <- set_names(c('#ca0020','#f4a582','#0571b0',"#018571"), t$study)
+# # all four comparisons
+# plotVenn(t$sig_DEGs, 
+#          labelRegions=FALSE,
+#          #sNames = names(t$sig_DEGs), 
+#          systemShow=F) %>%
+#   {. ->> d} %>%
+#   showSVG(d, 
+#          setColors = col[names(d$orig)],
+#          labelRegions=FALSE,
+#          showNumbers=FALSE,
+#          fontScale = 1,
+#          systemShow=F,
+#          outFile=paste0("./Figures/06/", "Venn_E2_all.svg")
+#          )
+# int_genes <- getVennOverlap(t$sig_DEGs) 
+
+#########################
+# COMBINE PANEL A AND C #
+#########################
+# dev.new(width=6.7, height=3.2, noRStudioGD = TRUE) 
+(A_B <- plot_grid(A, NULL, rel_widths = c(1,1), labels = c('A', 'B'), hjust = 0) )
+```
+
+```{r eval=FALSE}
+# failed attempt at reading the svg file created by nVennR
 a <- xml2::as_list( read_xml( paste0( "./", "Venn_epi_sig.svg")) )
 l <- map_depth(a$svg$defs, 2,~pluck(.x, "path") ) %>% flatten()
 l <- map(2:5,~a$svg$defs[[.x]]) %>% flatten() %>%
@@ -184,38 +219,6 @@ myV3 <- createVennObj(nSets = 3, sSizes = c(rep(1, 8)))
 myV3 <- plotVenn(nVennObj = myV3, systemShow=T, showPlot =F, labelRegions=F, 
                  showNumbers=F, opacity=0.2, borderWidth=4, 
                  outFile=paste0("./", "Venn_epi_sig.svg"))
-
-
-# d <- plotVenn(t$genes[-c(5:8)], 
-#          sNames = names(t$genes[-c(5:8)]),
-#          outFile=paste0(params$fig.path, "Venn_epi_sig.svg")
-#          )
-
-# showSVG(d)
-knitr::include_graphics(paste0("./", "Venn_epi_sig.svg"))
-
-col <- set_names(c('#ca0020','#f4a582','#0571b0',"#018571"), t$study)
-# all four comparisons
-plotVenn(t$sig_DEGs, 
-         labelRegions=FALSE,
-         #sNames = names(t$sig_DEGs), 
-         systemShow=F) %>%
-  {. ->> d} %>%
-  showSVG(d, 
-         setColors = col[names(d$orig)],
-         labelRegions=FALSE,
-         showNumbers=FALSE,
-         fontScale = 1,
-         systemShow=T,
-         outFile=paste0("./Figures/06/", "Venn_E2_all.svg")
-         )
-int_genes <- getVennOverlap(t$sig_DEGs) 
-
-#########################
-# COMBINE PANEL A AND C #
-#########################
-# dev.new(width=6.7, height=3.2, noRStudioGD = TRUE) 
-(A_B <- plot_grid(A, NULL, rel_widths = c(1,1), labels = c('A', 'B')) )
 ```
 
 ### Plot dotplot and tissue
@@ -262,13 +265,13 @@ layer_dotplot.fun <- function(DATA, feat,
     #filter(., grepl("SubMuc", DATA$sp_annot) & !(grepl(epi_clus, DATA$Clusters))) %>%
     #filter(., (grepl(keep, DATA$layers))) %>%
     mutate(., FetchData(., vars = c(feat), slot = "data") ) %>%
-    select(groups, ID="orig.ident", layers, all_of(c(feat)), spatial_dist) %>%
-    mutate(ID = factor(.$ID, levels = names(col_gr)))
+    select(groups, ID="orig.ident", layers, all_of(c(feat)), spatial_dist) #%>%
+    #mutate(ID = factor(.$ID, levels = ID))
    
   dens <- ggplot() + 
     geom_density(data = DAT %>% filter(., .[[feat]] != 0 ), aes(y=spatial_dist, color=ID)) + 
     scale_y_continuous(expand = c(0, 0)) + ggpubr::clean_theme()+
-    scale_color_manual(values = col_gr) +
+    scale_color_manual(values = col) +
     theme(panel.border = element_blank(), 
           plot.margin = unit(c(0,0,0,0), "inches"))
 
@@ -313,7 +316,7 @@ layer_dotplot.fun <- function(DATA, feat,
 }
 ```
 
-```{r Figure-6B}
+```{r Figure-5B}
 ###############
 # FILTER DATA #
 ###############
@@ -390,7 +393,7 @@ p_list <- map(p, ~ .x + theme(plot.margin = unit(c(-25, -10, -10, -15), "pt"), #
 # dev.new(width=6.7, height=3.4, noRStudioGD = TRUE) 
 c <- plot_grid( plotlist = p_list, ncol = 4, rel_heights = c(1), rel_widths = c(1))
 C_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
-C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,1.1), labels = c('C'))
+C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,1.1), labels = c('C'), hjust = 0)
 
 ggsave("./Figures/05/Fig_05C.png", C, width = 6.7, height = 3.2, bg = "white", dpi = 300)
 ```
@@ -401,5 +404,6 @@ ggsave("./Figures/05/Fig_05C.png", C, width = 6.7, height = 3.2, bg = "white", d
 #############################
 # dev.new(width=6.7, height=6.7, noRStudioGD = TRUE)
 Figure5 <- plot_grid( A_B, C, ncol=1, rel_heights = c(1,1)) 
-ggsave("./Figures/05/Figure05.png", Figure5, width = 6.7, height = 6.7, bg = "white", dpi = 300)
+ggsave("./Figures/05/Figure05.png", Figure5, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
+ggsave("./Figures/05/Figure05.pdf", Figure5, width = 6.7, height = 6.7, bg = "white")
 ```

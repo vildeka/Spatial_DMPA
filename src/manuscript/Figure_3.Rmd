@@ -32,7 +32,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r background_job, eval=FALSE, include=FALSE}
-source("../bin/render_with_jobs.R")
+source("../../bin/render_with_jobs.R")
 
 # quarto
 # render_html_with_job(out_dir = lab_dir)
@@ -45,7 +45,7 @@ system2(command = "sed", stdout = TRUE,
                  paste0("./md_files/", basename("./09_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/09_figures", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_03", fig_path = "./Figures/FIGURES/")
 ```
 
 ### Load data and libraries
@@ -81,8 +81,6 @@ epi_clus <- "^5$|^6$|^7|^9" # non-filt
 # DEGs_table <- read_csv(paste0(input_dir,"subset_100/DGEs_condition_wilcox_epi_100.csv")) %>% filter(groups == "DMPA")
 DEGs_table <- read_csv(paste0("../../results/05_DGE_clusters_st_data/","DGEs_clusters_wilcox.csv"))
 DATA <- readRDS(paste0(input_dir,"seuratObj_spatial_dist.RDS"))
-img <- readPNG("../../resources/Schematic figure ST.png")
-ihc <- readPNG("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resources/CD20_IHC.png")
 ```
 
 ### UMAP of cluster resolutions
@@ -144,7 +142,7 @@ p2 <- plot_genes.fun(DAT, gene="spatial_dist", point_size = .05,
 ```
 
 ### Plot spatial distance on tissue
-```{r 08b_spatial_trajectory_tissue, fig.height=6, fig.width=4}
+```{r 03b_spatial_trajectory_tissue, fig.height=6, fig.width=4}
 ####################
 # SPATIAL DISTANCE #
 ####################
@@ -172,6 +170,7 @@ p <- map(feat,
                    sampleid = c("P118", "P097"),
                    zoom = "zoom",
                    lab = F,
+                   save_space = F,
                    col = col1,
                    alpha = 1,
                    ncol = 1, 
@@ -327,7 +326,7 @@ C_1 <- wrap_plots(dot_fig, ncol = 4, guides = "collect" ) +
         legend.justification = "right", 
         legend.background = element_rect(colour ="gray", linewidth=.2),
         legend.margin=margin(1,2,1,1), # moves the legend box
-        legend.box.margin=margin(1,1,-5,0), # moves the legend
+        legend.box.margin=margin(1,1,-4,0), # moves the legend
         #legend.box.margin=margin(-30,0,-15,0), 
         # axis.title.y.left = element_text(margin = margin(r = 5))
         ) 
@@ -382,14 +381,14 @@ C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,.9), labels = c('C'),  hjust
 ggsave("./Figures/03/Fig_03C.png", C, width = 3.4, height = 3.2, bg = "white", dpi = 300)
 ```
 
-```{r}
+```{r combine-ABC, fig.width=3.4, fig.height=1.9+3}
 # dev.new(width=3.4, height=1.9+3, noRStudioGD = TRUE)
 A_B_C <- plot_grid( A_B, C, ncol=1, rel_heights = c(.6,1))
 
  plot_grid( A_B_C, ncol=2, rel_widths = c(1,.03))
 ```
 
-```{r}
+```{r marker-gene-dotplot-function}
 ################################
 # DOTPLOT MARKER GENE FUNCTION #
 ################################
@@ -437,7 +436,7 @@ get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect
               xmax = markers_lvl[as.character(.$marker)]+0.5) %>%
     mutate(!!sym(groups) := factor(unlist(.[,1]), levels=names(gr_lvl)))
   
-  df <<- df
+  # df <<- df
   df_rect <- df %>% select(1, ymin,  ymax) %>% slice_max(., n=1, order_by=ymin, by=groups, with_ties=F)
   
   p <- ggplot(df, aes(x=marker, y=.data[[groups]])) +
@@ -450,8 +449,8 @@ get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect
       coord_cartesian(expand = F) )} +
     
     new_scale_fill() +
-    geom_point(aes(size = Pct, fill = Avg_), col = "gray", shape = 21) + #"#6A2595"
-    scale_fill_gradientn(colours = col,
+    geom_point(aes(size = Pct, fill = Avg_, col = Avg_), shape = 21) + #"#6A2595"
+    scale_fill_gradientn(colours = col, aesthetics = c("fill","colour"),
                        guide = guide_colorbar(ticks.colour = "black",
                                               frame.colour = "black"),
                        name = "Average\nexpression") +
@@ -467,7 +466,7 @@ get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect
           legend.margin=margin(0,0,0,0), #t,r,b,l
           legend.box.margin=margin(0,-6,-10,-8),
           axis.title = element_blank(),
-          #panel.grid.major = element_blank(), 
+          panel.grid.major = element_line(linewidth = .1), 
           #panel.grid.minor = element_blank(), 
           axis.ticks.y = element_blank(),
           plot.margin = unit(c(.2,0,.2,0),units = "cm") #trbl
@@ -493,12 +492,14 @@ gr_lvl <- rev(c("Superficial", "Upper IM", "Lower IM", "Basal"))
     filter(grepl(epi_clus, .$Clusters) & sp_annot == "epi") %>%
     get_df_for_dotplot.fun(., markers, groups="layers", gr_col, rect=T, gr_lvl=gr_lvl)  +
     theme(legend.position="bottom") + guides(fill = guide_colourbar(barwidth = 5, barheight = .5),
-                                             size = guide_legend(override.aes = list(size=3), keyheight = 1, keywidth = .1)
+                                             size = guide_legend(keyheight = 1, keywidth = .1 )
                                              ) +# horizontal
   theme(#legend.box.margin=margin(-10,0,0,0),
+        panel.border = element_rect(colour = "gray", fill=NA),
         legend.spacing.x = unit(1.5, 'pt'),
-        #legend.justification = "right",
         legend.text = element_text(size = 8),
+        legend.title = element_text(size = 8),
+        #legend.justification = "right",
         legend.margin=margin(0,0,0,0), # moves the legend box
         legend.box.margin=margin(-13,1,-5,-30), # moves the legend
         axis.text.y = element_text(margin = margin(r = -1)) )  )
@@ -517,5 +518,6 @@ D <- plot_grid(D, labels = c('D'), vjust = .9,  hjust = -.2)
 #############################
 # dev.new(width=3.54, height=7, noRStudioGD = TRUE)
 Figure3 <- plot_grid( A_B, C, D, ncol=1, rel_heights = c(.6,.85,.55)) 
-ggsave("./Figures/03/Figure03.png", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 300)
+ggsave("./Figures/03/Figure03.png", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
+ggsave("./Figures/03/Figure03.pdf", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
 ```
