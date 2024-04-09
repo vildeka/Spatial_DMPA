@@ -31,13 +31,15 @@ my_theme <-
 plot_clusters.fun <- function(obj, cluster, 
                               red = "umap_harmony", 
                               color = "Brew_all", 
-                              lable = TRUE, 
+                              lable = TRUE,
+                              nudge = F,
                               lable_size = 4,
                               txt_size = 7,
-                              dot_size = 0.5,
+                              dot_size = .5,
                               title = "colname",
+                              seed = 127,
                               assay="RNA"){
-  if(color[[1]] == "Brew_all"){
+  if(color[[1]] == "Brew_all" ){
     pal <- c(scales::hue_pal()(8),
              RColorBrewer::brewer.pal(9,"Set1"),
              RColorBrewer::brewer.pal(8,"Set2"),
@@ -72,18 +74,28 @@ plot_clusters.fun <- function(obj, cluster,
     add_tally() %>%
     arrange(nFeature_RNA) %>%
     arrange(desc(n))
+
+  # reduction method:
+  red_1 <- sym(paste0(red, "_1"))
+  red_2 <- sym(paste0(red, "_2"))
   
+  set.seed(seed)
   lable_df <- feat %>%
     ungroup() %>%
     group_by(!!(lab)) %>%
     select(!!(lab), contains(red)) %>% 
-    summarize_all(mean)
+    summarize_all(mean) %>%
+    mutate(vnudge = rnorm(nrow(.),-.01,0.5)) %>%
+    mutate(hnudge = rnorm(nrow(.),-.01,0.5)) %>%
+    {if(nudge) mutate(!!(red_1) := !!(red_1)+hnudge) else .} %>%
+    {if(nudge) mutate(!!(red_2) := !!(red_2)+vnudge) else .}
+    #mutate(!!(red_1) := !!(red_1)+hnudge) %>%
+    #mutate(!!(red_2) := !!(red_2)+vnudge)
   
-  red_1 <- sym(paste0(red, "_1"))
-  red_2 <- sym(paste0(red, "_2"))
+  lable_df<<-lable_df
   
-  if(!(lable == FALSE)){text <- geom_text(data = lable_df, aes(label = !!(lab)), 
-                                          col="black", size=lable_size, vjust=1, hjust=.5) }
+  if(!(lable == FALSE)){text <- geom_text(data = lable_df, aes(label = !!(lab)),
+                                          col="black", size=lable_size,  hjust=.7, vjust=-.3,) }
   else{text <- NULL}
   
   p <- ggplot(feat, aes(!!(red_1), !!(red_2), 
@@ -95,6 +107,7 @@ plot_clusters.fun <- function(obj, cluster,
     scale_color_manual(values = pal, na.value = "transparent")  +
     my_theme + t +
     theme(
+      title = element_blank(),
       plot.margin = unit(c(.05,.1,0,0), "cm"), #t,r,b,l c(.1,.1,-.4,-.1)
       axis.title.x = element_text(size=txt_size, vjust=3.5), # margin=margin(t=10, r=10, b=10, l=10,)
       axis.title.y = element_text(size=txt_size, vjust=-1),
@@ -111,6 +124,7 @@ plot_clusters.fun <- function(obj, cluster,
 plot_genes.fun <- function(obj, 
                            gene, 
                            point_size = .5,
+                           lable_size = 4,
                            mins=NULL, maxs=NULL, 
                            red="umap_harmony", 
                            col=c("grey90","grey80","grey60","navy","black") ,
@@ -136,7 +150,6 @@ plot_genes.fun <- function(obj,
   }
   
   obj <- obj %>%
-    #select(1:3, !!(gene)) %>%
     mutate(feat = round(.$feat*98)+1) %>%
     mutate(pal = c( col[1],colorRampPalette(col[-1])(99))[.$feat] ) %>%
     arrange(!!(gene))
@@ -147,7 +160,7 @@ plot_genes.fun <- function(obj,
   
   # txt lable:
   if(lable == FALSE){l = FALSE
-  text <- NoLegend() #+ labs(color= "Clusters")
+  text <- NoLegend()
   }else{l = TRUE
   if(lable != TRUE){obj <- mutate(obj, lab = pull(obj, lable))}
   
@@ -156,13 +169,15 @@ plot_genes.fun <- function(obj,
     select(lab, contains(red)) %>% 
     summarize_all(mean) 
   
-  text <- geom_text(data = lable_df, aes(label = lab), col="black", size=2.5) }
+  text <- list(
+    geom_point(data = lable_df, aes(x=!!(red_1), y=!!(red_2), ), col="#FFFFFF99", size=lable_size, alpha=.6),
+    geom_text(data = lable_df, aes(label = lab), col="black", size=lable_size)) }
   
   p <- ggplot(obj, aes(!!(red_1), !!(red_2), label=l , color = pal) ) +
     geom_point(alpha = 0.5, size=point_size) + ggtitle(as_label(gene)) +
-    text + #scale_color_viridis(option = "D", na.value="#EBECF0") +
+    text +
     scale_colour_identity() +
-    my_theme + theme_void() +
+    theme_void() +
     theme(legend.position = "bottom",
           plot.title = element_text(hjust = 0.5)) 
   return(p)
@@ -207,14 +222,17 @@ Volcano.fun_logFC <- function(DEGs_table, group, y.axis,
       geom_jitter(width = 0.3, alpha = 0.3, size=dot_size) +
       geom_text_repel(data = tt, label= tt$Lable, colour = "black", size=lab_size, #vjust = -0.6,
                       show.legend=FALSE, segment.color = NA,
-                      #check_overlap = TRUE 
-                      #,point.padding = NA, segment.color = NA,
-      )+
-      geom_hline(yintercept = 0, linetype = "solid") +
-      #geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
-      guides(col = guide_legend(override.aes = list(size=2), keyheight = .7)) +
+                      box.padding = 0.1,       # Reduce padding around text
+                      point.padding = 0.1 ) +  # Reduce space between text and points
+      geom_hline(yintercept = 0, linetype = "solid", linewidth =.1) +
+      # geom_vline(xintercept = c(-1, 1), linetype = "dashed", alpha = 0.5) +
+      guides(col = guide_legend(override.aes = list(size=1), keyheight = .6)) +
       theme_minimal() + 
-      theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+      theme(axis.title = element_blank(),
+            legend.text = element_text(size = 7),
+            legend.title = element_text(size = 8, vjust = -1.5),
+            axis.text.y = element_text(size = 7, hjust=1),
+            axis.text.x = element_text(vjust = .5, size = 9)) +   # hjust=1, angle = 45, 
       scale_colour_manual(values = c("Up"= "red", "NotSig"= "grey90", "Down"="blue"),
                           name = paste0("FDR < ",up[2])) #+
     #facet_wrap(~cluster, nrow = 1)
@@ -238,7 +256,7 @@ Volcano.fun_logFC <- function(DEGs_table, group, y.axis,
       guides(col = guide_legend(override.aes = list(size=2), keyheight = .7)) +
       theme(#legend.position="none", 
         axis.title.x = element_text(hjust=0.001),
-        legend.title = element_blank()) + # Hide the legend
+        legend.title = element_blank(),) + # Hide the legend
       scale_colour_manual(values = c("Up"= "red", "NotSig"= "black", "Down"="blue"),
                           breaks = c("Up", "Down"),
                           labels = c("Upregualated\nin DMPA\n", #"Non sig. diff.\nexpressed", 
