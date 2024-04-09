@@ -60,10 +60,11 @@ plot_spatial.fun <- function(
     sampleid = c("P080"),
     geneid = "CD3E",
     title = " ",
-    txt = TRUE,
+    lab = TRUE,
     image_id = "hires",
     alpha = 1,
     ncol = 2,
+    save_space = T,
     spectral = TRUE,
     annot_line = .3,
     colors = NULL, # lightgray
@@ -92,7 +93,8 @@ plot_spatial.fun <- function(
       cont_colors <- myPalette(100)
     }else{cont_colors <- colors}
     colour_pallet <- scale_color_gradientn(geneid, colours = cont_colors,
-                                           na.value = "#FFFFFF")
+                                           na.value = "#FFFFFF",
+                                           guide = guide_colourbar(barwidth = .5, barheight = 5 ))
     guides <- NULL 
   }else{
     if (is.null(colors)){
@@ -105,7 +107,7 @@ plot_spatial.fun <- function(
                        
                        RColorBrewer::brewer.pal(8,"Pastel2") )
     }else{disc_colors <- colors}
-    colour_pallet <- scale_fill_manual(geneid, values = disc_colors, aesthetics = c("colour"))
+    colour_pallet <- scale_fill_manual(geneid, values = disc_colors, aesthetics = c("colour"), na.value = "grey90")
     guides <- guides(colour = guide_legend(override.aes = list(size=2), keyheight = .5))
   }
   
@@ -123,44 +125,38 @@ plot_spatial.fun <- function(
     left_join(.,select(spe, barcode=".cell",!!(geneid)), by="barcode") %>%
     as_tibble() 
   
-  if(txt){
-    gr <- spe@meta.data %>% group_by(groups, orig.ident ) %>% nest() %>% pull(., "groups")
-    text_annot <- tibble(sample_id = sampleid, x=500, y=500, orig.ident = sampleid, gr = gr)
+  if(lab){
+    gr <- spe@meta.data %>% group_by(groups, orig.ident ) %>% nest() %>% arrange(match(orig.ident, sampleid)) %>% pull(., "groups")
+    text_annot <- tibble(sample_id = sampleid, x=500, y=800, orig.ident = sampleid, gr = gr) 
     txt <- list(geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt), # sample ID
-           geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt))
+           geom_text(aes(label = gr, x=x, y=y+90), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt))
   }else{txt <- NULL}
   
   # select viewframe:
-  if (!(is.null(zoom))){
-    tools <- map(sampleid, ~pluck(spe@tools, .x)) %>%
-      map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%
-      #map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
-      bind_rows(., .id = "orig.ident")
-    
-    l <- tools %>% 
-      filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
-      #select(row=imagerow)
-      dplyr::rename("_row"=y, "_col"=x) %>%
-      summarise(across("_row":"_col", 
-                       list(min=min, max=max), 
-                       .names = "{.fn}{.col}")) 
-  }
+  if (is.null(zoom)){zoom <- "zoom"}
+  tools <- map(sampleid, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+  l <- tools %>% 
+    filter(.data[["name"]] == zoom) %>% 
+    dplyr::rename("_row"=y, "_col"=x) %>%
+    summarise(across("_row":"_col", 
+                     list(min=min, max=max), 
+                     .names = "{.fn}{.col}"))
   
   ## Spatial image:
   if (!(img_alpha == 0)){
-    # set image alpha:
+    
     im <- map(sampleid, ~pluck(spe@images, .x, "image")) 
     # im is a 3D matrix, each dimension representing red, green or blue
     # a 4th dimension can be added to specify the opacity
-    #im[[1]] <- img
-    # img_alpha
+
     # im <- map(im, ~ matrix(
     #   rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
     # 
     # img <- map(im, ~as.raster(.x))
     
     # add alpha dimension to the rgb matrix
-    im <- imap(im, ~array(c(.x, DATA@misc$alpha[[.y]]), dim = c(dim(.x)[1:2],4)) )
+    alpha_m <- map(sampleid, ~spe@misc$alpha[[.x]]*img_alpha )
+    im <- imap(im, ~array(c(.x, alpha_m[[.y]]), dim = c(dim(.x)[1:2],4)) )
     # select the size of the viewbox
     img_ <- map(im, ~.x[l$min_row:l$max_row,l$min_col:l$max_col,])
     
@@ -191,19 +187,17 @@ plot_spatial.fun <- function(
   else{spatial_annotation <- NULL}
   
   p <- ggplot()+
-    geom_point(data=df, aes(x=imagecol,y=imagerow, colour=.data[[geneid]]), #fill=.data[[geneid]]
+    spatial_image +
+    geom_point(data=df, aes(x=imagecol,y=imagerow, colour=.data[[geneid]]),
                shape = 16, #colour = "transparent", stroke = 0.5,
                size = point_size, alpha = alpha) +
-    spatial_image +
     spatial_annotation + 
-    #scale_color_manual(values=c("#808080", "transparent")) + 
     colour_pallet +
-    coord_cartesian(expand=FALSE ) + theme(l) +
+    coord_equal(expand=FALSE) +
+
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
     txt +
-    #geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
-    #geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
     facet_wrap(~factor(orig.ident, levels = sampleid), ncol = ncol, dir = if(ncol > 2){"h"}else{"v"})
   
   # Hexagon shape:             
@@ -215,42 +209,26 @@ plot_spatial.fun <- function(
   #     alpha = alpha
   #   )
   
+  # Define theme settings for tight space
+  if(save_space){theme_tight <- theme(
+    panel.spacing.x = unit(-1, "lines"),
+    panel.spacing.y = unit(-3, "lines"),
+    legend.box.margin = margin(0,10,0,-10), # moves the legend
+    legend.title = element_text(size = 8),
+    plot.margin = if (ncol == 2) unit(c(-2, -1, -2, -1), "lines") # t,r,b,l
+    else unit(c(-2.5, -1, -2, -1), "lines") )}else{theme_tight <-NULL}
+  
   p <- p +
     xlab("") +
     ylab("") +
-    #labs(fill = "Total UMI")+
-    theme_set(theme_bw(base_size = 10))+
-    guides+
-    theme(
-      rect =               element_blank(), # removes the box around the plot
-      strip.background =   element_blank(), # removes facet labels
-      strip.text.x =       element_blank(), # removes facet labels
-      axis.text =          element_blank(),
-      axis.title =         element_blank(), 
-      panel.background =   element_blank(),
-      panel.grid.major =   element_blank(),
-      panel.grid.minor =   element_blank(),
-      axis.ticks.length =  unit(0, "cm"),
-      panel.spacing =      unit(0, "lines"),
-      plot.margin =        unit(c(0, 0, 0, 0), "lines")
-    )
-  
-  # theme_set(theme_bw(base_size = 10))+
-  #   theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
-  #         legend.position = "right",
-  #         rect = element_blank(), # removes the box around the tissue
-  #         legend.key = element_rect(fill = "white"),
-  #         panel.grid.major = element_blank(),
-  #         panel.grid.minor = element_blank(),
-  #         #panel.background = element_blank(),
-  #         axis.title = element_blank(),
-  #         axis.line = element_blank(),
-  #         axis.text = element_blank(),
-  #         axis.ticks = element_blank(),
-  #         panel.background = element_rect(fill = "transparent", colour = NA),
-  #         plot.background = element_rect(fill = "transparent", colour = NA),
-  #         strip.background = element_blank(),
-  #         strip.text.x = element_blank()
+
+    theme_void() +
+    guides +
+    theme(strip.text.x = element_blank(), # removes facet title
+          plot.margin = unit(c(0, 0, 0, 0), "cm"),
+          panel.spacing.y = unit(-2, "lines"),
+    ) + theme_tight
+
   return(p)
 }
 
@@ -337,10 +315,10 @@ violin.fun <- function(
     col_pal=NULL, 
     txt_size=7,
     n=1){
-  if(is.null(col_pal)){col_pal <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC") }
+  if(is.null(col_pal)){col_pal <- c("#4E79A7","#F28E2B","#E15759","#76B7B2","#59A14F","#EDC948","#B07AA1","#FF9DA7","#9C755F","#BAB0AC") }
   m <- max(obj[[feature]])/n # try e.g 2
   obj %>%
-    tidyseurat::ggplot(aes(.data[[facet]], .data[[feature]], fill=.data[[fill]])) +
+    ggplot(aes(.data[[facet]], .data[[feature]], fill=.data[[fill]])) +
     geom_violin() + ggtitle(feature) +
     geom_jitter(width = 0.3, alpha = 0.2, size=.1) +
     scale_fill_manual(values = col_pal) +
@@ -368,8 +346,9 @@ plot_st_meta.fun <- function(
     assay="RNA",
     sp_annot = TRUE,
     feat = "groups",
+    save_space = TRUE,
     orig.ident = "orig.ident",
-    lvls = c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031"),
+    lvls = c("P118", "P080", "P031", "P105", "P097", "P108", "P114", "P107"), 
     title = " ",
     image_id = "hires",
     alpha = 1,
@@ -380,17 +359,19 @@ plot_st_meta.fun <- function(
     annot_line = .3,
     point_size = 1.75,
     img_alpha = .5,
-    zoom = NULL ) {
+    zoom = "zoom" # one of "zoom" or "fov"
+    ){
+  
+  spe <- mutate(spe, orig.ident = as.character(.data[[orig.ident]]))
   
   feature <- enquo(feat)
   feat <- sym(feat)
   orig.ident <- enquo(orig.ident)
+  
   ID <- unique(pull(spe, orig.ident)) %>% set_names(.)
   # Set default assay
   DefaultAssay(spe) <- assay
   
-  # filter samples:
-  #spe <- spe %>% filter(., orig.ident %in% sampleid)
   ## get feature to plot:
   if (!(as_label(feat) %in% colnames(spe@meta.data))) {
     spe <- spe %>%
@@ -421,46 +402,45 @@ plot_st_meta.fun <- function(
     mutate(imagerow = .$imagerow * .$scale_fact) %>%
     cbind(.,as_tibble(select(spe, !!(feature)))) %>%
     cbind(.,as_tibble(select(spe, "orig.ident"=!!(orig.ident)))) %>%
-    #mutate(orig.ident = !!(facet)) %>%
-    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
-    #cbind(.,as_tibble(select(spe, groups))) %>%
     rownames_to_column(var = "barcode") %>%
     as_tibble() 
   
   gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
-  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
+  text_annot <- tibble(sample_id = ID, x=450, y=800, orig.ident = ID, gr = gr) 
   
   # select viewframe:
-  if (!(is.null(zoom))){
-    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
-    l <- tools %>% 
-      filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
-      #select(row=imagerow)
-      dplyr::rename("_row"=y, "_col"=x) %>%
-      summarise(across("_row":"_col", 
-                       list(min=min, max=max), 
-                       .names = "{.fn}{.col}")) 
-  }
-  else{l <- tibble( min_col = 0, max_col = ncol(img),
-                    min_row = 0, max_row = nrow(img))}
+  if (is.null(zoom)){zoom <- "zoom"}
+  tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+  l <- tools %>% 
+    filter(.data[["name"]] == zoom) %>% 
+    dplyr::rename("_row"=y, "_col"=x) %>%
+    summarise(across("_row":"_col", 
+                     list(min=min, max=max), 
+                     .names = "{.fn}{.col}"))
   
   ## Spatial image:
   if (!(img_alpha == 0)){
     
-    # set image alpha:
     im <- map(ID, ~pluck(spe@images, .x, "image")) 
-    im <- map(im, ~ matrix(
-      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    # im is a 3D matrix, each dimension representing red, green or blue
+    # a 4th dimension can be added to specify the opacity
     
-    img <- map(im, ~as.raster(.x))
-    img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
+    # add alpha dimension to the rgb matrix
+    alpha_m <- map(ID, ~spe@misc$alpha[[.x]]*img_alpha )
+    im <- imap(im, ~array(c(.x, alpha_m[[.y]]), dim = c(dim(.x)[1:2],4)) )
+    
+    # select the size of the viewbox
+    # if using "full_img" you have to modify the code to use smallest max_col value of the images
+    # otherwise you get a out of bounds error. I have not attempted to make this work
+    img_ <- map(im, ~.x[l$min_row:l$max_row,l$min_col:l$max_col,])
+    # img <- map(im_, ~as.raster(.x)) 
+    # base::plot(img[[1]])
     
     # get grob and save as list
     grob <- map(img_, ~grid::rasterGrob(.x, width=unit(1,"npc"), height=unit(1,"npc")))
     images_tibble <- tibble(sample=factor(ID), grob=grob, orig.ident = ID)
     
-    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)
-  }
+    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)}
   else{spatial_image <- NULL}
   
   ## Spatial annotation:
@@ -474,21 +454,21 @@ plot_st_meta.fun <- function(
   }
   else{spatial_annotation <- NULL}
   #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
-  
+
   p <- ggplot() +
-    geom_point(data=df, aes(x=imagecol,y=imagerow, colour = .data[[feat]]), #fill=.data[[feat]], 
-               shape = 16, size = point_size, alpha = alpha) + #stroke = 0, 
-    colour_pallet +
     spatial_image + 
+    geom_point(data=df, aes(x=imagecol,y=imagerow, colour = .data[[feat]]),
+               shape = 16, size = point_size, alpha = alpha) +
+    
+    colour_pallet +
     spatial_annotation + 
     #scale_color_manual(values=c(annot_col, "transparent")) +
-    coord_cartesian(expand=FALSE ) + #theme(l) +
+    coord_equal(expand=FALSE) + 
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
     geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
-    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol)
-  # facet_wrap(vars(!!(orig.ident)), ncol = ncol)
+    geom_text(aes(label = gr, x=x, y=y+90), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
+    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol, dir = if(ncol > 2){"h"}else{"v"} )
   
   #Hexagon shape:
   # p <- p +
@@ -499,24 +479,22 @@ plot_st_meta.fun <- function(
   #     alpha = alpha
   #   )
   
+  # Define theme settings for tight space
+  if(save_space){theme_tight <- theme(
+    axis.ticks.length = unit(0, "cm"),
+    panel.spacing.x = unit(-1, "lines"),
+    panel.spacing.y = unit(-3, "lines"),
+    legend.box.margin = margin(0,15,0,-25), # moves the legend
+    plot.margin = if (ncol == 2) unit(c(-2, -1, -2, -1), "lines") # t,r,b,l
+    else unit(c(-2.5, -1, -2, -1), "lines") )}else{theme_tight <-NULL}
+  
   p <- p +
-    xlab("") +
-    ylab("") +
+    theme_void() +
     guides +
-    theme(
-          rect =               element_blank(), # removes the box around the plot
-          strip.background =   element_blank(), # removes facet labels
-          strip.text.x =       element_blank(), # removes facet labels
-          axis.text =          element_blank(),
-          axis.title =         element_blank(),
-          panel.background =   element_blank(),
-          panel.grid.major =   element_blank(),
-          panel.grid.minor =   element_blank(),
-          axis.ticks.length =  unit(0, "cm"),
-          panel.spacing =      unit(0, "lines"),
-          plot.margin =        unit(c(0, 0, 0, 0), "lines")
-    ) 
-  #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
+    theme(strip.text.x = element_blank(), # reoves facet title
+          plot.margin = unit(c(0, 0, 0, 0), "cm"),
+          panel.spacing.y = unit(-2, "lines"),
+    ) + theme_tight
   
   return(p)
 }
@@ -536,9 +514,11 @@ plot_st_feat.fun <- function(
     spe,
     assay="RNA",
     sp_annot = TRUE,
-    geneid = "CDH1", #"LINC01135",# "nFeature_RNA"
+    txt = TRUE,
+    save_space = TRUE,
+    geneid = "nFeature_RNA",
     orig.ident = "orig.ident",
-    lvls = c("P118", "P105", "P080", "P031", "P097", "P107", "P108", "P114"),
+    lvls = c("P118", "P080", "P031", "P105", "P097", "P108", "P114", "P107"),
     title = " ",
     image_id = "hires",
     alpha = 1,
@@ -550,13 +530,15 @@ plot_st_feat.fun <- function(
     annot_line = .3,
     point_size = 1.75,
     img_alpha = .5,
-    zoom = NULL ) {
+    zoom = "zoom" # one of "zoom" or "fov"
+    ){
+  
+  spe <- mutate(spe, orig.ident = as.character(.data[[orig.ident]]))
   
   gene <- sym(geneid)
   orig.ident <- enquo(orig.ident) 
   ID <- unique(pull(spe, orig.ident)) %>% set_names(.)
   
-  # spe <- filter(DATA_st, decon_columns[["12"]]=="1")
   # Set default assay
   DefaultAssay(spe) <- assay
   
@@ -599,62 +581,48 @@ plot_st_feat.fun <- function(
     cbind(.,as_tibble(select(spe, feat))) %>%
     cbind(.,as_tibble(select(spe, !!(gene)))) %>%
     cbind(.,as_tibble(select(spe, "orig.ident"=!!(orig.ident)))) %>%
-    #mutate(orig.ident = !!(facet)) %>%
-    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
-    #cbind(.,as_tibble(select(spe, groups))) %>%
     rownames_to_column(var = "barcode") %>%
     as_tibble() %>%
     arrange(feat_val) 
   
   if(scale == TRUE){df <- df %>% mutate(!!(gene) := feat)}
   
-  gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
-  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
-  #text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, )
-  
   # select viewframe:
-  if (!(is.null(zoom))){
-    tools <- map(ID, ~pluck(spe@tools, .x)) %>% 
-      map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%  
-      map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
-      bind_rows(., .id = "orig.ident") #%>% select(-contains("..."))
-    l <- tools %>% 
-      filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
-      #select(row=imagerow)
-      dplyr::rename("_row"=y, "_col"=x) %>%
-      summarise(across("_row":"_col", 
-                       list(min=~min(.x), max=~max(.x)), 
-                       .names = "{.fn}{.col}")) 
-  }
-  else{l <- tibble( min_col = 0, max_col = ncol(img),
-                    min_row = 0, max_row = nrow(img))}
-  
+  if (is.null(zoom)){zoom <- "zoom"}
+  tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+  l <- tools %>% 
+    filter(.data[["name"]] == zoom) %>% 
+    dplyr::rename("_row"=y, "_col"=x) %>%
+    summarise(across("_row":"_col", 
+                     list(min=min, max=max), 
+                      .names = "{.fn}{.col}")) 
+
   ## Spatial image:
   if (!(img_alpha == 0)){
     
-    # set image alpha:
     im <- map(ID, ~pluck(spe@images, .x, "image")) 
-    im <- map(im, ~ matrix(
-      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    # im is a 3D matrix, each dimension representing red, green or blue
+    # a 4th dimension can be added to specify the opacity
     
-    img <- map(im, ~as.raster(.x))
-    img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
+    # add alpha dimension to the rgb matrix
+    alpha_m <- map(ID, ~spe@misc$alpha[[.x]]*img_alpha )
+    im <- imap(im, ~array(c(.x, alpha_m[[.y]]), dim = c(dim(.x)[1:2],4)) )
+    
+    # select the size of the viewbox
+    img_ <- map(im, ~.x[l$min_row:l$max_row,l$min_col:l$max_col,])
+    # img <- map(im_, ~as.raster(.x)) 
+    # base::plot(img[[1]])
     
     # get grob and save as list
     grob <- map(img_, ~grid::rasterGrob(.x, width=unit(1,"npc"), height=unit(1,"npc")))
     images_tibble <- tibble(sample=factor(ID), grob=grob, orig.ident = ID)
     
-    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)
-  }
-  
-  
+    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)}
   else{spatial_image <- NULL}
   
   ## Spatial annotation:
   if(sp_annot){
     tools <- map(ID, ~pluck(spe@tools, .x)) %>% 
-      map(., ~select(.x, name, path_idx, x, y, elem_idx, colour, everything())) %>%  
-      map(., ~select(.x, everything(),spot_x = 7, spot_y = 8)) %>%
       bind_rows(., .id = "orig.ident") %>%
       filter(!(grepl("fov|zoom|full_image", .$name)))
     spatial_annotation <- geom_path(
@@ -663,25 +631,32 @@ plot_st_feat.fun <- function(
       aes(x=x, y=y, group=interaction(elem_idx)), colour=annot_col)
   }
   else{spatial_annotation <- NULL}
-  #id_lab <- tibble(id=ID, x=rep(-Inf, length(ID)), y=rep(Inf, length(ID)))
+  
+  if(txt){
+    gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
+    text_annot <- tibble(sample_id = ID, x=450, y=700, orig.ident = ID, gr = gr) 
+    txt_spacing <- if(save_space){c(130,60)}else{c(0,120)}
+    
+    txt <- list(geom_text(aes(label = sample_id, x=x, y=y+txt_spacing[2]), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt), # sample ID
+                geom_text(aes(label = gr, x=x, y=y+txt_spacing[1]), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) ) # condition
+    }else{txt <- NULL}
   
   p <- ggplot() +
+    spatial_image +
     geom_point(data=df, aes(x=imagecol,y=imagerow, colour=.data[[gene]]),
                stroke = 0, size = point_size, alpha = alpha) +
     #scale_colour_identity() +
     scale_color_gradientn(colours = col,
                           values = seq(from=0, to=1, along.with=col),
                           breaks = if(scale== TRUE){c(1,25,50,75,99)}else{waiver()},
-                          na.value = "grey90") + 
-    spatial_image + 
+                          na.value = "grey90",
+                          guide = guide_colourbar(barwidth = .5, barheight = 5 )) + 
+    txt +
     spatial_annotation + 
-    coord_cartesian(expand=FALSE ) +
+    coord_equal(expand=FALSE) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
     facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol, dir = if(ncol > 2){"h"}else{"v"})
-  #facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
   #Hexagon shape:
   # p <- p +
@@ -692,28 +667,21 @@ plot_st_feat.fun <- function(
   #     alpha = alpha
   #   )
   
+  # Define theme settings for tight space
+  if(save_space){theme_tight <- theme(
+    axis.ticks.length = unit(0, "cm"),
+    panel.spacing.x = unit(-1, "lines"),
+    panel.spacing.y = unit(-3, "lines"),
+    legend.box.margin = margin(0,10,0,-10), # moves the legend
+    plot.margin = if (ncol == 2) unit(c(-2, -1, -2, -1), "lines") # t,r,b,l
+    else unit(c(-2.5, -1, -2, -1), "lines") )}else{theme_tight <-NULL}
+  
   p <- p +
-    xlab("") +
-    ylab("") +
-    
-    theme_set(theme_bw(base_size = 10))+
-    theme(plot.margin = unit(c(0, 0, 0, 0), "cm"),
-          legend.position = "right",
-          rect = element_blank(), # removes the box around the tissue
-          legend.key = element_rect(fill = "white"),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-          #panel.background = element_blank(),
-          axis.title = element_blank(),
-          axis.line = element_blank(),
-          axis.text = element_blank(),
-          axis.ticks = element_blank(),
-          panel.background = element_rect(fill = "transparent", colour = NA),  
-          plot.background = element_rect(fill = "transparent", colour = NA),
-          strip.background = element_blank(),
-          strip.text.x = element_blank()
-    ) 
-  #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
+    theme_void() +
+    theme(strip.text.x = element_blank(), # removes facet title
+          plot.margin = unit(c(0, 0, 0, 0), "cm"),
+          panel.spacing.y = unit(-2, "lines"),
+    ) + theme_tight
   
   return(p)
 }
@@ -731,7 +699,8 @@ plot_cell_pie.fun <- function(
     orig.ident = "orig.ident",
     ct.res = NULL,
     ct.select = NULL,
-    radius_adj = 0,
+    radius_adj = -1,
+    save_space = T,
     lvls = c("P118", "P080","P031", "P105", "P097","P108", "P114", "P107"),
     title = " ",
     image_id = "hires",
@@ -741,8 +710,7 @@ plot_cell_pie.fun <- function(
     colors = NULL,
     annot_col = "#808080",
     annot_line = .3,
-    point_size = 1.75,
-    img_alpha = .5,
+    img_alpha = 0,
     zoom = "zoom" ) {
   
   if(isFALSE(is.null(ct.res))){ct.res <- enquo(ct.res)}
@@ -852,11 +820,198 @@ plot_cell_pie.fun <- function(
     colour_pallet +
     spatial_image + 
     spatial_annotation +
-    coord_cartesian(expand=FALSE ) + #theme(l) +
+    coord_equal(expand=FALSE ) + #theme(l) +
     xlim(l$min_col,l$max_col) +
     ylim(l$max_row,l$min_row) +
-    geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
-    geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
+    #geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
+    #geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
+    facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol,  dir = if(ncol > 2){"h"}else{"v"})
+  # facet_wrap(vars(!!(orig.ident)), ncol = ncol)
+  
+  #Hexagon shape:
+  # p <- p +
+  #   ggstar::geom_star(data=df, aes(x=imagecol,y=imagerow, fill=.data[[feat]], colour=.data[[feat]]),
+  #     starshape = "hexagon",
+  #     size = point_size,
+  #     #stroke = 0,
+  #     alpha = alpha
+  #   )
+  
+  # Define theme settings for tight space
+  if(save_space){theme_tight <- theme(
+    axis.ticks.length = unit(0, "cm"),
+    panel.spacing.x = unit(-1, "lines"),
+    panel.spacing.y = unit(-3, "lines"),
+    plot.margin = if (ncol == 2) unit(c(-2, -1, -2, -1), "lines") # t,r,b,l
+    else unit(c(-2.5, -1, -2, -1), "lines") )}else{theme_tight <-NULL}
+  
+  p <- p +
+    xlab("") +
+    ylab("") +
+    #labs(fill = "Total UMI")+
+    theme_set(theme_void(base_size = 10))+
+    guides+
+    theme(strip.text.x = element_blank(), # reoves facet title
+          plot.margin = unit(c(0, 0, 0, 0), "cm"),
+          panel.spacing.y = unit(-2, "lines"),
+    ) + theme_tight
+  
+  # p <- p +
+  #   xlab("") +
+  #   ylab("") +
+  #   guides +
+  #   theme(
+  #     rect =               element_blank(), # removes the box around the plot
+  #     strip.background =   element_blank(), # removes facet labels
+  #     strip.text.x =       element_blank(), # removes facet labels
+  #     axis.text =          element_blank(),
+  #     axis.title =         element_blank(),
+  #     panel.background =   element_blank(),
+  #     panel.grid.major =   element_blank(),
+  #     panel.grid.minor =   element_blank(),
+  #     axis.ticks.length =  unit(0, "cm"),
+  #     panel.spacing =      unit(0, "lines"),
+  #     plot.margin =        unit(c(0, 0, 0, 0), "lines")
+  #   ) 
+  #geom_text(data=id_lab,aes(label=id,x = 500, y = 500), inherit.aes = FALSE)
+  
+  return(p)
+}
+
+
+#### OLD VERSION ####
+plot_cell_pie.fun <- function(
+    spe,
+    assay="RNA",
+    sp_annot = TRUE,
+    orig.ident = "orig.ident",
+    ct.res = NULL,
+    ct.select = NULL,
+    radius_adj = -1,
+    lvls = c("P118", "P080","P031", "P105", "P097","P108", "P114", "P107"),
+    title = " ",
+    image_id = "hires",
+    alpha = 1,
+    ncol = 4,
+    spectral = TRUE,
+    colors = NULL,
+    annot_col = "#808080",
+    annot_line = .3,
+    img_alpha = 0,
+    zoom = "zoom" ) {
+  
+  if(isFALSE(is.null(ct.res))){ct.res <- enquo(ct.res)}
+  orig.ident <- enquo(orig.ident)
+  ID <- unique(pull(spe, orig.ident)) %>% set_names(.)
+  # Set default assay
+  DefaultAssay(spe) <- assay
+  
+  # get all cell annotations
+  if(assay == "celltypeprops"){
+    cell_annot <- t(spe@assays$celltypeprops@data) %>%
+      as_tibble(., rownames = "barcode") 
+  }else{
+    cell_annot <- spe@assays$misc$cell_annot %>% 
+      filter(grepl(paste0(ID, collapse="|"), .cell)) %>%
+      select(barcode=".cell", values, !!(ct.res)) %>%
+      pivot_wider(., names_from = !!(ct.res), values_fill = 0,
+                  values_from = values, values_fn = function(x) sum(x)) }
+  
+  if(is.null(ct.select)){ct.select <- colnames(cell_annot)[2:ncol(cell_annot)]}
+  
+  # get all spot coordinates:
+  scale_fact <- map_dbl(ID, ~pluck(spe@images, .x, "scale.factors", "hires"))
+  df <- map(ID, ~pluck(spe@images, .x, "coordinates")) %>%
+    map2(., scale_fact, ~mutate(.x, scale_fact = .y)) %>%
+    bind_rows(., .id = "orig.ident") %>%
+    mutate(imagecol = .$imagecol * .$scale_fact) %>%
+    mutate(imagerow = .$imagerow * .$scale_fact) %>%
+    rownames_to_column(var = "barcode") %>%
+    select(-any_of(c("epi", "SubMuc")), -contains("_")) %>%
+    left_join(., cell_annot, by="barcode") %>%
+    #mutate(orig.ident = !!(facet)) %>%
+    #mutate(orig.ident = factor(.data[["orig.ident"]], levels = lvls)) %>%
+    #cbind(.,as_tibble(select(spe, groups))) %>%
+    as_tibble() 
+  
+  gr <- unique(spe@meta.data[,c("orig.ident", "groups")])[,"groups"]
+  text_annot <- tibble(sample_id = ID, x=500, y=500, orig.ident = ID, gr = gr) 
+  
+  ## Colour pallets:
+  if (is.null(colors)){
+    # scales::show_col(disc_colors)
+    cell_col <- c(RColorBrewer::brewer.pal(9,"Pastel1"),
+                  RColorBrewer::brewer.pal(9,"Set1"),
+                  scales::hue_pal()(8),
+                  RColorBrewer::brewer.pal(8,"Set2"),
+                  RColorBrewer::brewer.pal(8,"Accent"),
+                  
+                  RColorBrewer::brewer.pal(8,"Pastel2") )
+    cell_col <- set_names(cell_col[1:length(ct.select)], ct.select)
+  }else{cell_col <- colors}
+  colour_pallet <- scale_fill_manual(values = cell_col, na.value = "grey90" )
+  guides <- guides(fill=guide_legend(ncol=1,title = ""))
+  
+  # select viewframe:
+  if (!(is.null(zoom))){
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident")
+    l <- tools %>% 
+      filter(.data[["name"]] == zoom) %>% # zoom <- "zoom"
+      #select(row=imagerow)
+      dplyr::rename("_row"=y, "_col"=x) %>%
+      summarise(across("_row":"_col", 
+                       list(min=min, max=max), 
+                       .names = "{.fn}{.col}")) 
+  }
+  # else{l <- tibble( min_col = 0, max_col = ncol(img),
+  #                   min_row = 0, max_row = nrow(img))}
+  
+  ## Spatial image:
+  if (!(img_alpha == 0)){
+    
+    # set image alpha:
+    im <- map(ID, ~pluck(spe@images, .x, "image")) 
+    im <- map(im, ~ matrix(
+      rgb(.x[,,1],.x[,,2],.x[,,3], .x[4,,]* img_alpha), nrow=dim(.x)[1]))
+    
+    img <- map(im, ~as.raster(.x))
+    img_ <- map(img, ~.x[l$min_row:l$max_row,l$min_col:l$max_col])
+    
+    # get grob and save as list
+    grob <- map(img_, ~grid::rasterGrob(.x, width=unit(1,"npc"), height=unit(1,"npc")))
+    images_tibble <- tibble(sample=factor(ID), grob=grob, orig.ident = ID)
+    
+    spatial_image <- geom_spatial(data=images_tibble, aes(grob=grob), x=0.5, y=0.5)
+  }
+  else{spatial_image <- NULL}
+  
+  ## Spatial annotation:
+  if(sp_annot){
+    tools <- map(ID, ~pluck(spe@tools, .x)) %>% bind_rows(., .id = "orig.ident") %>%
+      filter(!(grepl("fov|zoom|full_image", .$name))) # removes the black frame around image
+    spatial_annotation <- geom_path(
+      data=tools, 
+      show.legend = FALSE, linewidth = annot_line,
+      aes(x=x, y=y, group=interaction(elem_idx)), colour=annot_col)
+  }
+  else{spatial_annotation <- NULL}
+  
+  radius = (max(df$imagecol) - min(df$imagecol)) * (max(df$imagerow) - min(df$imagerow))
+  radius = radius / nrow(df)
+  radius = radius / pi
+  radius = sqrt(radius) * 0.85
+  
+  p <- ggplot() +
+    geom_scatterpie(data=na.omit(df), aes(x=imagecol,y=imagerow, r=radius+radius_adj), cols=ct.select, color=NA) +
+    
+    colour_pallet +
+    spatial_image + 
+    spatial_annotation +
+    coord_equal(expand=FALSE ) + #theme(l) +
+    xlim(l$min_col,l$max_col) +
+    ylim(l$max_row,l$min_row) +
+    #geom_text(aes(label = sample_id, x=x, y=y), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # sample ID
+    #geom_text(aes(label = gr, x=x, y=y+120), data = text_annot, inherit.aes = F, hjust = 0, size = 8/.pt) + # condition
     facet_wrap(~factor(orig.ident, levels = lvls), ncol = ncol,  dir = if(ncol > 2){"h"}else{"v"})
   # facet_wrap(vars(!!(orig.ident)), ncol = ncol)
   
