@@ -1,6 +1,6 @@
 Quality Control Spatial data
 ================
-10/22/23
+4/9/24
 
 ### Load packages
 
@@ -11,11 +11,14 @@ Quality Control Spatial data
 library(tidyverse)
 library(tidyseurat)
 library(Seurat)
+library(SeuratObject)
+library(broom)
 library(RColorBrewer)
 library(cowplot)
 library(patchwork)
 # remotes::install_github("czarnewski/niceRplots",force=T)
 library(niceRplots)
+
 source("../bin/spatial_visualization.R")
 ```
 
@@ -34,7 +37,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 #metadata <- read_csv("../data/Clinincal_data_Spatial_DMPA.csv")
 DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
-#sample_names <- unique(DATA$orig.ident)
+sample_id <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107") %>% set_names()
 
 #################
 # COLOUR PALLET #
@@ -54,8 +57,9 @@ p2 <- ggplot() +
   geom_histogram(data = DATA@meta.data, aes(nCount_RNA), fill = "red", alpha = 0.7, bins = 50) +
   ggtitle("Total counts per spots")
 
-gene_attr <- data.frame(nUMI = Matrix::rowSums(DATA@assays$RNA@counts), 
-                        nSpots = Matrix::rowSums(DATA@assays$RNA@counts > 0))
+gene_attr <- data.frame(nUMI = Matrix::rowSums(assay_count), 
+                        nSpots = Matrix::rowSums(assay_count > 0))
+
 p3 <- ggplot() +
   geom_histogram(data = gene_attr, aes(nUMI), fill = "red", alpha = 0.7, bins = 50) +
   scale_x_log10() +
@@ -111,7 +115,7 @@ sapply(DATA@meta.data[feature], summary) %>%
 # percentage of mitochondria
 (plots_m <- DATA %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
+      sampleid = sample_id,
       geneid = "percent_mito",
       zoom = "zoom",
       ncol = 4,
@@ -126,8 +130,8 @@ sapply(DATA@meta.data[feature], summary) %>%
 # number of genes per spot
 (plots_f <- DATA %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
-      geneid = "nFeature_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      sampleid = sample_id,
+      geneid = "nFeature_RNA",
       zoom = "zoom",
       ncol = 4,
       img_alpha = 0,
@@ -141,8 +145,8 @@ sapply(DATA@meta.data[feature], summary) %>%
 # number of reads per spot
 (plots_c <- DATA %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
-      geneid = "nCount_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      sampleid = sample_id,
+      geneid = "nCount_RNA",
       zoom = "zoom",
       ncol = 4,
       img_alpha = 0,
@@ -169,12 +173,14 @@ remove_genes <- function(x, gene_name) x[!(grepl(gene_name, rownames(x[["RNA"]])
 # identify transcripts within the 0.005 percentile:
 percentile <- function(x, nF) between(nF,quantile(nF,probs = c(0.005)), quantile(nF,probs = c(0.995)))
 
+
 DATA <- DATA %>%
   # filter out spots with less than 100 genes and more than 15% mt and 10% hb:
   mutate(filt = case_when(nFeature_RNA < 100 ~ 'filt',
                           percent_mito > 15 ~ 'filt',
                           percent_hb > 10 ~ 'filt',
                               TRUE ~ "keep")) %>%
+  mutate(orig.ident = factor(.$orig.ident, levels = sample_id)) %>%
   {. ->> temp } %>%
   #filter(., percentile(., .$nFeature_RNA)) %>%
   filter(filt == "keep") %>%
@@ -183,7 +189,7 @@ DATA <- DATA %>%
   select(-filt)
 ```
 
-### Summary stats
+### Summary stats after filtering
 
 Dimension of DATA before filtering, genes: 36601, spots: 6612<br/>
 Dimension of DATA after filtering, genes: 22026, spots: 6598
@@ -215,7 +221,7 @@ DATA@meta.data %>%
   split(.$groups, drop = T) %>% 
   map(., ~.x %>%
         select(., any_of(feature[1:2])) %>%
-        map(summary) %>%
+        map(~tidy(summary(.x))) %>%
         bind_rows(.id = "stat")
         #tibble(.x, .name_repair="unique")
       ) %>%
@@ -224,12 +230,12 @@ DATA@meta.data %>%
   knitr::kable(digits = 1)
 ```
 
-| groups | stat         | Min. | 1st Qu. | Median |     Mean | 3rd Qu. |  Max. |
-|:-------|:-------------|-----:|--------:|-------:|---------:|--------:|------:|
-| ctrl   | nCount_RNA   |  111 |     974 |   2279 | 4743.045 |    6458 | 46060 |
-| DMPA   | nCount_RNA   |  183 |    1497 |   2585 | 4952.667 |    5749 | 50999 |
-| ctrl   | nFeature_RNA |  104 |     708 |   1276 | 1735.319 |    2420 |  7860 |
-| DMPA   | nFeature_RNA |  158 |     993 |   1422 | 1879.477 |    2453 |  7363 |
+| groups | stat         | minimum |   q1 | median |   mean |   q3 | maximum |
+|:-------|:-------------|--------:|-----:|-------:|-------:|-----:|--------:|
+| ctrl   | nCount_RNA   |     111 |  974 |   2279 | 4743.0 | 6458 |   46060 |
+| DMPA   | nCount_RNA   |     183 | 1497 |   2585 | 4952.7 | 5749 |   50999 |
+| ctrl   | nFeature_RNA |     104 |  708 |   1276 | 1735.3 | 2420 |    7860 |
+| DMPA   | nFeature_RNA |     158 |  993 |   1422 | 1879.5 | 2453 |    7363 |
 
 ### Plotting QC before and after filtering
 
@@ -265,20 +271,20 @@ temp %>%
 
 | .cell                 | groups | sp_annot | orig.ident | nCount_RNA | nFeature_RNA | percent_mito | percent_hb | percent_ribo | filt |
 |:----------------------|:-------|:---------|:-----------|-----------:|-------------:|-------------:|-----------:|-------------:|:-----|
-| P097_TCGCGTAGCAGTGTCC | DMPA   | SubMuc   | P097       |          7 |            7 |         28.6 |        0.0 |         14.3 | filt |
-| P118_CATGGTAAGTAGCGTT | ctrl   | SubMuc   | P118       |         14 |           13 |          0.0 |        0.0 |          0.0 | filt |
-| P080_TCGTGTACTATGGATG | ctrl   | SubMuc   | P080       |         17 |           17 |          0.0 |        0.0 |          5.9 | filt |
 | P031_AGAAGAGCGCCGTTCC | ctrl   | SubMuc   | P031       |         30 |           29 |          3.3 |        0.0 |         10.0 | filt |
-| P097_GCATCGGCCGTGTAGG | DMPA   | SubMuc   | P097       |         30 |           29 |          3.3 |        0.0 |         10.0 | filt |
-| P114_TCGCGTAGCAGTGTCC | DMPA   | SubMuc   | P114       |         41 |           38 |          2.4 |        0.0 |         19.5 | filt |
-| P080_AGAAGAGCGCCGTTCC | ctrl   | SubMuc   | P080       |         48 |           39 |          2.1 |        0.0 |          8.3 | filt |
-| P114_TCGTGTACTATGGATG | DMPA   | SubMuc   | P114       |         58 |           56 |          6.9 |        0.0 |         13.8 | filt |
-| P107_CATGGTAAGTAGCGTT | DMPA   | epi      | P107       |         63 |           59 |          4.8 |        0.0 |         15.9 | filt |
-| P105_AGAAGAGCGCCGTTCC | ctrl   | SubMuc   | P105       |         63 |           62 |         11.1 |        0.0 |         19.0 | filt |
-| P097_TCGTGTACTATGGATG | DMPA   | SubMuc   | P097       |         88 |           82 |          3.4 |        0.0 |          8.0 | filt |
-| P108_CATGGTAAGTAGCGTT | DMPA   | SubMuc   | P108       |         88 |           82 |          2.3 |        0.0 |         17.0 | filt |
 | P031_AGATACCGGTGTTCAC | ctrl   | SubMuc   | P031       |        790 |          439 |         15.6 |        0.0 |         13.0 | filt |
 | P031_GTGCCATCACACGGTG | ctrl   | SubMuc   | P031       |       1136 |          566 |         16.6 |        0.1 |         12.3 | filt |
+| P080_AGAAGAGCGCCGTTCC | ctrl   | SubMuc   | P080       |         48 |           39 |          2.1 |        0.0 |          8.3 | filt |
+| P080_TCGTGTACTATGGATG | ctrl   | SubMuc   | P080       |         17 |           17 |          0.0 |        0.0 |          5.9 | filt |
+| P097_GCATCGGCCGTGTAGG | DMPA   | SubMuc   | P097       |         30 |           29 |          3.3 |        0.0 |         10.0 | filt |
+| P097_TCGCGTAGCAGTGTCC | DMPA   | SubMuc   | P097       |          7 |            7 |         28.6 |        0.0 |         14.3 | filt |
+| P097_TCGTGTACTATGGATG | DMPA   | SubMuc   | P097       |         88 |           82 |          3.4 |        0.0 |          8.0 | filt |
+| P105_AGAAGAGCGCCGTTCC | ctrl   | SubMuc   | P105       |         63 |           62 |         11.1 |        0.0 |         19.0 | filt |
+| P107_CATGGTAAGTAGCGTT | DMPA   | epi      | P107       |         63 |           59 |          4.8 |        0.0 |         15.9 | filt |
+| P108_CATGGTAAGTAGCGTT | DMPA   | SubMuc   | P108       |         88 |           82 |          2.3 |        0.0 |         17.0 | filt |
+| P114_TCGCGTAGCAGTGTCC | DMPA   | SubMuc   | P114       |         41 |           38 |          2.4 |        0.0 |         19.5 | filt |
+| P114_TCGTGTACTATGGATG | DMPA   | SubMuc   | P114       |         58 |           56 |          6.9 |        0.0 |         13.8 | filt |
+| P118_CATGGTAAGTAGCGTT | ctrl   | SubMuc   | P118       |         14 |           13 |          0.0 |        0.0 |          0.0 | filt |
 
 ### Plot filtered spots
 
@@ -286,8 +292,8 @@ temp %>%
 # dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 (plots <- temp %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
-      geneid = "filt",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      sampleid = sample_id,
+      geneid = "filt",
       zoom = "zoom",
       ncol = 4,
       img_alpha = 0,
@@ -304,7 +310,7 @@ data-fig-align="center" />
 #############################
 # GET TOP 20 ABUNDANT GENES #
 #############################
-top_genes <- DATA@assays$RNA@counts %>%
+top_genes <- assay_count %>%
   Matrix::rowSums(.) %>%
   sort(., decreasing = T) %>%
   .[1:20]
@@ -352,7 +358,8 @@ data-fig-align="center" />
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
 saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
-#DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
+# saveRDS(DATA, paste0(result_dir,"seuratObjV5_filtered.RDS"))
+# DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
 ```
 
 ### Session info
@@ -361,64 +368,64 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
 sessionInfo()
 ```
 
-    R version 4.1.2 (2021-11-01)
-    Platform: x86_64-apple-darwin13.4.0 (64-bit)
-    Running under: macOS Big Sur 10.16
+    R version 4.3.3 (2024-02-29)
+    Platform: x86_64-apple-darwin20 (64-bit)
+    Running under: macOS Monterey 12.7.3
 
     Matrix products: default
-    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.21.dylib
+    BLAS:   /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRblas.0.dylib 
+    LAPACK: /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
 
     locale:
-    [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
+    [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+    time zone: Europe/Stockholm
+    tzcode source: internal
 
     attached base packages:
     [1] stats     graphics  grDevices utils     datasets  methods   base     
 
     other attached packages:
-     [1] niceRplots_0.1.0   patchwork_1.1.2    cowplot_1.1.1      RColorBrewer_1.1-3
-     [5] Seurat_4.3.0       tidyseurat_0.5.3   SeuratObject_4.1.3 sp_1.5-1          
-     [9] ttservice_0.2.2    forcats_1.0.0      stringr_1.5.0      dplyr_1.1.2       
-    [13] purrr_1.0.1        readr_2.1.3        tidyr_1.3.0        tibble_3.2.1      
-    [17] ggplot2_3.4.3      tidyverse_1.3.2   
+     [1] niceRplots_0.1.0   patchwork_1.2.0    cowplot_1.1.3      RColorBrewer_1.1-3
+     [5] broom_1.0.5        Seurat_4.3.0       tidyseurat_0.8.0   SeuratObject_5.0.1
+     [9] sp_2.1-3           ttservice_0.4.0    lubridate_1.9.3    forcats_1.0.0     
+    [13] stringr_1.5.1      dplyr_1.1.4        purrr_1.0.2        readr_2.1.5       
+    [17] tidyr_1.3.1        tibble_3.2.1       ggplot2_3.5.0      tidyverse_2.0.0   
 
     loaded via a namespace (and not attached):
-      [1] googledrive_2.0.0      Rtsne_0.16             colorspace_2.1-0      
-      [4] deldir_1.0-6           ellipsis_0.3.2         ggridges_0.5.4        
-      [7] fs_1.6.2               spatstat.data_3.0-0    rstudioapi_0.14       
-     [10] farver_2.1.1           leiden_0.4.3           listenv_0.9.0         
-     [13] ggrepel_0.9.3          fansi_1.0.4            lubridate_1.9.0       
-     [16] xml2_1.3.3             codetools_0.2-19       splines_4.1.2         
-     [19] knitr_1.42             polyclip_1.10-4        jsonlite_1.8.5        
-     [22] broom_1.0.4            ica_1.0-3              cluster_2.1.4         
-     [25] dbplyr_2.2.1           png_0.1-8              uwot_0.1.14           
-     [28] spatstat.sparse_3.0-0  sctransform_0.3.5      shiny_1.7.4           
-     [31] compiler_4.1.2         httr_1.4.5             backports_1.4.1       
-     [34] lazyeval_0.2.2         assertthat_0.2.1       Matrix_1.6-1          
-     [37] fastmap_1.1.1          gargle_1.2.1           cli_3.6.1             
-     [40] later_1.3.0            htmltools_0.5.5        tools_4.1.2           
-     [43] igraph_1.4.1           gtable_0.3.4           glue_1.6.2            
-     [46] reshape2_1.4.4         RANN_2.6.1             Rcpp_1.0.10           
-     [49] scattermore_0.8        cellranger_1.1.0       vctrs_0.6.3           
-     [52] nlme_3.1-163           spatstat.explore_3.0-5 progressr_0.13.0      
-     [55] lmtest_0.9-40          spatstat.random_3.0-1  xfun_0.38             
-     [58] globals_0.16.2         rvest_1.0.3            timechange_0.2.0      
-     [61] mime_0.12              miniUI_0.1.1.1         lifecycle_1.0.3       
-     [64] irlba_2.3.5.1          goftest_1.2-3          googlesheets4_1.0.1   
-     [67] future_1.32.0          MASS_7.3-60            zoo_1.8-11            
-     [70] scales_1.2.1           spatstat.utils_3.0-1   hms_1.1.2             
-     [73] promises_1.2.0.1       parallel_4.1.2         yaml_2.3.7            
-     [76] gridExtra_2.3          pbapply_1.7-0          reticulate_1.28       
-     [79] stringi_1.7.12         rlang_1.1.1            pkgconfig_2.0.3       
-     [82] matrixStats_0.63.0     evaluate_0.21          lattice_0.21-8        
-     [85] tensor_1.5             ROCR_1.0-11            labeling_0.4.3        
-     [88] htmlwidgets_1.6.2      tidyselect_1.2.0       parallelly_1.36.0     
-     [91] RcppAnnoy_0.0.20       plyr_1.8.8             magrittr_2.0.3        
-     [94] R6_2.5.1               generics_0.1.3         DBI_1.1.3             
-     [97] pillar_1.9.0           haven_2.5.1            withr_2.5.0           
-    [100] fitdistrplus_1.1-8     abind_1.4-5            survival_3.5-5        
-    [103] future.apply_1.10.0    modelr_0.1.10          crayon_1.5.2          
-    [106] KernSmooth_2.23-20     utf8_1.2.3             spatstat.geom_3.0-3   
-    [109] plotly_4.10.1          tzdb_0.3.0             rmarkdown_2.21        
-    [112] grid_4.1.2             readxl_1.4.1           data.table_1.14.6     
-    [115] reprex_2.0.2           digest_0.6.31          xtable_1.8-4          
-    [118] httpuv_1.6.9           munsell_0.5.0          viridisLite_0.4.2     
+      [1] deldir_2.0-2           pbapply_1.7-2          gridExtra_2.3         
+      [4] rlang_1.1.3            magrittr_2.0.3         RcppAnnoy_0.0.22      
+      [7] spatstat.geom_3.2-8    matrixStats_1.2.0      ggridges_0.5.6        
+     [10] compiler_4.3.3         reshape2_1.4.4         png_0.1-8             
+     [13] vctrs_0.6.5            pkgconfig_2.0.3        fastmap_1.1.1         
+     [16] backports_1.4.1        ellipsis_0.3.2         labeling_0.4.3        
+     [19] utf8_1.2.4             promises_1.2.1         rmarkdown_2.25        
+     [22] tzdb_0.4.0             xfun_0.42              jsonlite_1.8.8        
+     [25] goftest_1.2-3          later_1.3.2            spatstat.utils_3.0-4  
+     [28] irlba_2.3.5.1          parallel_4.3.3         cluster_2.1.6         
+     [31] R6_2.5.1               ica_1.0-3              spatstat.data_3.0-4   
+     [34] stringi_1.8.3          reticulate_1.35.0      parallelly_1.37.0     
+     [37] lmtest_0.9-40          scattermore_1.2        Rcpp_1.0.12           
+     [40] knitr_1.45             tensor_1.5             future.apply_1.11.1   
+     [43] zoo_1.8-12             sctransform_0.4.1      httpuv_1.6.14         
+     [46] Matrix_1.6-5           splines_4.3.3          igraph_2.0.2          
+     [49] timechange_0.3.0       tidyselect_1.2.0       abind_1.4-5           
+     [52] rstudioapi_0.15.0      yaml_2.3.8             spatstat.random_3.2-2 
+     [55] spatstat.explore_3.2-6 codetools_0.2-19       miniUI_0.1.1.1        
+     [58] listenv_0.9.1          plyr_1.8.9             lattice_0.22-5        
+     [61] shiny_1.8.0            withr_3.0.0            ROCR_1.0-11           
+     [64] evaluate_0.23          Rtsne_0.17             future_1.33.1         
+     [67] survival_3.5-8         polyclip_1.10-6        fitdistrplus_1.1-11   
+     [70] pillar_1.9.0           KernSmooth_2.23-22     plotly_4.10.4         
+     [73] generics_0.1.3         hms_1.1.3              munsell_0.5.0         
+     [76] scales_1.3.0           globals_0.16.2         xtable_1.8-4          
+     [79] glue_1.7.0             lazyeval_0.2.2         tools_4.3.3           
+     [82] data.table_1.15.0      RANN_2.6.1             fs_1.6.3              
+     [85] leiden_0.4.3.1         dotCall64_1.1-1        grid_4.3.3            
+     [88] colorspace_2.1-0       nlme_3.1-164           cli_3.6.2             
+     [91] spatstat.sparse_3.0-3  spam_2.10-0            fansi_1.0.6           
+     [94] viridisLite_0.4.2      uwot_0.1.16            gtable_0.3.4          
+     [97] digest_0.6.34          progressr_0.14.0       ggrepel_0.9.5         
+    [100] farver_2.1.1           htmlwidgets_1.6.4      htmltools_0.5.7       
+    [103] lifecycle_1.0.4        httr_1.4.7             mime_0.12             
+    [106] MASS_7.3-60.0.1       

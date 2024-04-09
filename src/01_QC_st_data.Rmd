@@ -55,11 +55,14 @@ knitr::opts_chunk$set(
 library(tidyverse)
 library(tidyseurat)
 library(Seurat)
+library(SeuratObject)
+library(broom)
 library(RColorBrewer)
 library(cowplot)
 library(patchwork)
 # remotes::install_github("czarnewski/niceRplots",force=T)
 library(niceRplots)
+
 source("../bin/spatial_visualization.R")
 
 ```
@@ -78,12 +81,24 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 #metadata <- read_csv("../data/Clinincal_data_Spatial_DMPA.csv")
 DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
-sample_id <- c("P118","P080", "P031","P105", "P107","P114" ,"P097","P108" ) %>% set_names()
+sample_id <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107") %>% set_names()
 
 #################
 # COLOUR PALLET #
 #################
 friendly_cols <- c("#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC") 
+```
+
+```{r Seurat-Version, echo=FALSE}
+Seurat_V4 <- TRUE
+
+if(Seurat_V4){ 
+  # V4
+  assay_count <- DATA@assays$RNA@counts}else{ 
+  # V5
+  assay_count <- DATA@assays$RNA@layers$counts
+  # set default layer to counts because data is empty and we want to operate on counts (V5):
+  LayerData(DATA, layer = "data") <- LayerData(DATA, layer = "counts")}
 ```
 
 ```{r 01a_Feature_and_counts}
@@ -98,8 +113,9 @@ p2 <- ggplot() +
   geom_histogram(data = DATA@meta.data, aes(nCount_RNA), fill = "red", alpha = 0.7, bins = 50) +
   ggtitle("Total counts per spots")
 
-gene_attr <- data.frame(nUMI = Matrix::rowSums(DATA@assays$RNA@counts), 
-                        nSpots = Matrix::rowSums(DATA@assays$RNA@counts > 0))
+gene_attr <- data.frame(nUMI = Matrix::rowSums(assay_count), 
+                        nSpots = Matrix::rowSums(assay_count > 0))
+
 p3 <- ggplot() +
   geom_histogram(data = gene_attr, aes(nUMI), fill = "red", alpha = 0.7, bins = 50) +
   scale_x_log10() +
@@ -164,7 +180,7 @@ d %>%
 # percentage of mitochondria
 (plots_m <- DATA %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
+      sampleid = sample_id,
       geneid = "percent_mito",
       zoom = "zoom",
       ncol = 4,
@@ -177,8 +193,8 @@ d %>%
 # number of genes per spot
 (plots_f <- DATA %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
-      geneid = "nFeature_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      sampleid = sample_id,
+      geneid = "nFeature_RNA",
       zoom = "zoom",
       ncol = 4,
       img_alpha = 0,
@@ -190,8 +206,8 @@ d %>%
 # number of reads per spot
 (plots_c <- DATA %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
-      geneid = "nCount_RNA",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      sampleid = sample_id,
+      geneid = "nCount_RNA",
       zoom = "zoom",
       ncol = 4,
       img_alpha = 0,
@@ -213,6 +229,7 @@ remove_genes <- function(x, gene_name) x[!(grepl(gene_name, rownames(x[["RNA"]])
 # identify transcripts within the 0.005 percentile:
 percentile <- function(x, nF) between(nF,quantile(nF,probs = c(0.005)), quantile(nF,probs = c(0.995)))
 
+
 DATA <- DATA %>%
   # filter out spots with less than 100 genes and more than 15% mt and 10% hb:
   mutate(filt = case_when(nFeature_RNA < 100 ~ 'filt',
@@ -228,7 +245,7 @@ DATA <- DATA %>%
   select(-filt)
 ```
 
-### Summary stats
+### Summary stats after filtering
 Dimension of DATA before filtering, genes: `r dim(temp)[1]`, spots: `r dim(temp)[2]`<br/>
 Dimension of DATA after  filtering, genes: `r dim(DATA)[1]`, spots: `r dim(DATA)[2]`
 ```{r summary-table-after}
@@ -247,7 +264,7 @@ DATA@meta.data %>%
   split(.$groups, drop = T) %>% 
   map(., ~.x %>%
         select(., any_of(feature[1:2])) %>%
-        map(summary) %>%
+        map(~tidy(summary(.x))) %>%
         bind_rows(.id = "stat")
         #tibble(.x, .name_repair="unique")
       ) %>%
@@ -289,8 +306,8 @@ temp %>%
 # dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 (plots <- temp %>%
   plot_spatial.fun(., 
-      sampleid = unique(.$orig.ident),
-      geneid = "filt",#"KRT15", #"PTPRC",#"sp_annot",#"CDH1",
+      sampleid = sample_id,
+      geneid = "filt",
       zoom = "zoom",
       ncol = 4,
       img_alpha = 0,
@@ -304,7 +321,7 @@ temp %>%
 #############################
 # GET TOP 20 ABUNDANT GENES #
 #############################
-top_genes <- DATA@assays$RNA@counts %>%
+top_genes <- assay_count %>%
   Matrix::rowSums(.) %>%
   sort(., decreasing = T) %>%
   .[1:20]
@@ -349,7 +366,8 @@ col = (scales::hue_pal())(20)[20:1]
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
 saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
-#DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
+# saveRDS(DATA, paste0(result_dir,"seuratObjV5_filtered.RDS"))
+# DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
 ```
 
 ### Session info
