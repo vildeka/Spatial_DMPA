@@ -470,7 +470,7 @@ DATA %>%
 ```
 
 ## Plot spots to be removed
-```{r 02d_plot_spots_to_remove, fig.height=8, fig.width=6}
+```{r 00d_plot_spots_to_remove, fig.height=8, fig.width=6}
 # dev.new(width=10, height=10, noRStudioGD = TRUE)
 
 DATA <-  DATA %>%
