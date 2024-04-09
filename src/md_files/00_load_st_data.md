@@ -338,7 +338,8 @@ DATA <-  DATA %>%
 # dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 plot_spatial.fun(DATA, 
       sampleid=sample_id,
-      sp_annot = F,
+      sp_annot = F, 
+      alpha = 0,
       geneid = "nFeature_RNA",
       zoom = "zoom",
       ncol = 2,
@@ -348,17 +349,6 @@ plot_spatial.fun(DATA,
 ```
 
 <img src="../Figures/00/00a_plot_tissue.png" data-fig-align="center" />
-
-``` r
-DATA_st <- readRDS(paste0("../results/02_integrate_st_data/","seuratObj_integrated_old.RDS"))
-DATA <- readRDS(paste0("../results/01_QC_st_data/","seuratObj_filtered.RDS"))
-DATA_st@images <- DATA@images
-DATA_st@misc$alpha <- DATA@misc$alpha
-DATA_st@tools <- DATA@tools
-saveRDS(DATA_st, paste0("../results/02_integrate_st_data/","seuratObj_integrated.RDS"))
-
-DATA <- readRDS(paste0("../results/04_deconvolution_st_data/","seuratObj_deconvolution_scdc.RDS"))
-```
 
 ``` r
 # dev.new(height=7, width=6, noRStudioGD = TRUE)
@@ -480,7 +470,7 @@ data-fig-align="center" />
 dim(DATA)
 ```
 
-    [1] 22026  6598
+    [1] 36601  6700
 
 ``` r
 # Filter spots outside manual annotation
@@ -490,34 +480,27 @@ DATA$filt <- NULL
 dim(DATA)
 ```
 
-    [1] 22026  6598
+    [1] 36601  6612
 
 ``` r
 DATA
 ```
 
-    # A Seurat-tibble abstraction: 6,598 × 28
-    # [90mFeatures=22026 | Cells=6598 | Active assay=RNA | Assays=RNA, SCDC_clus,[0m
-    # [90m  SCDC_annot1, SCDC_annot2, misc[0m
-       .cell     groups sp_annot orig.ident layers nCount_RNA nFeature_RNA sp_annot2
-       <chr>     <chr>  <chr>    <chr>      <fct>       <dbl>        <int> <chr>    
-     1 P031_AAA… ctrl   SubMuc   P031       0             429          355 SubMuc   
-     2 P031_AAA… ctrl   SubMuc   P031       8            4052         2230 SubMuc   
-     3 P031_AAA… ctrl   epi      P031       Lower…       7566         2585 epi      
-     4 P031_AAA… ctrl   epi      P031       Basal       11378         3872 epi      
-     5 P031_AAA… ctrl   epi      P031       8            4602         2268 epi      
-     6 P031_AAA… ctrl   epi      P031       Basal        5517         2506 epi      
-     7 P031_AAA… ctrl   SubMuc   P031       4            1751         1081 SubMuc   
-     8 P031_AAA… ctrl   SubMuc   P031       0             780          475 <NA>     
-     9 P031_AAA… ctrl   SubMuc   P031       0             618          464 SubMuc   
-    10 P031_AAA… ctrl   SubMuc   P031       8            3539         1947 SubMuc   
-    # ℹ 6,588 more rows
-    # ℹ 20 more variables: percent_mito <dbl>, percent_hb <dbl>,
-    #   percent_ribo <dbl>, Clusters <fct>, PC_1 <dbl>, PC_2 <dbl>, PC_3 <dbl>,
-    #   PC_4 <dbl>, PC_5 <dbl>, UMAP_1 <dbl>, UMAP_2 <dbl>, harmony_1 <dbl>,
-    #   harmony_2 <dbl>, harmony_3 <dbl>, harmony_4 <dbl>, harmony_5 <dbl>,
-    #   umap_harmony_1 <dbl>, umap_harmony_2 <dbl>, umap_harmony_knn_1 <dbl>,
-    #   umap_harmony_knn_2 <dbl>
+    # A Seurat-tibble abstraction: 6,612 × 7
+    # [90mFeatures=36601 | Cells=6612 | Active assay=RNA | Assays=RNA[0m
+       .cell            groups sp_annot orig.ident nCount_RNA nFeature_RNA sp_annot2
+       <chr>            <chr>  <chr>    <chr>           <dbl>        <int> <chr>    
+     1 P031_AAACGAGACG… ctrl   SubMuc   P031              463          356 SubMuc   
+     2 P031_AAACTGCTGG… ctrl   SubMuc   P031             4081         2232 SubMuc   
+     3 P031_AAAGTAGCAT… ctrl   epi      P031             7595         2588 epi      
+     4 P031_AAAGTGTGAT… ctrl   epi      P031            11394         3873 epi      
+     5 P031_AAAGTTGACT… ctrl   epi      P031             4617         2270 epi      
+     6 P031_AAATACCTAT… ctrl   epi      P031             5538         2507 epi      
+     7 P031_AAATCGTGTA… ctrl   SubMuc   P031             1765         1084 SubMuc   
+     8 P031_AAATGGCCCG… ctrl   SubMuc   P031              789          477 <NA>     
+     9 P031_AAATTAACGG… ctrl   SubMuc   P031              639          465 SubMuc   
+    10 P031_AAATTTGCGG… ctrl   SubMuc   P031             3570         1948 SubMuc   
+    # ℹ 6,602 more rows
 
 ``` r
 # dev.new(height=7, width=6, noRStudioGD = TRUE)

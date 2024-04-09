@@ -365,23 +365,14 @@ DATA <-  DATA %>%
 # dev.new(width=7, height=3.5, noRStudioGD = TRUE)
 plot_spatial.fun(DATA, 
       sampleid=sample_id,
-      sp_annot = F,
+      sp_annot = F, 
+      alpha = 0,
       geneid = "nFeature_RNA",
       zoom = "zoom",
       ncol = 2,
       annot_line = 1,
       img_alpha = 1,
       point_size = 0) +  theme(legend.position = "none") # theme_nothing() #
-
-
-DATA_st <- readRDS(paste0("../results/02_integrate_st_data/","seuratObj_integrated_old.RDS"))
-DATA <- readRDS(paste0("../results/01_QC_st_data/","seuratObj_filtered.RDS"))
-DATA_st@images <- DATA@images
-DATA_st@misc$alpha <- DATA@misc$alpha
-DATA_st@tools <- DATA@tools
-saveRDS(DATA_st, paste0("../results/02_integrate_st_data/","seuratObj_integrated.RDS"))
-
-DATA <- readRDS(paste0("../results/04_deconvolution_st_data/","seuratObj_deconvolution_scdc.RDS"))
 
 ```
 
