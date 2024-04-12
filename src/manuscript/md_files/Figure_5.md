@@ -1,6 +1,6 @@
 Figure 5
 ================
-4/11/24
+4/12/24
 
 ### Load data and libraries
 
@@ -72,7 +72,13 @@ set.seed(1);A <- DEGs_filt %>%
         #axis.ticks.x.bottom = element_line(colour = col),
         plot.margin = unit(c(1, .5, .4, 1), "lines")) #t,r,b,l
 
+A
+```
 
+<img src="../Figures/FIGURES/05a_volcano_plot.png"
+data-fig-align="center" />
+
+``` r
 #######################
 # PLOTS VENN DIAGRAM #
 ######################
@@ -99,7 +105,7 @@ venn_input.fun <- function(sig_table, gr_col){
 
 t <- venn_input.fun(sig_table, layers) # cluster overlaps
 
-# "../Figures/06/"
+# "./Figures/06/"
 library(nVennR)
 d <- plotVenn(t$genes[c("Basal","Lower IM","Superficial","Upper IM")], 
          sNames = names(t$genes[c("Basal","Lower IM","Superficial","Upper IM")]),
@@ -123,32 +129,12 @@ knitr::include_graphics(paste0("./", "Venn_epi_sig.svg"))
 <img src="./Venn_epi_sig.svg" data-fig-align="center" />
 
 ``` r
-# not used includes comparison of Bradley, Zal, ST and E2
-# col <- set_names(c('#ca0020','#f4a582','#0571b0',"#018571"), t$study)
-# # all four comparisons
-# plotVenn(t$sig_DEGs, 
-#          labelRegions=FALSE,
-#          #sNames = names(t$sig_DEGs), 
-#          systemShow=F) %>%
-#   {. ->> d} %>%
-#   showSVG(d, 
-#          setColors = col[names(d$orig)],
-#          labelRegions=FALSE,
-#          showNumbers=FALSE,
-#          fontScale = 1,
-#          systemShow=F,
-#          outFile=paste0("../Figures/06/", "Venn_E2_all.svg")
-#          )
-# int_genes <- getVennOverlap(t$sig_DEGs) 
-
 #########################
 # COMBINE PANEL A AND C #
 #########################
 # dev.new(width=6.7, height=3.2, noRStudioGD = TRUE) 
-(A_B <- plot_grid(A, NULL, rel_widths = c(1,1), labels = c('A', 'B'), hjust = 0) )
+A_B <- plot_grid(A, NULL, rel_widths = c(1,1), labels = c('A', 'B'), hjust = 0) 
 ```
-
-<img src="../Figures/FIGURES/Figure-6AC-2.png" data-fig-align="center" />
 
 ``` r
 # failed attempt at reading the svg file created by nVennR
@@ -312,7 +298,7 @@ C_1 <- wrap_plots(dot_fig, nrow = 1, guides = "collect" ) +
         # axis.title.y.left = element_text(margin = margin(r = 5))
         )
 
-ggsave("../Figures/05/Fig_05C.png", C_1, width = 6.7, height = 2.4) #, dpi = 300
+ggsave("./Figures/05/Fig_05C.png", C_1, width = 6.7, height = 2.4) #, dpi = 300
 
 ############################
 # CLUS EXPRESION ON TISSUE #
@@ -359,10 +345,11 @@ C_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
 (C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,1.1), labels = c('C'), hjust = 0))
 ```
 
-<img src="../Figures/FIGURES/Figure-5B.png" data-fig-align="center" />
+<img src="../Figures/FIGURES/05c_dotplot_gene_traject.png"
+data-fig-align="center" />
 
 ``` r
-ggsave("../Figures/05/Fig_05C.png", C, width = 6.7, height = 3.2, bg = "white", dpi = 300)
+# ggsave("./Figures/05/dotplot_gene_traject.png", C, width = 6.7, height = 3.2, bg = "white", dpi = 300)
 ```
 
 ``` r
@@ -371,10 +358,9 @@ ggsave("../Figures/05/Fig_05C.png", C, width = 6.7, height = 3.2, bg = "white", 
 #############################
 # dev.new(width=6.7, height=6.7, noRStudioGD = TRUE)
 Figure5 <- plot_grid( A_B, C, ncol=1, rel_heights = c(1,1)) 
-ggsave("../Figures/05/Figure05.png", Figure5, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
-ggsave("../Figures/05/Figure05.pdf", Figure5, width = 6.7, height = 6.7, bg = "white")
+ggsave("./Figures/05/Figure05.pdf", Figure5, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
 
 Figure5
 ```
 
-<img src="../Figures/FIGURES/Figure-6.png" data-fig-align="center" />
+<img src="../Figures/FIGURES/Figure-5.png" data-fig-align="center" />

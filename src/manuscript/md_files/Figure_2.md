@@ -1,6 +1,6 @@
 Figure 2
 ================
-3/29/24
+4/12/24
 
 ### Load data and libraries
 
@@ -19,6 +19,10 @@ library(grid)
 library(scatterpie)
 library(patchwork)
 library(openxlsx)
+
+# remotes::install_github('linxihui/NNLM')
+library(NNLM)
+library(parallel)
 
 source("../../bin/spatial_visualization.R")
 source("../../bin/plotting_functions.R")
@@ -42,9 +46,9 @@ DATA_r <- readRDS(paste0("../../results/06_plot_annotation_ref_data/","seuratObj
 ```
 
 ``` r
-DATA@assays$misc$cell_annot %>% 
+DATA@misc$cell_annot %>% 
   mutate(cell_annot_1 = ifelse(.$cell_annot_1 == "Epithelial", "Keratinocyte", .$cell_annot_1)) %>%
-  {. ->> DATA@assays$misc$cell_annot }
+  {. ->> DATA@misc$cell_annot }
 ```
 
 ``` r
@@ -105,15 +109,10 @@ ym <- max(df$ymax)
 xm <- length(cell_type)+3.5
 
 clus_lvl <- rev(c("6", "9", "7", "5","8","3","4","0","1","2","10")) 
-DATA %>%
-  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
-ggplot(., aes(x=Clusters, y=nCount_RNA, fill=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col)
-```
+# DATA %>%
+#   mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
+# ggplot(., aes(x=Clusters, y=nCount_RNA, fill=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col)
 
-<img src="../Figures/FIGURES/marker-gene-dotplot.png"
-data-fig-align="center" />
-
-``` r
 (A <- ggplot(df, aes(x=marker, y=Clusters)) +
   geom_point(aes(size = Pct, fill = Avg), color="white", shape=21) +
   scale_fill_gradientn(colours = viridisLite::magma(100),
@@ -161,12 +160,12 @@ data-fig-align="center" />
 )
 ```
 
-<img src="../Figures/FIGURES/marker-gene-dotplot-2.png"
+<img src="../Figures/02/02a_marker-gene-dotplot.png"
 data-fig-align="center" />
 
 ``` r
 # dev.new(width=8, height=5, noRStudioGD = TRUE)
-ggsave("./Figures/04/dotplot_marker_genes_clusters.pdf", A, width = 8, height = 5) # cell_marker
+# ggsave("./Figures/04/marker-gene-dotplot.pdf", A, width = 8, height = 5) # cell_marker
 ```
 
 ``` r
@@ -240,7 +239,7 @@ col <- df %>%
 
 cell_type <- levels(df_$annot)
 cell_col <- set_names(col[1:length(cell_type)], cell_type)
-# DATA@assays[["misc"]]$markers <- list(cell_annot = df_)  
+# DATA@misc$markers <- list(cell_annot = df_)  
 
 ###################################
 # CELL MARKER PROPORTION PER SPOT #
@@ -250,7 +249,7 @@ immune <- cell_type[grepl(paste0(c("B cell","T cell","Myeloid","NK cells"),colla
 select <- list(NULL, immune)
 
 DAT <- DATA %>% filter(orig.ident == "P097")
-DAT@assays[["misc"]]<- list(cell_annot = df_)  
+DAT@misc$cell_annot <- df_ 
 
 plot <- map(select,
           ~plot_cell_pie.fun(DAT,
@@ -277,8 +276,11 @@ p_2 <- plot[[2]] + theme(plot.margin = unit(c(.5, -3.5, -1.3, -4.2), "lines"))
 
 #p <- plot_grid(plot[[1]], plot[[2]], ncol = 2)
 # dev.new(width=5.5, height=2.4, noRStudioGD = TRUE)
-B_ <- plot_grid(NULL, p_1, NULL, p_2, nrow = 1, rel_widths = c(.15,1.1,.1,1.1))
+(B_ <- plot_grid(NULL, p_1, NULL, p_2, nrow = 1, rel_widths = c(.15,1.1,.1,1.1)))
 ```
+
+<img src="../Figures/02/02b_cell-marker-prop-on-tissue.png"
+data-fig-align="center" />
 
 ``` r
 col <- c("#FFD92F","#8DA0CB","#FC8D62","#66C2A5","#E78AC3","#A6D854","#eb6062","#B3B3B3","#984EA3","#FF7F00","#FFFF33","#A65628","#F781BF")
@@ -295,7 +297,7 @@ p <- ggplot(dat, aes(X,  fill = b)) + scale_fill_manual(values = cell_col) +  ge
           ) )
 ```
 
-<img src="../Figures/FIGURES/legend.png" data-fig-align="center" />
+<img src="../Figures/02/02b_legend.png" data-fig-align="center" />
 
 ``` r
 # combine plots and legend
@@ -304,14 +306,12 @@ B <- B_ + draw_grob(legend, hjust = -.09, vjust = -.28)
 
 # dev.new(width=7.4, height=2.4, noRStudioGD = TRUE)
 B_C <- plot_grid(B, NULL, rel_widths = c(1,.6),  labels = c('B','C'))
-ggsave("./Figures/02/Figure02B.png", B_C, width = 7.4, height = 3, bg = "white", dpi = 400)
+# ggsave("./Figures/02/Figure02B.png", B_C, width = 7.4, height = 3, bg = "white", dpi = 400)
 ```
 
 ## Semla deconvolution
 
 ``` r
-library(NNLM)
-library(parallel)
 ###################
 # SEMLA FUNCTIONS #
 ###################
@@ -1113,7 +1113,7 @@ VariableFeatures(DATA) <- var_features
 DimPlot(DATA_r, group.by = "cell_annot_1")
 ```
 
-<img src="../Figures/FIGURES/prepare-for-semla-decon.png"
+<img src="../Figures/02/prepare-for-semla-decon.png"
 data-fig-align="center" />
 
 ``` r
@@ -1186,7 +1186,7 @@ sum_clus <- FetchData(DATA_cell, cell_type) %>%
 )
 ```
 
-<img src="../Figures/FIGURES/Cell-type-contribution-plot.png"
+<img src="../Figures/02/02c_cell-type-contribution-plot.png"
 data-fig-align="center" />
 
 ## Combine all plots
@@ -1200,5 +1200,9 @@ B_C <- plot_grid(B, C, rel_widths = c(1,.6),  labels = c('B','C'))
 
 # dev.new(width=7.4, height=7.4, noRStudioGD = TRUE)
 Figure2 <- plot_grid( A, B_C, ncol=1, rel_heights = c(1,.85), hjust = -.2, labels = c('A')) 
-ggsave("./Figures/02/Figure02.png", Figure2, width = 7.4, height = 7.4, bg = "white", dpi = 1000)
+ggsave("./Figures/Figure-2.pdf", Figure2, width = 7.4, height = 7.4, bg = "white", dpi = 1000)
+
+Figure2
 ```
+
+<img src="../Figures/02/Figure-2.png" data-fig-align="center" />

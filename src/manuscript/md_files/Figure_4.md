@@ -1,6 +1,6 @@
 Figure 4
 ================
-4/11/24
+4/12/24
 
 ### Load data and libraries
 
@@ -94,7 +94,7 @@ p2 <- plot_genes.fun(DAT, gene="spatial_dist_SM", point_size = .05,
           plotlist = list(p1, p2)) )
 ```
 
-<img src="../Figures/FIGURES/03a_plot_resolution.png"
+<img src="../Figures/04/04a_plot_resolution.png"
 data-fig-align="center" />
 
 ### Plot spatial distance on tissue
@@ -146,7 +146,7 @@ p[[2]] <- p[[2]] + scale_color_pseudotime(palette = col2)
     draw_label("Control", x = c(.2), y = c( .94), hjust = 0, size = 9) )
 ```
 
-<img src="../Figures/FIGURES/08b_spatial_trajectory_tissue.png"
+<img src="../Figures/04/04b_spatial_trajectory_tissue.png"
 data-fig-align="center" />
 
 ``` r
@@ -269,17 +269,18 @@ gr_lvl <- c("8","3","4","0","2","1")
         axis.text.y = element_text(margin = margin(r = -1)) )  )
 ```
 
-<img src="../Figures/FIGURES/Marker_genes.png" data-fig-align="center" />
+<img src="../Figures/04/04c_marker_genes_submuc.png"
+data-fig-align="center" />
 
 ``` r
 # dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
 # dev.new(width=4, height=5.5, noRStudioGD = TRUE) # vertical
-# ggsave(paste0("../Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
-# ggsave(paste0("../Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
 
 # dev.new(width=3.4, height=2, noRStudioGD = TRUE) # horizontal
 C <- plot_grid(C, labels = c('C'), hjust = -.2)
-ggsave("../Figures/04/Fig_04C.png", C, width = 6.7, height = 2.4) #, dpi = 300
+# ggsave("./Figures/04/marker_genes_submuc.png", C, width = 6.7, height = 2.4, dpi = 1000)
 ```
 
 ### Plot dotplot
@@ -403,10 +404,11 @@ D_1 <- wrap_plots(dot_fig, ncol = 7, guides = "collect" ) +
 (D <- plot_grid(D_1, NULL, rel_widths = c(1,.01), labels = c('D'),  hjust = -.2) )
 ```
 
-<img src="../Figures/FIGURES/Figure-4D.png" data-fig-align="center" />
+<img src="../Figures/04/04d_dotplot_gene_traject.png"
+data-fig-align="center" />
 
 ``` r
-ggsave("../Figures/04/Fig_04D.png", D_1, width = 6.7, height = 2.4) #, dpi = 300
+# ggsave("./Figures/04/dotplot_gene_traject.png", D_1, width = 6.7, height = 2.4, dpi = 1000)
 ```
 
 ``` r
@@ -418,10 +420,9 @@ A_B_C <- plot_grid( A, B, C, ncol=3, rel_widths = c(.6,.5,1.65), labels = c('A',
 
 # dev.new(width=7.4, height=4.8, noRStudioGD = TRUE)
 Figure4 <- plot_grid( A_B_C, D, ncol=1, rel_heights = c(1.1,1.1), hjust = -.2) 
-ggsave("../Figures/04/Figure04.png", Figure4, width = 7.4, height = 4.8, bg = "white", dpi = 1000)
-ggsave("../Figures/04/Figure04.pdf", Figure4, width = 7.4, height = 4.8, bg = "white")
+ggsave("./Figures/Figure-4.pdf", Figure4, width = 7.4, height = 4.8, bg = "white", dpi = 1000)
 
 Figure4
 ```
 
-<img src="../Figures/FIGURES/Figure-4.png" data-fig-align="center" />
+<img src="../Figures/04/Figure-4.png" data-fig-align="center" />

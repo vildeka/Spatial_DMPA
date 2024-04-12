@@ -1,6 +1,6 @@
 Figure 6
 ================
-4/11/24
+4/12/24
 
 ### Load data and libraries
 
@@ -82,7 +82,8 @@ C <- plot_grid(C, rel_widths = c(1), labels = c('C'), hjust = .5)
 (A_C <- plot_grid(A, C, rel_widths = c(3,.85), labels = c('A'), hjust = 0))
 ```
 
-<img src="../Figures/FIGURES/Figure-6AC.png" data-fig-align="center" />
+<img src="../Figures/06/05ac_volcano_plot_IHC.png"
+data-fig-align="center" />
 
 ### Plot dotplot and tissue
 
@@ -202,7 +203,7 @@ B_1  <- wrap_plots(dot_fig, nrow = 1, guides = "collect" ) +
         # axis.title.y.left = element_text(margin = margin(r = 5))
         )
 
-ggsave("../Figures/06/Fig_06C.png", B_1, width = 6.7, height = 2.4) #, dpi = 300
+# ggsave("./Figures/06/gene_dotplot.png", B_1, width = 6.7, height = 2.4) #, dpi = 300
 
 ############################
 # CLUS EXPRESION ON TISSUE #
@@ -249,10 +250,11 @@ B_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
 (B <- plot_grid( B_1, B_2, ncol=1, rel_heights = c(3,1.1), labels = c('B'), hjust = 0))
 ```
 
-<img src="../Figures/FIGURES/Figure-6B.png" data-fig-align="center" />
+<img src="../Figures/06/05b_dotplot_and_tissue_plot.png"
+data-fig-align="center" />
 
 ``` r
-ggsave("../Figures/06/Fig_06B.png", B, width = 6.7, height = 3.2, bg = "white", dpi = 300)
+# ggsave("./Figures/06/dotplot_and_tissue_plot.png", B, width = 6.7, height = 3.2, bg = "white", dpi = 300)
 ```
 
 ``` r
@@ -260,12 +262,10 @@ ggsave("../Figures/06/Fig_06B.png", B, width = 6.7, height = 3.2, bg = "white", 
 # COMBINE ALL FIGURE PANELS #
 #############################
 # dev.new(width=6.7, height=6.7, noRStudioGD = TRUE)
-(Figure6 <- plot_grid( A_C, B, ncol=1, rel_heights = c(1,1)) )
+Figure6 <- plot_grid( A_C, B, ncol=1, rel_heights = c(1,1)) 
+ggsave("./Figures/Figure-6.pdf", Figure6, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
+
+Figure6
 ```
 
-<img src="../Figures/FIGURES/Figure-6.png" data-fig-align="center" />
-
-``` r
-ggsave("../Figures/06/Figure06.png", Figure6, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
-ggsave("../Figures/06/Figure06.pdf", Figure6, width = 6.7, height = 6.7, bg = "white")
-```
+<img src="../Figures/06/Figure-6.png" data-fig-align="center" />

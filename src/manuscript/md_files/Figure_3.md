@@ -1,6 +1,6 @@
 Figure 3
 ================
-4/11/24
+4/12/24
 
 ### Load data and libraries
 
@@ -98,7 +98,7 @@ p2 <- plot_genes.fun(DAT, gene="spatial_dist", point_size = .05,
           plotlist = list(p1, p2)) )
 ```
 
-<img src="../Figures/FIGURES/03a_plot_resolution.png"
+<img src="../Figures/03/03a_plot_resolution.png"
 data-fig-align="center" />
 
 ### Plot spatial distance on tissue
@@ -155,7 +155,7 @@ B <- plot_grid(ncol = 2, #labels = c('B'),  hjust = -.2,
     draw_label("Gene exp. similarity", x = c(.53), y = c( .94), hjust = 0, size = 8) )
 ```
 
-<img src="../Figures/FIGURES/03b_spatial_trajectory_tissue.png"
+<img src="../Figures/03/03b_spatial_trajectory_tissue.png"
 data-fig-align="center" />
 
 ``` r
@@ -164,10 +164,10 @@ data-fig-align="center" />
 (A_B <- plot_grid( A, B, ncol=2, rel_widths = c(.55,1), labels = c('A','B'),  hjust = -.2))
 ```
 
-<img src="../Figures/FIGURES/A-B.png" data-fig-align="center" />
+<img src="../Figures/03/03ab_UMAP_tissue.png" data-fig-align="center" />
 
 ``` r
-ggsave("../Figures/03/Fig_03AB.png", A_B, width = 3.35, height = 1.9, bg = "white", dpi = 300)
+# ggsave("./Figures/03/UMAP_tissue.png", A_B, width = 3.35, height = 1.9, bg = "white", dpi = 300)
 ```
 
 ### Plot dotplot and tissue
@@ -302,7 +302,7 @@ C_1 <- wrap_plots(dot_fig, ncol = 4, guides = "collect" ) +
         ) 
 
 C_1 <- plot_grid(C_1, NULL, rel_widths = c(1,.01))
-ggsave("../Figures/03/Fig_03C1.png", C_1, width = 6.7, height = 2.4) #, dpi = 300
+ggsave("./Figures/03/Fig_03C1.png", C_1, width = 6.7, height = 2.4) #, dpi = 300
 
 ############################
 # CLUS EXPRESION ON TISSUE #
@@ -349,10 +349,11 @@ C_2 <- plot_grid(NULL, c, rel_widths = c(.05,1))
 (C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,.9), labels = c('C'),  hjust = -.2))
 ```
 
-<img src="../Figures/FIGURES/Figure-3C.png" data-fig-align="center" />
+<img src="../Figures/03/03c_dot_and_tissue.png"
+data-fig-align="center" />
 
 ``` r
-ggsave("../Figures/03/Fig_03C.png", C, width = 3.4, height = 3.2, bg = "white", dpi = 300)
+# ggsave("./Figures/03/dot_and_tissue.png", C, width = 3.4, height = 3.2, bg = "white", dpi = 300)
 ```
 
 ``` r
@@ -362,7 +363,7 @@ A_B_C <- plot_grid( A_B, C, ncol=1, rel_heights = c(.6,1))
  plot_grid( A_B_C, ncol=2, rel_widths = c(1,.03))
 ```
 
-<img src="../Figures/FIGURES/combine-ABC.png" data-fig-align="center" />
+<img src="../Figures/03/03abc_combined.png" data-fig-align="center" />
 
 ``` r
 ################################
@@ -481,14 +482,14 @@ D <- DATA %>%
         axis.text.y = element_text(margin = margin(r = -1)) )  
 # dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
 # dev.new(width=4, height=5.5, noRStudioGD = TRUE) # vertical
-# ggsave(paste0("../Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
-# ggsave(paste0("../Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
+# ggsave(paste0("./Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
 
 # dev.new(width=3.4, height=2, noRStudioGD = TRUE) # horizontal
 (D <- plot_grid(D, labels = c('D'), vjust = .9,  hjust = -.2))
 ```
 
-<img src="../Figures/FIGURES/05e_Marker_genes_epi.png"
+<img src="../Figures/03/03d_marker_genes_epi.png"
 data-fig-align="center" />
 
 ``` r
@@ -497,10 +498,9 @@ data-fig-align="center" />
 #############################
 # dev.new(width=3.54, height=7, noRStudioGD = TRUE)
 Figure3 <- plot_grid( A_B, C, D, ncol=1, rel_heights = c(.6,.85,.55)) 
-ggsave("../Figures/03/Figure03.png", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
-ggsave("../Figures/03/Figure03.pdf", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
+ggsave("./Figures/Figure-3.pdf", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
 
 Figure3
 ```
 
-<img src="../Figures/FIGURES/Figure-6.png" data-fig-align="center" />
+<img src="../Figures/03/Figure-3.png" data-fig-align="center" />

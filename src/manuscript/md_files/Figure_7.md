@@ -1,6 +1,6 @@
 Figure 7
 ================
-4/11/24
+4/12/24
 
 ### Load data and libraries
 
@@ -643,7 +643,7 @@ knitr::include_graphics(paste0("./Figures/06/", "Venn_E2_Zal.svg"))
 
 #plot(d)
 
-#p <- grImport2::readPicture(paste0("../Figures/06/", "Venn_E2_Zal.svg"))
+#p <- grImport2::readPicture(paste0("./Figures/06/", "Venn_E2_Zal.svg"))
 ```
 
 ``` r
@@ -703,11 +703,11 @@ txt_df <- cpm1_3_umap_dt[!(is.na(cpm1_3_umap_dt$txt)),] %>%
         )   )
 ```
 
-<img src="../Figures/FIGURES/UMAP.png" data-fig-align="center" />
+<img src="../Figures/07/07c_bulk_UMAP.png" data-fig-align="center" />
 
 ``` r
 # dev.new(height=16.11, width=16.11, units="cm")
-# ggsave(paste0("../Figures/07/", "Bulk_UMAP.png"), p)
+# ggsave(paste0("./Figures/07/", "Bulk_UMAP.png"), p)
 ```
 
 ``` r
@@ -902,7 +902,7 @@ H_sub <- grid.grabExpr(draw(H_sub, heatmap_legend_side = "left", merge_legend = 
 (B <- plot_grid(H_epi, H_sub, labels = c('B'), ncol = 1, rel_heights = c(1, .8)))
 ```
 
-<img src="../Figures/FIGURES/E2-lvl-gene-heatmap.png"
+<img src="../Figures/07/07b_E2-lvl-gene-heatmap.png"
 data-fig-align="center" />
 
 ``` r
@@ -978,7 +978,7 @@ col <- c("ctrl high"="#FF7F00", "ctrl"="#FED9A6", "high"="#6A51A3", "low"="#9E9A
   ) )
 ```
 
-<img src="../Figures/FIGURES/E2-lvl-differences.png"
+<img src="../Figures/07/07d_E2-lvl-top_DEGs.png"
 data-fig-align="center" />
 
 ``` r
@@ -990,10 +990,9 @@ A_C_D <- plot_grid( NULL, C, D, ncol=1, rel_heights = c(.75,1,1), labels = c('A'
 
 # dev.new(width=7.48, height=7.48, noRStudioGD = TRUE)
 Figure7 <- plot_grid( A_C_D, B, ncol=2, rel_widths = c(1,1)) 
-ggsave("./Figures/07/Figure07.png", Figure7, width = 7.48, height = 7.48, bg = "white", dpi = 1000)
-ggsave("./Figures/07/Figure07.pdf", Figure7, width = 7.48, height = 7.48, bg = "white")
+ggsave("./Figures/Figure-7.pdf", Figure7, width = 7.48, height = 7.48, bg = "white", dpi = 1000)
 
 Figure7
 ```
 
-<img src="../Figures/FIGURES/Figure-7.png" data-fig-align="center" />
+<img src="../Figures/07/Figure-7.png" data-fig-align="center" />
