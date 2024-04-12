@@ -91,8 +91,6 @@ input_dir <- "../results/06_DGE_condition_st_data/"
 result_dir <- "../../results/07_GSEA_st_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 
-#GO_path <- "../../broliden_5325/resources/KEGG_GO_database/c5.bp.v6.2.symbols.gmt.txt"
-#KEGG_path <- "../../broliden_5325/resources/KEGG_GO_database/c2.cp.kegg.v6.2.symbols.gmt.txt"
 KEGG_path <- "../../resources/c2.cp.kegg_legacy.v2023.2.Hs.json"
 GO_path <- "../../resources/c5.all.v2023.2.Hs.json"
 epi_clus <- "^5$|^6$|^7|^9"
@@ -101,9 +99,6 @@ submuc_remove <- "1|2"
 #############
 # LOAD DATA #
 #############
-# DEGs_table <- read_csv(paste0(input_dir,"subset_100/DGEs_condition_wilcox_epi_100.csv")) %>% filter(groups == "DMPA")
-# DEGs_table <- read_csv(paste0(input_dir,"DGEs_condition_wilcox.csv"))
-#DEGs_table <- readxl::read_xlsx(paste0(input_dir,"Supplemental Table 4.xlsx"), sheet = "DEGs condition")
 DEGs_table <- read_csv(paste0("../../results/06_DGE_condition_st_data/","DGEs_condition_wilcox.csv"))
 DATA <- readRDS(paste0("../../results/04_deconvolution_st_data/","seuratObj_deconvolution_scdc.RDS"))
 fgseaRes <- readRDS(paste0(result_dir,"fgseaRes_tables_updated_DB.RDS"))
@@ -118,7 +113,7 @@ GO_database <- read_json.fun(fromJSON(GO_path))
 KEGG_database <- read_json.fun(fromJSON(KEGG_path))
 
 # set seed for all operations
-# c <- addTaskCallback(function(...) {set.seed(123);TRUE})
+c <- addTaskCallback(function(...) {set.seed(123);TRUE})
 # removeTaskCallback(c)
 # sample(1:500, 3)
 ```
@@ -293,7 +288,9 @@ slim_df <- fgseaRes_df %>%
   filter(db == "GO") %>%
   mutate(morf = ifelse(grepl("\\d", .$Clusters), "SubMuc", "epi")) %>%
   filter(!(grepl(submuc_remove, .$Clusters))) %>%
-  # mutate(go_ids = pmap(., ~left_join(..3, goterms, by=c("pathway"="t"))[["id"]] )) %>%
+  # the old go ids from the GOTERM db that was missing some ids:
+    mutate(fgseaRes = pmap(., ~left_join(..3, select(goterms, t, GOTERM_ids="id"), by=c("pathway"="t")) )) %>%
+    mutate(GOTERM_ids = pmap(., ~..3[["GOTERM_ids"]])) %>%
   mutate(go_ids = pmap(., ~..3[["id"]])) %>%
   dplyr::select(morf, go_ids) %>%
   
@@ -348,9 +345,13 @@ ggplot(df$epi) +
 sig_epi_GO <- fgseaRes_filt$fgseaRes[1:4] %>% bind_rows(., .id = "clus") %>% filter(!(grepl("\\d", .$clus))) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
 sig_sub_GO <- fgseaRes_filt$fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
 #sig_sub_GO <- fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05)
+
+# because i filtered away the terms (n=38) with no match in the GOTERM db, the result is different 
+# when not removing these, much more messy plot, here are the missing ids:
+go_filt <- c("GO:0034341", "GO:0140888", "GO:0048871", "GO:1903829", "GO:0034341", "GO:0051603", "GO:0071346", "GO:0043603", "GO:0048871", "GO:0007249", "GO:0010608", "GO:0140888", "GO:0071346", "GO:0034341", "GO:0140888", "GO:0051603", "GO:0009063", "GO:0007249", "GO:0048871", "GO:0034341", "GO:0071346", "GO:0048871", "GO:0071824", "GO:0006974", "GO:0034341", "GO:0071346", "GO:0043603", "GO:0034248", "GO:0051603", "GO:0071824", "GO:0010608", "GO:0006458", "GO:0006278", "GO:1903050", "GO:0071826", "GO:0040029", "GO:0034249", "GO:0043603", "GO:0010608", "GO:0034248", "GO:0051603", "GO:0048871", "GO:0034250", "GO:0034766", "GO:0071826", "GO:0034341", "GO:1903050", "GO:1903829", "GO:0071824", "GO:0051897", "GO:1903828", "GO:1903051", "GO:0071346", "GO:0015986", "GO:0043271", "GO:1902895", "GO:0006278", "GO:0015793", "GO:0032781")
 ```
 
-```{r S1a_enrichment-graph-epi, fig.width=5.5, fig.height=5}
+```{r similarity-matrix-functions}
 # Modified code by YuLab from enrichplot package:
 # https://github.com/YuLab-SMU/enrichplot/blob/devel/R/emapplot_utilities.R
 
@@ -433,7 +434,10 @@ build_emap_graph <- function(sim_m, fgesa_df, method = "JC", cex_line = 1, min_e
   
   return(graph)
 }
+```
 
+
+```{r S1a_enrichment-graph-epi, fig.width=5.5, fig.height=5}
 dge <- DEGs_table %>% 
   filter(grepl("[^\\d]", .$layers)) %>% 
   filter(p_val<=0.01) %>%
@@ -461,7 +465,7 @@ GO_comb_epi <- sig_epi_GO %>%
   mutate(pathway = paste0(.$clus, ":", .$GOid)) %>%
   mutate("Sig. in" = paste0(.$clus[cur_group_rows()], collapse = "|"), .by="GOid") %>%
   #filter((is.na(.$id))) %>%
-  filter(!(is.na(.$Term))) %>%
+  filter(!(.$GOid %in% go_filt)) %>%
   # removes the idential terms:
   slice_max(n=1, order_by = tibble(abs(NES), size), by="Term") %>%
   ungroup()
@@ -598,7 +602,7 @@ set.seed(1);p <- G_epi %>%
   #facet_nodes(~gene_module)
   
 # dev.new(width=5.5, height=5, noRStudioGD = TRUE)
-# ggsave(paste0("./Figures/S2/","./enrichment-graph-epi.png"), plot = p, width = 6, height = 5, dpi = 1000 )
+# ggsave(paste0("./Figures/S2&3/","./enrichment-graph-epi.png"), plot = p, width = 6, height = 5, dpi = 1000 )
 p
 ```
 
@@ -625,8 +629,8 @@ GO_comb_sub <- sig_sub_GO %>%
   mutate("leadingEdge_comb" = list(unique(unlist(.$leadingEdge[cur_group_rows()]))), .by="pathway") %>%
   mutate(pathway = paste0(.$clus, ":", .$id)) %>%
   mutate("Sig. in" = paste0(.$clus[cur_group_rows()], collapse = "|"), .by="Term") %>%
-  #filter((is.na(.$id))) %>%
-  filter(!(is.na(.$id))) %>%
+  # filter((is.na(.$id))) %>%
+  filter(!(.$GOid %in% go_filt)) %>%
   # removes the idential terms:
   slice_max(n=1, order_by = tibble(abs(NES), size), by="Term") %>%
   ungroup()
@@ -662,7 +666,7 @@ set.seed(123);G <- graph$tidy %>%
   mutate(community = factor( as_tibble(.)$community, 
                              levels = as.character(1:max(as.integer(as_tibble(.)$community))) )) %>%
   left_join(goterms, by=c("pathway"="id")) %>%
-  mutate(GOslim = GOslim_l[as_tibble(.)$pathway]) %>%
+  #mutate(GOslim = GOslim_l[as_tibble(.)$pathway]) %>%
   
   #filter(community == "1" | community == "2" | community == "3" )  %>% #  | community == "3" | community == "4" | community == "5"
   {. ->> G_nodes} %>%
@@ -714,7 +718,7 @@ G_nodes_sub <- G_sub %>% as_tibble()
 
 # select terms to label in graph and diplay in table:
 g_table_sub <- G_sub %>% as_tibble() %>%
-  mutate(col = pal[.$com]) %>%
+  # mutate(col = pal[.$com]) %>%
   dplyr::select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
   # determines the number of rows are included in the table:
@@ -770,11 +774,11 @@ set.seed(1);p <- G_sub %>%
   #facet_nodes(~gene_module)
   
 # dev.new(width=5.5, height=5, noRStudioGD = TRUE)
-# ggsave(paste0("./Figures/S2/","./enrichment-graph-submuc.png"), plot = p, width = 6, height = 5, dpi = 1000 )
+# ggsave(paste0("./Figures/S2&3/","./enrichment-graph-submuc.png"), plot = p, width = 6, height = 5, dpi = 1000 )
 p
 ```
 
-```{r S2a_graph-per-layer, fig.width=5, fig.height=15}
+```{r S2a_graph-per-layer, fig.width=1, fig.height=3.3}
 m <- set_names(c("#E41A1C","#FF7F00", "#C77CFF","#984EA3"), c("Sup", "Upper", "Lower", "Basal"))
 
 set.seed(1);p <- imap(m, 
@@ -808,7 +812,7 @@ set.seed(1);p <- imap(m,
 
 # dev.new(width=5, height=15, noRStudioGD = TRUE)
 (p <- wrap_plots(p, ncol = 1) )#
-# ggsave(filename = "./Figures/S2/graph_per_layer_sub.pdf", plot = p, width =1 , height =3.9, dpi = 1000, bg = "white" )
+# ggsave(filename = "./Figures/S2&3/graph_per_layer_sub.pdf", plot = p, width =1 , height =3.9, dpi = 1000, bg = "white" )
 ```
 
 ```{r S2a_piechart-GOslim-graph-clus,  fig.width =10 , fig.height =10}
@@ -857,12 +861,12 @@ pie_plots <- map2(df, pal_list,
 pie_plots[[1]]
 pie_plots[[2]]
 
-# ggsave(filename = "./Figures/S2/piechart-GOslim-graph-clus_epi.pdf", plot = pie_plots[[1]], width =10 , height =10, dpi = 1000 )
-# ggsave(filename = "./Figures/S2/piechart-GOslim-graph-clus_submuc.pdf", plot = pie_plots[[2]], width =10 , height =10, dpi = 1000 )
+# ggsave(filename = "./Figures/S2&3/piechart-GOslim-graph-clus_epi.pdf", plot = pie_plots[[1]], width =10 , height =10, dpi = 1000 )
+# ggsave(filename = "./Figures/S2&3/piechart-GOslim-graph-clus_submuc.pdf", plot = pie_plots[[2]], width =10 , height =10, dpi = 1000 )
 ```
 
-```{r S2b_enrichment_table}
-# Coloring the table conditionnally using `ggpubr::table_cell_bg()`
+```{r S2b_enrichment_table, fig.width=6, fig.height=5.5}
+# Coloring the table conditionally using `ggpubr::table_cell_bg()`
 tabel_col.fun<- function(ggtab, g, pal){
   for(i in 1:nrow(g)){
     #print(i)
@@ -901,11 +905,12 @@ ggtab <- imap(g_table, ~ .x[,-1] %>%
                   ) ))  %>%
   tabel_col.fun(., g_table[[.y]], pal_list[[.y]]) )
 
-ggtab[[1]]
-ggtab[[2]]
+#ggtab[[1]]
+#ggtab[[2]]
 
-# ggsave(paste0("./Figures/S2/","enrichment_table_epi.png"), plot = ggtab[[1]], width = 5, height = 3, dpi = 1000 )
-# ggsave(paste0("./Figures/S2/","enrichment_table_submuc.png"), plot = ggtab[[2]], width = 5.5, height = 5, dpi = 1000 )
+# dev.new(width = 5.5, height = 5)
+# ggsave(paste0("./Figures/S2&3/","enrichment_table_epi.png"), plot = ggtab[[1]], width = 5, height = 3, dpi = 1000 )
+# ggsave(paste0("./Figures/S2&3/","enrichment_table_submuc.png"), plot = ggtab[[2]], width = 6, height = 5.5, dpi = 1000 )
 ```
 
 
