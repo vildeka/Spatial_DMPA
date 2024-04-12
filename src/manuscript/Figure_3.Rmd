@@ -39,13 +39,13 @@ source("../../bin/render_with_jobs.R")
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "./Figures/FIGURES/")
+render_git_with_job(fig_path = "./Figures/03/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./09_figures.md"))))
+                 paste0("./md_files/", basename("./03_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/figure_03", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_03", fig_path = "./Figures/03/")
 ```
 
 ### Load data and libraries
@@ -84,7 +84,8 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_spatial_dist.RDS"))
 ```
 
 ### UMAP of cluster resolutions
-```{r 03a_plot_resolution, fig.asp=5/10}
+```{r 03a_plot_resolution, fig.width=1.3, fig.height=1.9}
+# fig.asp=5/10,
 ###############
 # FILTER DATA #
 ###############
@@ -142,7 +143,7 @@ p2 <- plot_genes.fun(DAT, gene="spatial_dist", point_size = .05,
 ```
 
 ### Plot spatial distance on tissue
-```{r 03b_spatial_trajectory_tissue, fig.height=6, fig.width=4}
+```{r 03b_spatial_trajectory_tissue, fig.width=2.6, fig.height=1.9}
 ####################
 # SPATIAL DISTANCE #
 ####################
@@ -186,19 +187,19 @@ p <- map(feat,
 p[[2]] <- p[[2]] + scale_color_pseudotime(palette = col2) 
 
 # dev.new(width=2.6, height=1.9, noRStudioGD = TRUE)
-(B <- plot_grid(ncol = 2, #labels = c('B'),  hjust = -.2,
-          plotlist = p) )
+B <- plot_grid(ncol = 2, #labels = c('B'),  hjust = -.2,
+          plotlist = p) 
 
 (B <- B + draw_label("DMPA", x = c(.05), y = c(.48), hjust = 0, size = 9) +
     draw_label("Control", x = c(.1), y = c( .94), hjust = 0, size = 9) +
     draw_label("Gene exp. similarity", x = c(.53), y = c( .94), hjust = 0, size = 8) )
 ```
 
-```{r}
+```{r 03ab_UMAP_tissue, fig.width=3.35, fig.height=1.9}
 # dev.new(width=3.35, height=1.9, noRStudioGD = TRUE)
 
-A_B <- plot_grid( A, B, ncol=2, rel_widths = c(.55,1), labels = c('A','B'),  hjust = -.2)
-ggsave("./Figures/03/Fig_03AB.png", A_B, width = 3.35, height = 1.9, bg = "white", dpi = 300)
+(A_B <- plot_grid( A, B, ncol=2, rel_widths = c(.55,1), labels = c('A','B'),  hjust = -.2))
+# ggsave("./Figures/03/UMAP_tissue.png", A_B, width = 3.35, height = 1.9, bg = "white", dpi = 300)
 ```
 
 ### Plot dotplot and tissue
@@ -297,7 +298,7 @@ layer_dotplot.fun <- function(DATA, feat,
 }
 ```
 
-```{r Figure-3C}
+```{r 03c_dot_and_tissue, fig.width=3.54, fig.height=3.2}
 ###############
 # FILTER DATA #
 ###############
@@ -331,7 +332,7 @@ C_1 <- wrap_plots(dot_fig, ncol = 4, guides = "collect" ) +
         # axis.title.y.left = element_text(margin = margin(r = 5))
         ) 
 
-(C_1 <- plot_grid(C_1, NULL, rel_widths = c(1,.01)))
+C_1 <- plot_grid(C_1, NULL, rel_widths = c(1,.01))
 ggsave("./Figures/03/Fig_03C1.png", C_1, width = 6.7, height = 2.4) #, dpi = 300
 
 ############################
@@ -376,12 +377,12 @@ p_list <- map(p, ~ .x + theme(plot.margin = unit(c(-35, -2, -30, -15), "pt"), #t
 # dev.new(width=3.54, height=3.2, noRStudioGD = TRUE) 
 c <- plot_grid( plotlist = p_list, ncol = 4, rel_heights = c(1), rel_widths = c(1))
 C_2 <- plot_grid(NULL, c, rel_widths = c(.05,1))
-C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,.9), labels = c('C'),  hjust = -.2)
+(C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,.9), labels = c('C'),  hjust = -.2))
 
-ggsave("./Figures/03/Fig_03C.png", C, width = 3.4, height = 3.2, bg = "white", dpi = 300)
+# ggsave("./Figures/03/dot_and_tissue.png", C, width = 3.4, height = 3.2, bg = "white", dpi = 300)
 ```
 
-```{r combine-ABC, fig.width=3.4, fig.height=1.9+3}
+```{r 03abc_combined, fig.width=3.4, fig.height=1.9+3}
 # dev.new(width=3.4, height=1.9+3, noRStudioGD = TRUE)
 A_B_C <- plot_grid( A_B, C, ncol=1, rel_heights = c(.6,1))
 
@@ -477,7 +478,7 @@ get_df_for_dotplot.fun <- function(obj, markers, groups="Clusters", gr_col, rect
 
 
 ### Dotplot of epithelial marker genes 
-```{r 05e_Marker_genes_epi, fig.height=3, fig.width=8}
+```{r 03d_marker_genes_epi, fig.height=2, fig.width=3.4}
 ###################################
 # DOTPLOT TOP 10 MARKER GENES EPI #
 ###################################
@@ -488,7 +489,7 @@ markers <- c("RNASE7", "HMOX1", "DUOXA2", "DHRS9", "CHAC1", "PLA2G4D", "CEACAM7"
 markers_id <- c(rep("Superficial",5), rep("Upper IM",5),rep("Lower IM",5),rep("Basal",5))
 groups="layers"
 gr_lvl <- rev(c("Superficial", "Upper IM", "Lower IM", "Basal"))
-(D <- DATA %>%
+D <- DATA %>%
     filter(grepl(epi_clus, .$Clusters) & sp_annot == "epi") %>%
     get_df_for_dotplot.fun(., markers, groups="layers", gr_col, rect=T, gr_lvl=gr_lvl)  +
     theme(legend.position="bottom") + guides(fill = guide_colourbar(barwidth = 5, barheight = .5),
@@ -502,22 +503,23 @@ gr_lvl <- rev(c("Superficial", "Upper IM", "Lower IM", "Basal"))
         #legend.justification = "right",
         legend.margin=margin(0,0,0,0), # moves the legend box
         legend.box.margin=margin(-13,1,-5,-30), # moves the legend
-        axis.text.y = element_text(margin = margin(r = -1)) )  )
+        axis.text.y = element_text(margin = margin(r = -1)) )  
 # dev.new(width=8, height=3, noRStudioGD = TRUE) # horizontal
 # dev.new(width=4, height=5.5, noRStudioGD = TRUE) # vertical
 # ggsave(paste0("./Figures/05/","Marker_genes_epi_h", ".pdf"), plot,  width = 6, height = 3)
 # ggsave(paste0("./Figures/05/","Marker_genes_epi_v", ".pdf"), plot,  width = 4, height = 5.5)
 
 # dev.new(width=3.4, height=2, noRStudioGD = TRUE) # horizontal
-D <- plot_grid(D, labels = c('D'), vjust = .9,  hjust = -.2)
+(D <- plot_grid(D, labels = c('D'), vjust = .9,  hjust = -.2))
 ```
 
-```{r Figure-6}
+```{r Figure-3, fig.width=3.54, fig.height=6.7, dpi=1000}
 #############################
 # COMBINE ALL FIGURE PANELS #
 #############################
 # dev.new(width=3.54, height=7, noRStudioGD = TRUE)
 Figure3 <- plot_grid( A_B, C, D, ncol=1, rel_heights = c(.6,.85,.55)) 
-ggsave("./Figures/03/Figure03.png", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
-ggsave("./Figures/03/Figure03.pdf", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
+ggsave("./Figures/Figure-3.pdf", Figure3, width = 3.54, height = 6.7, bg = "white", dpi = 1000)
+
+Figure3
 ```

@@ -39,13 +39,13 @@ source("../../bin/render_with_jobs.R")
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "./Figures/FIGURES/")
+render_git_with_job(fig_path = "./Figures/02/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./09_figures.md"))))
+                 paste0("./md_files/", basename("./02_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../../lab_book/figure_02", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../../lab_book/figure_02", fig_path = "./Figures/02/")
 ```
 
 ### Load data and libraries
@@ -64,6 +64,10 @@ library(grid)
 library(scatterpie)
 library(patchwork)
 library(openxlsx)
+
+# remotes::install_github('linxihui/NNLM')
+library(NNLM)
+library(parallel)
 
 source("../../bin/spatial_visualization.R")
 source("../../bin/plotting_functions.R")
@@ -87,9 +91,9 @@ DATA_r <- readRDS(paste0("../../results/06_plot_annotation_ref_data/","seuratObj
 ```
 
 ```{r rename-cell-type}
-DATA@assays$misc$cell_annot %>% 
+DATA@misc$cell_annot %>% 
   mutate(cell_annot_1 = ifelse(.$cell_annot_1 == "Epithelial", "Keratinocyte", .$cell_annot_1)) %>%
-  {. ->> DATA@assays$misc$cell_annot }
+  {. ->> DATA@misc$cell_annot }
 ```
 
 ```{r Marker-genes}
@@ -112,7 +116,7 @@ clus_lvl <- set_names(seq_along(clus_lvl), clus_lvl)
 gene_lvl <- set_names(seq_along(Cell_marker), Cell_marker)
 ```
 
-```{r marker-gene-dotplot}
+```{r 02a_marker-gene-dotplot, fig.width=8, fig.height=5}
 ################
 # FETCH GENES #
 ################
@@ -150,9 +154,9 @@ ym <- max(df$ymax)
 xm <- length(cell_type)+3.5
 
 clus_lvl <- rev(c("6", "9", "7", "5","8","3","4","0","1","2","10")) 
-DATA %>%
-  mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
-ggplot(., aes(x=Clusters, y=nCount_RNA, fill=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col)
+# DATA %>%
+#   mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
+# ggplot(., aes(x=Clusters, y=nCount_RNA, fill=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col)
 
 (A <- ggplot(df, aes(x=marker, y=Clusters)) +
   geom_point(aes(size = Pct, fill = Avg), color="white", shape=21) +
@@ -200,7 +204,7 @@ ggplot(., aes(x=Clusters, y=nCount_RNA, fill=Clusters)) + geom_violin() + scale_
         ) 
 )
 # dev.new(width=8, height=5, noRStudioGD = TRUE)
-ggsave("./Figures/04/dotplot_marker_genes_clusters.pdf", A, width = 8, height = 5) # cell_marker
+# ggsave("./Figures/04/marker-gene-dotplot.pdf", A, width = 8, height = 5) # cell_marker
 ```
 
 ```{r subseted-colour-pallet}
@@ -237,7 +241,7 @@ ColourPalleteMulti <- function(df, group, subgroup){
 
 ```
 
-```{r cell-marker-prop-on-tissue}
+```{r 02b_cell-marker-prop-on-tissue, fig.width=5.5, fig.height=2.4}
 ################
 # FETCH GENES #
 ################
@@ -275,7 +279,7 @@ col <- df %>%
 
 cell_type <- levels(df_$annot)
 cell_col <- set_names(col[1:length(cell_type)], cell_type)
-# DATA@assays[["misc"]]$markers <- list(cell_annot = df_)  
+# DATA@misc$markers <- list(cell_annot = df_)  
 
 ###################################
 # CELL MARKER PROPORTION PER SPOT #
@@ -285,7 +289,7 @@ immune <- cell_type[grepl(paste0(c("B cell","T cell","Myeloid","NK cells"),colla
 select <- list(NULL, immune)
 
 DAT <- DATA %>% filter(orig.ident == "P097")
-DAT@assays[["misc"]]<- list(cell_annot = df_)  
+DAT@misc$cell_annot <- df_ 
 
 plot <- map(select,
           ~plot_cell_pie.fun(DAT,
@@ -312,10 +316,10 @@ p_2 <- plot[[2]] + theme(plot.margin = unit(c(.5, -3.5, -1.3, -4.2), "lines"))
 
 #p <- plot_grid(plot[[1]], plot[[2]], ncol = 2)
 # dev.new(width=5.5, height=2.4, noRStudioGD = TRUE)
-B_ <- plot_grid(NULL, p_1, NULL, p_2, nrow = 1, rel_widths = c(.15,1.1,.1,1.1))
+(B_ <- plot_grid(NULL, p_1, NULL, p_2, nrow = 1, rel_widths = c(.15,1.1,.1,1.1)))
 ```
 
-```{r legend}
+```{r 02b_legend, fig.width=7.4, fig.height=2.4}
 col <- c("#FFD92F","#8DA0CB","#FC8D62","#66C2A5","#E78AC3","#A6D854","#eb6062","#B3B3B3","#984EA3","#FF7F00","#FFFF33","#A65628","#F781BF")
 cell_type <- c("B cell", "T cell", "Keratinocyte","Endothelial","Fibroblast", "Myeloid", "NK cells")
 cell_col <- set_names(col[1:length(cell_type)], cell_type)
@@ -335,13 +339,11 @@ B <- B_ + draw_grob(legend, hjust = -.09, vjust = -.28)
 
 # dev.new(width=7.4, height=2.4, noRStudioGD = TRUE)
 B_C <- plot_grid(B, NULL, rel_widths = c(1,.6),  labels = c('B','C'))
-ggsave("./Figures/02/Figure02B.png", B_C, width = 7.4, height = 3, bg = "white", dpi = 400)
+# ggsave("./Figures/02/Figure02B.png", B_C, width = 7.4, height = 3, bg = "white", dpi = 400)
 ```
 
 ## Semla deconvolution
 ```{r semla-features}
-library(NNLM)
-library(parallel)
 ###################
 # SEMLA FUNCTIONS #
 ###################
@@ -1166,7 +1168,7 @@ rownames(DATA_cell@assays$celltypeprops@data)
 ```
 
 ## Plot cell type contribution
-```{r Cell-type-contribution-plot}
+```{r 02c_cell-type-contribution-plot, fig.height=2.4, fig.width=3}
 cell_type <- c("T cell", "B cell", "Myeloid", "NK cells", "Epithelial", "Fibroblast", "Endothelial")
 clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 
@@ -1208,8 +1210,9 @@ sum_clus <- FetchData(DATA_cell, cell_type) %>%
            size = guide_legend( keywidth = .5),)
 )
 ```
+
 ## Combine all plots
-```{r Figure-6}
+```{r Figure-2, fig.width = 7.4, fig.height = 7.4, dpi=1000}
 #############################
 # COMBINE ALL FIGURE PANELS #
 #############################
@@ -1218,6 +1221,7 @@ B_C <- plot_grid(B, C, rel_widths = c(1,.6),  labels = c('B','C'))
 
 # dev.new(width=7.4, height=7.4, noRStudioGD = TRUE)
 Figure2 <- plot_grid( A, B_C, ncol=1, rel_heights = c(1,.85), hjust = -.2, labels = c('A')) 
-ggsave("./Figures/02/Figure02.png", Figure2, width = 7.4, height = 7.4, bg = "white", dpi = 1000)
-ggsave("./Figures/02/Figure02.pdf", Figure2, width = 7.4, height = 7.4, bg = "white", dpi = 1000)
+ggsave("./Figures/Figure-2.pdf", Figure2, width = 7.4, height = 7.4, bg = "white", dpi = 1000)
+
+Figure2
 ```

@@ -39,13 +39,13 @@ source("../../bin/render_with_jobs.R")
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "./Figures/FIGURES/")
+render_git_with_job(fig_path = "./Figures/06/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./09_figures.md"))))
+                 paste0("./md_files/", basename("./06_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/figure_06", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_06", fig_path = "./Figures/06/")
 ```
 
 ### Load data and libraries
@@ -85,7 +85,7 @@ ihc <- readPNG("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resource
 ```
 
 ### Volcanoplot and IHC image (Figure 6A-C)
-```{r Figure-6AC}
+```{r 05ac_volcano_plot_IHC, fig.width=6.7, fig.height=3.2}
 # width 170 mm, 6.7 inches
 ###########################
 # VOLCANO PLOT SUBMUCOSA #
@@ -123,7 +123,7 @@ C <- ggplot() +
 #########################
 # dev.new(width=6.7, height=3.2, noRStudioGD = TRUE) 
 C <- plot_grid(C, rel_widths = c(1), labels = c('C'), hjust = .5)
-A_C <- plot_grid(A, C, rel_widths = c(3,.85), labels = c('A'), hjust = 0)
+(A_C <- plot_grid(A, C, rel_widths = c(3,.85), labels = c('A'), hjust = 0))
 ```
 
 ### Plot dotplot and tissue
@@ -209,7 +209,7 @@ layer_dotplot.fun <- function(DATA, feat,
 }
 ```
 
-```{r Figure-6B}
+```{r 05b_dotplot_and_tissue_plot, fig.width = 6.7, fig.height = 3.2}
 ###############
 # FILTER DATA #
 ###############
@@ -243,7 +243,7 @@ B_1  <- wrap_plots(dot_fig, nrow = 1, guides = "collect" ) +
         # axis.title.y.left = element_text(margin = margin(r = 5))
         )
 
-ggsave("./Figures/06/Fig_06C.png", B_1, width = 6.7, height = 2.4) #, dpi = 300
+# ggsave("./Figures/06/gene_dotplot.png", B_1, width = 6.7, height = 2.4) #, dpi = 300
 
 ############################
 # CLUS EXPRESION ON TISSUE #
@@ -287,17 +287,18 @@ p_list <- map(p, ~ .x + theme(plot.margin = unit(c(-25, -10, -10, -15), "pt"), #
 # dev.new(width=6.7, height=3.4, noRStudioGD = TRUE) 
 c <- plot_grid( plotlist = p_list, ncol = 4, rel_heights = c(1), rel_widths = c(1))
 B_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
-B <- plot_grid( B_1, B_2, ncol=1, rel_heights = c(3,1.1), labels = c('B'), hjust = 0)
+(B <- plot_grid( B_1, B_2, ncol=1, rel_heights = c(3,1.1), labels = c('B'), hjust = 0))
 
-ggsave("./Figures/06/Fig_06B.png", B, width = 6.7, height = 3.2, bg = "white", dpi = 300)
+# ggsave("./Figures/06/dotplot_and_tissue_plot.png", B, width = 6.7, height = 3.2, bg = "white", dpi = 300)
 ```
 
-```{r Figure-6}
+```{r Figure-6, fig.width = 6.7, fig.height = 6.7, dpi = 1000}
 #############################
 # COMBINE ALL FIGURE PANELS #
 #############################
 # dev.new(width=6.7, height=6.7, noRStudioGD = TRUE)
-(Figure6 <- plot_grid( A_C, B, ncol=1, rel_heights = c(1,1)) )
-ggsave("./Figures/06/Figure06.png", Figure6, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
-ggsave("./Figures/06/Figure06.pdf", Figure6, width = 6.7, height = 6.7, bg = "white")
+Figure6 <- plot_grid( A_C, B, ncol=1, rel_heights = c(1,1)) 
+ggsave("./Figures/Figure-6.pdf", Figure6, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
+
+Figure6
 ```

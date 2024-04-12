@@ -7,7 +7,6 @@ format:
     code-fold: show
 params:
   fig.path: "`r paste0(params$fig.path)`" #./Figures/
-  run.gsea: false
 editor_options: 
   chunk_output_type: console
 ---
@@ -39,13 +38,13 @@ source("../../bin/render_with_jobs.R")
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "./Figures/FIGURES/")
+render_git_with_job(fig_path = "./Figures/05/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./09_figures.md"))))
+                 paste0("./md_files/", basename("./05_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/figure_05", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_05", fig_path = "./Figures/05/")
 ```
 
 ### Load data and libraries
@@ -89,7 +88,7 @@ img <- readPNG("../../resources/Schematic figure ST.png")
 ```
 
 ### Volcanoplot and IHC image (Figure 6A-C)
-```{r Figure-6AC}
+```{r 05a_volcano_plot, fig.width=6.7, fig.height=3.2}
 # width 170 mm, 6.7 inches
 ord <-  c("Superficial","Upper IM","Lower IM","Basal", "8","3","4","0","2","1")
 col <- set_names(c("#F40014","#FF8A1E","#C77CFF","#A750B2"), ord[1:4])
@@ -117,10 +116,14 @@ set.seed(1);A <- DEGs_filt %>%
         #axis.ticks.x.bottom = element_line(colour = col),
         plot.margin = unit(c(1, .5, .4, 1), "lines")) #t,r,b,l
 
+A
+```
 
+```{r 05b_venn_diagram, fig.width=3.4, fig.height=3.2}
 #######################
 # PLOTS VENN DIAGRAM #
 ######################
+ord <-  c("Superficial","Upper IM","Lower IM","Basal", "8","3","4","0","2","1")
 sig_table <- DEGs_table %>%
   filter(p_val_adj < 0.05) %>%
   #filter((grepl(paste0(ord, collapse = "|^"), .$layers))) %>%
@@ -163,29 +166,11 @@ d <- plotVenn(t$genes[c("Basal","Lower IM","Superficial","Upper IM")],
 # showSVG(d)
 knitr::include_graphics(paste0("./", "Venn_epi_sig.svg"))
 
-# not used includes comparison of Bradley, Zal, ST and E2
-# col <- set_names(c('#ca0020','#f4a582','#0571b0',"#018571"), t$study)
-# # all four comparisons
-# plotVenn(t$sig_DEGs, 
-#          labelRegions=FALSE,
-#          #sNames = names(t$sig_DEGs), 
-#          systemShow=F) %>%
-#   {. ->> d} %>%
-#   showSVG(d, 
-#          setColors = col[names(d$orig)],
-#          labelRegions=FALSE,
-#          showNumbers=FALSE,
-#          fontScale = 1,
-#          systemShow=F,
-#          outFile=paste0("./Figures/06/", "Venn_E2_all.svg")
-#          )
-# int_genes <- getVennOverlap(t$sig_DEGs) 
-
 #########################
 # COMBINE PANEL A AND C #
 #########################
 # dev.new(width=6.7, height=3.2, noRStudioGD = TRUE) 
-(A_B <- plot_grid(A, NULL, rel_widths = c(1,1), labels = c('A', 'B'), hjust = 0) )
+A_B <- plot_grid(A, NULL, rel_widths = c(1,1), labels = c('A', 'B'), hjust = 0) 
 ```
 
 ```{r eval=FALSE}
@@ -316,7 +301,7 @@ layer_dotplot.fun <- function(DATA, feat,
 }
 ```
 
-```{r Figure-5B}
+```{r 05c_dotplot_gene_traject, fig.width = 6.7, fig.height = 3.2}
 ###############
 # FILTER DATA #
 ###############
@@ -393,17 +378,18 @@ p_list <- map(p, ~ .x + theme(plot.margin = unit(c(-25, -10, -10, -15), "pt"), #
 # dev.new(width=6.7, height=3.4, noRStudioGD = TRUE) 
 c <- plot_grid( plotlist = p_list, ncol = 4, rel_heights = c(1), rel_widths = c(1))
 C_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
-C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,1.1), labels = c('C'), hjust = 0)
+(C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,1.1), labels = c('C'), hjust = 0))
 
-ggsave("./Figures/05/Fig_05C.png", C, width = 6.7, height = 3.2, bg = "white", dpi = 300)
+# ggsave("./Figures/05/dotplot_gene_traject.png", C, width = 6.7, height = 3.2, bg = "white", dpi = 300)
 ```
 
-```{r Figure-6}
+```{r Figure-5, fig.width = 6.7, fig.height = 6.7, dpi = 1000}
 #############################
 # COMBINE ALL FIGURE PANELS #
 #############################
 # dev.new(width=6.7, height=6.7, noRStudioGD = TRUE)
 Figure5 <- plot_grid( A_B, C, ncol=1, rel_heights = c(1,1)) 
-ggsave("./Figures/05/Figure05.png", Figure5, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
-ggsave("./Figures/05/Figure05.pdf", Figure5, width = 6.7, height = 6.7, bg = "white")
+ggsave("./Figures/Figure-5.pdf", Figure5, width = 6.7, height = 6.7, bg = "white", dpi = 1000)
+
+Figure5
 ```

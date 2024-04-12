@@ -7,7 +7,6 @@ format:
     code-fold: show
 params:
   fig.path: "`r paste0(params$fig.path)`" #./Figures/
-  run.gsea: false
 editor_options: 
   chunk_output_type: console
 ---
@@ -39,13 +38,13 @@ source("../../bin/render_with_jobs.R")
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "./Figures/FIGURES/")
+render_git_with_job(fig_path = "./Figures/S2&3/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./09_figures.md"))))
+                 paste0("./md_files/", basename("./S2&3_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/figure_03", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_S2&3", fig_path = "./Figures/S2&3/")
 ```
 
 ### Load data and libraries
@@ -61,16 +60,26 @@ library(tidyseurat)
 library(patchwork)
 library(ggrepel)
 library(ggpubr)
-library(ggridges)
 library(scales)
 library(niceRplots)
-library(fgsea)
+#library(fgsea)
 library(openxlsx)
 library(jsonlite)
 library(ggraph)
 library(tidygraph)
 library(igraph)
+library(oaqc)
 library(ggnewscale)
+
+# BiocManager::install("DOSE")
+# BiocManager::install("GSEABase")
+# BiocManager::install("GO.db")
+# BiocManager::install("org.Hs.eg.db")
+library(DOSE)
+library(GSEABase)
+library(GO.db)
+library(org.Hs.eg.db)
+select <- dplyr::select
 
 source("../../bin/plotting_functions.R")
 #source("../../broliden_5325/code/enrichment_function.R")
@@ -263,8 +272,6 @@ saveRDS(fgseaRes_filt, paste0(result_dir,"fgseaRes_filt_tables.RDS"))
 ```
 
 ```{r GOslim}
-library(GSEABase)
-library(GO.db)
 path_slim <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resources/goslim_agr.obo"
 slim <- getOBOCollection(path_slim)
 
@@ -286,7 +293,7 @@ slim_df <- fgseaRes_df %>%
   filter(db == "GO") %>%
   mutate(morf = ifelse(grepl("\\d", .$Clusters), "SubMuc", "epi")) %>%
   filter(!(grepl(submuc_remove, .$Clusters))) %>%
-  #mutate(go_ids = pmap(., ~left_join(..3, goterms, by=c("pathway"="t"))[["id"]] )) %>%
+  # mutate(go_ids = pmap(., ~left_join(..3, goterms, by=c("pathway"="t"))[["id"]] )) %>%
   mutate(go_ids = pmap(., ~..3[["id"]])) %>%
   dplyr::select(morf, go_ids) %>%
   
@@ -343,7 +350,7 @@ sig_sub_GO <- fgseaRes_filt$fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% fil
 #sig_sub_GO <- fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05)
 ```
 
-```{r Enrichment-graph-epi}
+```{r S1a_enrichment-graph-epi, fig.width=5.5, fig.height=5}
 # Modified code by YuLab from enrichplot package:
 # https://github.com/YuLab-SMU/enrichplot/blob/devel/R/emapplot_utilities.R
 
@@ -443,7 +450,7 @@ l <- set_names(ord1, ord2)
 GO_comb_epi <- sig_epi_GO %>% 
   #mutate(., clus = factor(l[as.character(.$clus)], levels = ord1)) %>%
   add_count(pathway) %>% 
-  rename(GOid="id") %>%
+  dplyr::rename(GOid="id") %>%
   left_join( dplyr::select(goterms, Term, t), by=c("pathway"="t")) %>%
   #mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
   #mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
@@ -481,7 +488,7 @@ s <- set_names(summary$n_genes, as.character(summary$from))
 # https://bookdown.org/markhoff/social_network_analysis/centrality.html
 set.seed(123);G <- graph$tidy %>% 
   mutate(gene_module = str_extract(as_tibble(.)$pathway, "[^:]+") ) %>%
-  left_join(., select(GO_comb_epi, size, pathway, "Sig. in"), by="pathway") %>%
+  left_join(., dplyr::select(GO_comb_epi, size, pathway, "Sig. in"), by="pathway") %>%
   mutate(pathway = str_extract(as_tibble(.)$pathway, "GO:\\d+") ) %>%
   mutate(degree = centrality_degree(),
          btwn = centrality_betweenness(),
@@ -537,19 +544,19 @@ G_nodes_epi <- G_epi %>% as_tibble()
 
 g_table_epi <- G_epi %>% as_tibble() %>%
   #mutate(col = pal[.$com]) %>%
-  select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
+  dplyr::select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
   mutate(community = factor( .$community, levels = as.character(1:max(as.integer(.$community))) )) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
   # determines the number of rows are included in the table:
   filter(count > 4) %>%
-  left_join(., select(GO_comb_epi, Term, ES), by="Term") %>%
+  left_join(., dplyr::select(GO_comb_epi, Term, ES), by="Term") %>%
   slice_max(n=2, order_by = tibble(degree, abs(ES)), by="com", with_ties = F) %>%
   slice_max(n=1, order_by = tibble(abs(ES)), by="com", with_ties = F) %>%
   dplyr::mutate(n = row_number(), .by="community") %>%
   #mutate(Term = str_replace(.$Term, "(.{10,}?)\\s", "\\1\n")) %>%
   arrange(community) %>%
   mutate(Cluster = paste0(.$community,"^",.$n), .after="community" ) %>%
-  select(-com, -count) 
+  dplyr::select(-com, -count) 
   
 
 #### Plot graph ####
@@ -569,7 +576,7 @@ pal_epi <- set_names(col, c)
 
 # 'graphopt', 'stress', 'kk', 'mds', 'lgl', 'backbone', 
 set.seed(1);p <- G_epi %>%
-  left_join(., select(g_table_epi, pathway, lab="Term", n), by="pathway") %>%
+  left_join(., dplyr::select(g_table_epi, pathway, lab="Term", n), by="pathway") %>%
   
   ggraph(layout = 'backbone') + # 'graphopt'
   geom_edge_fan(width = .3, aes(colour=width), show.legend = FALSE) +
@@ -591,11 +598,12 @@ set.seed(1);p <- G_epi %>%
   #facet_nodes(~gene_module)
   
 # dev.new(width=5.5, height=5, noRStudioGD = TRUE)
-ggsave(paste0("./Figures/S2/","./Epi_enrichment_graph.png"), plot = p, width = 6, height = 5, dpi = 1000 )
+# ggsave(paste0("./Figures/S2/","./enrichment-graph-epi.png"), plot = p, width = 6, height = 5, dpi = 1000 )
+p
 ```
 
 
-```{r Enrichment-graph-submuc}
+```{r S1b_enrichment-graph-submuc, fig.width=5.5, fig.height=5}
 dge <- DEGs_table %>% 
   filter(grepl("[\\d]", .$layers)) %>% 
   filter(p_val<=0.01) %>%
@@ -609,8 +617,8 @@ GO_comb_sub <- sig_sub_GO %>%
   add_count(pathway) %>% 
   #mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
   #mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
-  rename(GOid = "id") %>%
-  left_join( select(goterms, Term, t, id), by=c("pathway"="t")) %>%
+  dplyr::rename(GOid = "id") %>%
+  left_join( dplyr::select(goterms, Term, t, id), by=c("pathway"="t")) %>%
   # filter leading edge by parameters set above:
   #mutate("p<0.01" = pmap(., ~intersect(..10, dge[[..1]]))) %>%
   # combine same terms from different clusters:
@@ -645,7 +653,7 @@ s <- set_names(summary$n_genes, as.character(summary$from))
 # https://bookdown.org/markhoff/social_network_analysis/centrality.html
 set.seed(123);G <- graph$tidy %>% 
   mutate(gene_module = str_extract(as_tibble(.)$pathway, "[^:]+") ) %>%
-  left_join(., select(GO_comb_sub, size, pathway, "Sig. in"), by="pathway") %>%
+  left_join(., dplyr::select(GO_comb_sub, size, pathway, "Sig. in"), by="pathway") %>%
   mutate(pathway = str_extract(as_tibble(.)$pathway, "GO:\\d+") ) %>%
   mutate(degree = centrality_degree(),
          btwn = centrality_betweenness(),
@@ -707,11 +715,11 @@ G_nodes_sub <- G_sub %>% as_tibble()
 # select terms to label in graph and diplay in table:
 g_table_sub <- G_sub %>% as_tibble() %>%
   mutate(col = pal[.$com]) %>%
-  select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
+  dplyr::select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
   # determines the number of rows are included in the table:
   filter(count > 4) %>%
-  left_join(., select(GO_comb_sub, id, ES), by=c("pathway"="id")) %>%
+  left_join(., dplyr::select(GO_comb_sub, id, ES), by=c("pathway"="id")) %>%
   # mutate(ES = ) %>%
   slice_max(n=2, order_by = tibble(degree, abs(ES)), by="com", with_ties = F) %>%
   slice_max(n=1, order_by = tibble(abs(ES)), by="com", with_ties = F) %>%
@@ -739,7 +747,7 @@ pal_sub <- set_names(col, c)
 
 # 'graphopt', 'stress', 'kk', 'mds', 'lgl', 'backbone', 
 set.seed(1);p <- G_sub %>%
-  left_join(., select(g_table_sub, pathway, lab="Term", n), by="pathway") %>%
+  left_join(., dplyr::select(g_table_sub, pathway, lab="Term", n), by="pathway") %>%
   #filter(!is.na(n)) %>% as_tibble() -> l
   
   ggraph(layout = 'backbone') + # 'graphopt'
@@ -762,10 +770,11 @@ set.seed(1);p <- G_sub %>%
   #facet_nodes(~gene_module)
   
 # dev.new(width=5.5, height=5, noRStudioGD = TRUE)
-ggsave(paste0("./Figures/S2/","./Sub_enrichment_graph.png"), plot = p, width = 6, height = 5, dpi = 1000 )
+# ggsave(paste0("./Figures/S2/","./enrichment-graph-submuc.png"), plot = p, width = 6, height = 5, dpi = 1000 )
+p
 ```
 
-```{r graph-per-layer}
+```{r S2a_graph-per-layer, fig.width=5, fig.height=15}
 m <- set_names(c("#E41A1C","#FF7F00", "#C77CFF","#984EA3"), c("Sup", "Upper", "Lower", "Basal"))
 
 set.seed(1);p <- imap(m, 
@@ -781,8 +790,7 @@ set.seed(1);p <- imap(m,
   #facet_nodes(~gene_module)
 p <- wrap_plots(p, ncol = 1)
 
-ggsave(filename = "./Figures/S2/graph_per_layer_epi.png", plot = p, width =1 , height =3.3, dpi = 1000 )
-ggsave(filename = "./Figures/S2/graph_per_layer_epi.pdf", plot = p, width =1 , height =3.3 )
+# ggsave(filename = "./Figures/S2/graph_per_layer_epi.pdf", plot = p, width =1 , height =3.3, dpi = 1000 )
 
 m <- set_names(c("#00BFC4","#00A9FF","#377EB8","#CD9600"), c("8", "3","4", "0"))
 
@@ -800,11 +808,10 @@ set.seed(1);p <- imap(m,
 
 # dev.new(width=5, height=15, noRStudioGD = TRUE)
 (p <- wrap_plots(p, ncol = 1) )#
-ggsave(filename = "./Figures/S2/graph_per_layer_sub.png", plot = p, width =1 , height =3.9, dpi = 1000, bg = "white" )
-ggsave(filename = "./Figures/S2/graph_per_layer_sub.pdf", plot = p, width =1 , height =3.3 )
+# ggsave(filename = "./Figures/S2/graph_per_layer_sub.pdf", plot = p, width =1 , height =3.9, dpi = 1000, bg = "white" )
 ```
 
-```{r piechart-GOslim}
+```{r S2a_piechart-GOslim-graph-clus,  fig.width =10 , fig.height =10}
 pal2 <- c(RColorBrewer::brewer.pal(10,"Paired"),
          RColorBrewer::brewer.pal(8,"Set2"),
          RColorBrewer::brewer.pal(8,"Dark2") )
@@ -850,11 +857,11 @@ pie_plots <- map2(df, pal_list,
 pie_plots[[1]]
 pie_plots[[2]]
 
-ggsave(filename = "./Figures/S2/Com_pichart_epi.pdf", plot = pie_plots[[1]], width =10 , height =10, dpi = 1000 )
-ggsave(filename = "./Figures/S2/Com_pichart_submuc.pdf", plot = pie_plots[[2]], width =10 , height =10, dpi = 1000 )
+# ggsave(filename = "./Figures/S2/piechart-GOslim-graph-clus_epi.pdf", plot = pie_plots[[1]], width =10 , height =10, dpi = 1000 )
+# ggsave(filename = "./Figures/S2/piechart-GOslim-graph-clus_submuc.pdf", plot = pie_plots[[2]], width =10 , height =10, dpi = 1000 )
 ```
 
-```{r enrichment_table}
+```{r S2b_enrichment_table}
 # Coloring the table conditionnally using `ggpubr::table_cell_bg()`
 tabel_col.fun<- function(ggtab, g, pal){
   for(i in 1:nrow(g)){
@@ -897,8 +904,8 @@ ggtab <- imap(g_table, ~ .x[,-1] %>%
 ggtab[[1]]
 ggtab[[2]]
 
-ggsave(paste0("./Figures/S2/","Epi_enrichment_table.png"), plot = ggtab[[1]], width = 5, height = 3, dpi = 1000 )
-ggsave(paste0("./Figures/S2/","Sub_enrichment_table.png"), plot = ggtab[[2]], width = 5.5, height = 5, dpi = 1000 )
+# ggsave(paste0("./Figures/S2/","enrichment_table_epi.png"), plot = ggtab[[1]], width = 5, height = 3, dpi = 1000 )
+# ggsave(paste0("./Figures/S2/","enrichment_table_submuc.png"), plot = ggtab[[2]], width = 5.5, height = 5, dpi = 1000 )
 ```
 
 

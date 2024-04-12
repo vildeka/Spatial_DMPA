@@ -7,7 +7,6 @@ format:
     code-fold: show
 params:
   fig.path: "`r paste0(params$fig.path)`" #./Figures/
-  run.gsea: false
 editor_options: 
   chunk_output_type: console
 ---
@@ -39,13 +38,13 @@ source("../../bin/render_with_jobs.R")
 # fs::file_move(path = file, new_path = paste0(lab_dir, file))
 
 # currently using quarto for github and kniter for html due to source code option 
-render_git_with_job(fig_path = "./Figures/FIGURES/")
+render_git_with_job(fig_path = "./Figures/07/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./09_figures.md"))))
+                 paste0("./md_files/", basename("./07_figures.md"))))
 
 # kniter
-knit_html_with_job(out_dir = "../lab_book/figure_07", fig_path = "./Figures/FIGURES/")
+knit_html_with_job(out_dir = "../lab_book/figure_07", fig_path = "./Figures/07/")
 ```
 
 ### Load data and libraries
@@ -59,12 +58,16 @@ library(SeuratObject)
 library(tidyseurat)
 library(cowplot)
 library(ggrepel)
+library(gridtext)
 library(png)
 library(grid)
 library(scatterpie)
 library(patchwork)
 library(openxlsx)
 library(readxl)
+
+# BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
 
 source("../../bin/spatial_visualization.R")
 source("../../bin/plotting_functions.R")
@@ -97,7 +100,7 @@ DEGs_table <- read_csv(paste0("../../results/06_DGE_condition_st_data/","DGEs_co
 DEGs_table_E2lvl <- read_csv(paste0("../../results/06_DGE_condition_st_data/","DGEs_condition_E2lvl.csv")) 
 ```
 
-```{r}
+```{r sig-DEGs}
 # top 15 genes sorted by logFC for each epithelial layer
 sig_nest <- DEGs_table %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
@@ -129,21 +132,21 @@ PP_sig <- DGEs_PP %>%
 
 
 ### Check overlapping genes (bulk data)
-```{r, 06c_Overlapping_genes_with_bulk}
+```{r, Overlapping_genes_with_bulk}
 ######################
 # CHECK GENE OVERLAP #
 ######################
 E2 <- DEGs_table_E2lvl %>% filter(p_val_adj < 0.05) #%>% filter((grepl(epi_clus, .$subgroup)))
 Z <- intersect(Zal_DEGs$symbol, sig_genes$gene)
 B <- intersect(sig_PP$symbol, sig_genes$gene)
-intersect(Z, B)
-intersect(E2$gene, sig_genes$gene)
-intersect(Zal_DEGs$symbol, E2$gene)
-intersect(sig_PP$symbol, E2$gene)
-setdiff(sig_genes$gene, E2$gene)
-setdiff(E2$gene, sig_genes$gene)
-intersect(sig_genes$gene, E2$gene)
-intersect(E2$gene, sig_PP$symbol)
+# intersect(Z, B)
+# intersect(E2$gene, sig_genes$gene)
+# intersect(Zal_DEGs$symbol, E2$gene)
+# intersect(sig_PP$symbol, E2$gene)
+# setdiff(sig_genes$gene, E2$gene)
+# setdiff(E2$gene, sig_genes$gene)
+# intersect(sig_genes$gene, E2$gene)
+# intersect(E2$gene, sig_PP$symbol)
 
 # Estrogen idenpendent genes
 non_E2 <- setdiff(sig_genes$gene, E2$gene)
@@ -152,7 +155,7 @@ non_E2 <- setdiff(sig_genes$gene, E2$gene)
 E2_dep <- setdiff(E2$gene, sig_genes$gene)
 
 g <- intersect(E2_dep, Zal_DEGs$symbol)
-intersect(E2_dep, sig_PP$symbol)
+# intersect(E2_dep, sig_PP$symbol)
 
 
 #####################################
@@ -174,7 +177,7 @@ All_DEGs <- list(ST=sig_genes, Zal=Zal_DEGs, Brad=sig_PP, E2=E2) %>%
 ```
 
 
-```{r Venn-E2}
+```{r 07a_venn-E2}
 #######################
 # PLOTS VENN DIAGRAM #
 ######################
@@ -219,7 +222,7 @@ plotVenn(t$sig_DEGs[1:3],
          labelRegions=FALSE,
          showNumbers=FALSE,
          fontScale = 2,
-         systemShow=T,
+         systemShow=F,
          outFile=paste0("./Figures/06/", "Venn_E2_Zal.svg")
          )
 
@@ -235,7 +238,7 @@ knitr::include_graphics(paste0("./Figures/06/", "Venn_E2_Zal.svg"))
 #p <- grImport2::readPicture(paste0("./Figures/06/", "Venn_E2_Zal.svg"))
 ```
 
-```{r UMAP}
+```{r 07c_bulk_UMAP, fig.width=3.74, fig.height=2.5}
 #### Tassos r object ####
 umap_obj_Tassos <- readRDS("/Users/vilkal/work/Brolidens_work/Projects/DMPA/data/umap_obj_Tassos.RDS")
 
@@ -296,7 +299,7 @@ txt_df <- cpm1_3_umap_dt[!(is.na(cpm1_3_umap_dt$txt)),] %>%
 
 ```
 
-```{r E2-lvl-gene-heatmap}
+```{r 07b_E2-lvl-gene-heatmap, fig.width=3.5, fig.height=7.48}
 library(ComplexHeatmap)
 library(circlize)
 
@@ -415,7 +418,7 @@ lgd = Legend(
 quantile(matx, c(0.1, 0.95))
 # average expression:
 set.seed(123)
-(H <- Heatmap(matx, name = " ",
+H <- Heatmap(matx, name = " ",
              col = circlize::colorRamp2(c(min(matx), 0, 4), c("#440154FF", "#21908CFF", "#FDE725FF")),
              #row_km = 6, #column_km = 2, # kmeans change every time you run it
              column_split =  factor(as.character(annot_col$layers), levels = unique(annot_col$layers)),
@@ -451,7 +454,7 @@ set.seed(123)
                                          labels_gp = gpar(fontsize = 7))
              #annotation_legend_param = list(size = unit(2, "mm"))
 
-             ) )#colorRampPalette(c(col))(10) 
+             ) #colorRampPalette(c(col))(10) 
 
 # set.seed(1) Tassos seed
 
@@ -480,7 +483,7 @@ H_sub <- grid.grabExpr(draw(H_sub, heatmap_legend_side = "left", merge_legend = 
 # COMBINE PLOTS #
 ################
 # dev.new(width=3.5, height=7.48, noRStudioGD = TRUE)
-B <- plot_grid(H_epi, H_sub, labels = c('B'), ncol = 1, rel_heights = c(1, .8))
+(B <- plot_grid(H_epi, H_sub, labels = c('B'), ncol = 1, rel_heights = c(1, .8)))
 
 ################
 # SAVE RESULTS #
@@ -496,7 +499,7 @@ B <- plot_grid(H_epi, H_sub, labels = c('B'), ncol = 1, rel_heights = c(1, .8))
 
 ```
 
-```{r E2-lvl-differences}
+```{r 07d_E2-lvl-top_DEGs, fig.width=3.74, fig.height=2.5}
 # get higest logFC values from top sig genes list
 filter_hig_pval.fun <- function(df, n){
   top_u <- df %>%
@@ -556,7 +559,7 @@ col <- c("ctrl high"="#FF7F00", "ctrl"="#FED9A6", "high"="#6A51A3", "low"="#9E9A
   
 ```
 
-```{r Figure-7}
+```{r Figure-7, fig.width = 7.48, fig.height = 7.48, dpi = 1000}
 #############################
 # COMBINE ALL FIGURE PANELS #
 #############################
@@ -565,6 +568,7 @@ A_C_D <- plot_grid( NULL, C, D, ncol=1, rel_heights = c(.75,1,1), labels = c('A'
 
 # dev.new(width=7.48, height=7.48, noRStudioGD = TRUE)
 Figure7 <- plot_grid( A_C_D, B, ncol=2, rel_widths = c(1,1)) 
-ggsave("./Figures/07/Figure07.png", Figure7, width = 7.48, height = 7.48, bg = "white", dpi = 1000)
-ggsave("./Figures/07/Figure07.pdf", Figure7, width = 7.48, height = 7.48, bg = "white")
+ggsave("./Figures/Figure-7.pdf", Figure7, width = 7.48, height = 7.48, bg = "white", dpi = 1000)
+
+Figure7
 ```
