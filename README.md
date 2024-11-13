@@ -6,11 +6,11 @@ Vilde Kaldhusdal, Mathias Franzen Boger, Annelie Tjernlund, Adam D. Burgener, Fr
 
 ## Table of contents
 
--   [General info](#general-info)
--   [Dependencies](#dependencies)
--   [Data Availability Statment](#data-availability-statment)
--   [Repo description](#repo-description)
--   [Setup](#setup)
+-   General info
+-   Dependencies
+-   Data Availability Statment
+-   Repo description
+-   Setup
 
 ## General info {#general-info}
 
