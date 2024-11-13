@@ -29,7 +29,7 @@ my_theme <-
 # obj <- seuratObj
 # cluster <- sym("RNA_snn_res.0.1")
 plot_clusters.fun <- function(obj, cluster, 
-                              red = "umap_harmony", 
+                              red = "umapharmony", 
                               color = "Brew_all", 
                               lable = TRUE,
                               nudge = F,
@@ -126,7 +126,7 @@ plot_genes.fun <- function(obj,
                            point_size = .5,
                            lable_size = 4,
                            mins=NULL, maxs=NULL, 
-                           red="umap_harmony", 
+                           red="umapharmony", 
                            col=c("grey90","grey80","grey60","navy","black") ,
                            lable = TRUE){
   gene <- sym(gene)
