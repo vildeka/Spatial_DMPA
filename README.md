@@ -6,11 +6,11 @@ Vilde Kaldhusdal, Mathias Franzen Boger, Annelie Tjernlund, Adam D. Burgener, Fr
 
 ## Table of contents
 
--   General info
--   Dependencies
--   Data Availability Statment
--   Repo description
--   Setup
+-   [General info](#general-info)
+-   [Dependencies](#dependencies)
+-   [Data Availability Statment](#data-availability-statment)
+-   [Repo description](#repo-description)
+-   [Setup](#setup)
 
 ## General info {#general-info}
 
@@ -24,7 +24,7 @@ This project used multiple datasets:
 
 -   Transcriptomics data (bulk mRNA-SEQ)
 
-## Dependencies {#dependencies}
+## Dependencies
 
 Project is created with:
 
@@ -39,7 +39,7 @@ Project is created with:
 
 **Bulk transcriptomics count data** files can be accessed in the Gene Expression Omnibus public repository, SuperSeries ID GSE217237. The raw transcriptomic sequencing data cannot be held in a public repository due to the sensitive nature of such personal data. Request for data access can be made to the Karolinska Institutet Research Data Office (contact via rdo\@ki.se), and access will be granted if the request meets the requirements of the data policy.
 
-## Repo description {#repo-description}
+## Repo description
 
 -   **src**\
     contains all the analysis script including all preprocessing steps
@@ -84,7 +84,7 @@ project
 │
 ```
 
-## Setup {#setup}
+## Setup
 
 Recommended setup to run this project:
 
