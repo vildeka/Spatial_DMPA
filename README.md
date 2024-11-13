@@ -12,7 +12,7 @@ Vilde Kaldhusdal, Mathias Franzen Boger, Annelie Tjernlund, Adam D. Burgener, Fr
 -   [Repo description](#repo-description)
 -   [Setup](#setup)
 
-## General info {#general-info}
+## General info
 
 doi:
 
