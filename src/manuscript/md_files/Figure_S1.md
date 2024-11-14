@@ -1,6 +1,6 @@
 Supplemental Figure 1
 ================
-11/13/24
+11/14/24
 
 ### Load data and libraries
 
@@ -51,7 +51,7 @@ feature <-  c("nCount_RNA", "nFeature_RNA")
 A <-  map(feature, ~violin.fun(DAT, feature=.x, 
                                fill="orig.ident", 
                                col_pal=friendly_cols, 
-                               n=1, txt_size=8, dot_size=.02))
+                               n=1, txt_size=8, dot_size=.5))
 (A <- plot_grid(plotlist=A, nrow = 1, byrow = F))
 ```
 
@@ -83,7 +83,7 @@ C <- DATA %>%
                  #annot_col = "#dbd9d9",
                  annot_line = .1,
                  img_alpha = 0,
-                 point_size = .7) + 
+                 point_size = .6) + 
   theme(legend.box.margin=margin(0,30,-0,-30)) # moves the legend)
   
 C
@@ -123,7 +123,7 @@ DefaultAssay(DATA) <- "RNA"
                    annot_line = .2,
                    img_alpha = 0)  + 
    guides(fill = guide_legend(keyheight = .7, keywidth = .7)) +
-   theme(legend.box.margin=margin(0,25,-0,-20), # moves the legend)
+   theme(legend.box.margin=margin(0,20,-0,-30), # moves the legend)
          legend.title = element_blank()) )# moves the legend)
 ```
 
@@ -139,9 +139,9 @@ data-fig-align="center" />
 #############################
 # COMBINE ALL FIGURE PANELS #
 #############################
-# dev.new(width=7, height=8, noRStudioGD = TRUE)
+# dev.new(width=7, height=7, noRStudioGD = TRUE)
 A_B <- plot_grid(A, NA, rel_widths = c(1,.4), labels = c('a', 'b'))
-Figure_S1 <- plot_grid( A_B, NA, C, NA, D, ncol=1, rel_heights = c(1,.3,.9,.2,.9), labels = c(NA, NA, 'c', NA, 'd')) 
+Figure_S1 <- plot_grid( A_B, NA, C, NA, D, NA, ncol=1, rel_heights = c(.8,.15,.9,.25,.9,.1), labels = c(NA, 'c', NA, NA, 'd')) 
 ggsave("./Figures/Figure-3.pdf", Figure_S1, width = 7, height = 8, bg = "white", dpi = 1000)
 
 Figure_S1

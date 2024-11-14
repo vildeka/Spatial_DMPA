@@ -326,7 +326,7 @@ violin.fun <- function(
   obj %>%
     ggplot(aes(.data[[facet]], .data[[feature]], fill=.data[[fill]])) +
     geom_violin(linewidth = .2) + ggtitle(feature) +
-    geom_jitter(width = 0.3, alpha = 0.2, size=dot_size) +
+    geom_jitter(width = 0.3, alpha = 0.2, size=dot_size, col="black", stroke=0, shape=20) +
     scale_fill_manual(values = col_pal) +
     theme_minimal(base_size = 6) + NoLegend() + ylim(c(0, m)) +
     theme(text = element_text(size = txt_size),
