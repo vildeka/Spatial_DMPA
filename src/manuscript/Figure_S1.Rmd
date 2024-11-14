@@ -134,7 +134,7 @@ C
 ```
 
 ### Plot deconvolution cell proportion on tissue
-```{r S1d_cell_prop_tissue, fig.height=7, fig.width=3.3}
+```{r S1d_cell_prop_tissue, fig.width=7, fig.height=3.3}
 #################################
 # CELL TYPE PROPORTION PER SPOT #
 #################################
