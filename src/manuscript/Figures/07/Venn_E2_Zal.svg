@@ -18,15 +18,14 @@
   .nLabel {
 	   font-family: Arial;
     pointer-events: none;
-	   font-size: 10px;
+	   font-size: 20px;
 	   text-anchor: middle;
 	   alignment-baseline: central;
   }
-  .belong { 
- display: none;
+  .belong {
 	   font-family: Arial;
     pointer-events: none;
-	   font-size: 5px;
+	   font-size: 10px;
 	   text-anchor: middle;
 	   alignment-baseline: central;
   }
@@ -39,27 +38,27 @@
   }
   .p0{
     stroke: none;
-    fill: #e6194b;
+    fill:  #ca0020 ;
   }
   .q0{
     fill: none;
-    stroke: #e6194b;
+    stroke:  #ca0020 ;
   }
   .p1{
     stroke: none;
-    fill: #3cb44b;
+    fill:  #f4a582 ;
   }
   .q1{
     fill: none;
-    stroke: #3cb44b;
+    stroke:  #f4a582 ;
   }
   .p2{
     stroke: none;
-    fill: #ffe119;
+    fill:  #0571b0 ;
   }
   .q2{
     fill: none;
-    stroke: #ffe119;
+    stroke:  #0571b0 ;
   }
 ]]>
 </style>

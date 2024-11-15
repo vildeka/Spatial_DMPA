@@ -508,8 +508,8 @@ H_sub <- grid.grabExpr(draw(H_sub, heatmap_legend_side = "left", merge_legend = 
 filter_hig_pval.fun <- function(df, n){
   top_u <- df %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-  #mutate(Direction = ifelse(p_val_adj > 0.05, "NOT SIG.", .$Direction)) %>%
-  #filter(Regulation != "NOT SIG.") %>%
+  mutate(Direction = ifelse(p_val_adj > 0.05, "NOT SIG.", .$Direction)) %>%
+  filter(Regulation != "NOT SIG.") %>%
   mutate(Direction = factor(.$Direction, levels = c("UP", "DOWN"))) %>%
   slice_max(n=n, order_by = tibble(abs(avg_log2FC), p_val), by="Direction", with_ties = F) %>%
   filter(n()==1 | n()>1 & p_val==min(p_val), .by="gene") # filter duplicate genes
