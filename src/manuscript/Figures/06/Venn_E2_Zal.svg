@@ -15,11 +15,10 @@
 	   fill: none;
     pointer-events: all;
   }
-  .nLabel { 
- display: none;
+  .nLabel {
 	   font-family: Arial;
     pointer-events: none;
-	   font-size: 20px;
+	   font-size: 10px;
 	   text-anchor: middle;
 	   alignment-baseline: central;
   }
@@ -27,7 +26,7 @@
  display: none;
 	   font-family: Arial;
     pointer-events: none;
-	   font-size: 10px;
+	   font-size: 5px;
 	   text-anchor: middle;
 	   alignment-baseline: central;
   }
@@ -40,27 +39,27 @@
   }
   .p0{
     stroke: none;
-    fill:  #ca0020 ;
+    fill: #e6194b;
   }
   .q0{
     fill: none;
-    stroke:  #ca0020 ;
+    stroke: #e6194b;
   }
   .p1{
     stroke: none;
-    fill:  #f4a582 ;
+    fill: #3cb44b;
   }
   .q1{
     fill: none;
-    stroke:  #f4a582 ;
+    stroke: #3cb44b;
   }
   .p2{
     stroke: none;
-    fill:  #0571b0 ;
+    fill: #ffe119;
   }
   .q2{
     fill: none;
-    stroke:  #0571b0 ;
+    stroke: #ffe119;
   }
 ]]>
 </style>
