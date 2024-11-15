@@ -42,7 +42,7 @@ source("../../bin/render_with_jobs.R")
 render_git_with_job(fig_path = "./Figures/03/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./03_figures.md"))))
+                 paste0("./md_files/", basename("./Figure_3.md"))))
 
 # kniter
 knit_html_with_job(out_dir = "../lab_book/figure_03", fig_path = "./Figures/03/")

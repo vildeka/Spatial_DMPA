@@ -42,7 +42,7 @@ source("../../bin/render_with_jobs.R")
 render_git_with_job(fig_path = "./Figures/02/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./02_figures.md"))))
+                 paste0("./md_files/", basename("./Figure_2.md"))))
 
 # kniter
 knit_html_with_job(out_dir = "../../lab_book/figure_02", fig_path = "./Figures/02/")
@@ -66,6 +66,7 @@ library(patchwork)
 library(openxlsx)
 
 # remotes::install_github('linxihui/NNLM')
+# https://thecoatlessprofessor.com/programming/cpp/rcpp-rcpparmadillo-and-os-x-mavericks-lgfortran-and-lquadmath-error/#after-r-3-4-0
 library(NNLM)
 library(parallel)
 
@@ -555,7 +556,7 @@ rnmf <- function (
 
 
 
-#' Summarize features associated with cselected factors
+#' Summarize features associated with selected factors
 #'
 #' Extracts the top driving features per factor and returns
 #'

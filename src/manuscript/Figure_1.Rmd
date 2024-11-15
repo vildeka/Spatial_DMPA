@@ -41,7 +41,7 @@ source("../../bin/render_with_jobs.R")
 render_git_with_job(fig_path = "./Figures/01/")
 system2(command = "sed", stdout = TRUE,
         args = c("-i", "''","-e", 's/src=\\"\\./src=\\"\\.\\./g',
-                 paste0("./md_files/", basename("./01_figures.md"))))
+                 paste0("./md_files/", basename("./Figure_1.md"))))
 
 # kniter
 knit_html_with_job(out_dir = "../lab_book/01_figures", fig_path = "./Figures/FIGURES/")
@@ -107,11 +107,15 @@ colors <- c( "#CD9600", "#7CAE00", "#e0e067", "#00A9FF", "#377EB8","#984EA3", "#
              "#00BFC4", "#FF7F00","#FFFF33")
 clus_n <- 0:10
 colors <- set_names(colors, clus_n)
+feat <- "Clusters"
+
+colors <- c("#FBB4AE", "#B3CDE3")
+feat <- "sp_annot"
 
 clus <- DATA %>%
   #mutate(Clusters = as.character(.$Clusters)) %>%
   plot_spatial.fun( .,
-                 geneid = "Clusters",
+                 geneid = feat,
                  sampleid = c("P118", "P097"),
                  save_space = F,
                  lab = F,
@@ -119,16 +123,16 @@ clus <- DATA %>%
                  col = colors,
                  alpha = .9,
                  ncol = 1, 
-                 #annot_col = "#dbd9d9",
+                 annot_col = "black",
                  annot_line = .1,
                  img_alpha = 0,
-                 point_size = .6) + 
+                 point_size = .5) + 
   theme(legend.position = "none") # moves the legend)
   
 clus
 # dev.new(height=3.3, width=2, noRStudioGD = TRUE)
-# ggsave("./Figures/S1/clusters_on_tissue.pdf", clus, width = 7, height = 3.3, dpi = 500, bg = "white")
-# ggsave("./Figures/01/clusters_on_tissue.png", clus, width = 2, height = 3.3, dpi = 1000)
+# ggsave("./Figures/01/clusters_on_tissue.pdf", clus, width = 2, height = 3.3, dpi = 1000) #, bg = "white"
+# ggsave("./Figures/01/sp_annot_on_tissue.pdf", clus, width = 2, height = 3.3, dpi = 1000)
 ```
 
 ```{r 01c_st_UMAP_clusters, fig.width=3, fig.height=2.8}
@@ -264,7 +268,7 @@ groups="sp_annot"
           
           legend.text = element_text(size = 8),
           legend.title = element_text(size = 8),
-          legend.margin=margin(0,0,0,0), # moves the legend box
+          legend.margin=margin(0,0,0,0), # moves the box
           legend.box.margin=margin(-3,1,-11,-30) )) # moves the legend 
 
 # ggsave(paste0("./Figures/01/","top5_marker_genes_morf", ".pdf"), plot,  width = 6.5, height = 1.9)
