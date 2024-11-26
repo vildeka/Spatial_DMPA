@@ -1,3 +1,2 @@
 # Build settings
-kramdown:
-  input: GFM
+markdown: GFM
