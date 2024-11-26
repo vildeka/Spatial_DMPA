@@ -29,11 +29,12 @@ This project used multiple datasets:
 
 ### Analysis scripts
 
-1.  [00_load_st_data.Rmd](https://vildeka.github.io/Spatial_DMPA/00_load_st_data)
-2.  [01_QC_st_data](https://vildeka.github.io/Spatial_DMPA/01_QC_st_data)
-3.  
+0.  [00_load_st_data.Rmd](https://vildeka.github.io/Spatial_DMPA/00_load_st_data)
+1.  [01_QC_st_data](https://vildeka.github.io/Spatial_DMPA/01_QC_st_data)
+2.  
 
 ### Manuscript figures
+1. [Figure_1.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_1)
 
 ## Dependencies
 
