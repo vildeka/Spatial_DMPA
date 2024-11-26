@@ -43,6 +43,8 @@ This project used multiple datasets:
 3. [Figure_3.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_3)
 4. [Figure_4.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_4)
 5. [Figure_5.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_5)
+6. [Figure_6.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_6)
+7. [Figure_7.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_7)
 
 ## Dependencies
 
