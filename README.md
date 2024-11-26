@@ -7,6 +7,7 @@ Vilde Kaldhusdal, Mathias Franzen Boger, Annelie Tjernlund, Adam D. Burgener, Fr
 ## Table of contents
 
 -   [General info](#general-info)
+-   [Workflow](#Workflow)
 -   [Dependencies](#dependencies)
 -   [Data Availability Statment](#data-availability-statment)
 -   [Repo description](#repo-description)
@@ -23,6 +24,16 @@ This project used multiple datasets:
 -   Spatial transcriptomics data (10x Visium)
 
 -   Transcriptomics data (bulk mRNA-SEQ)
+
+## Workflow
+
+### Analysis scripts
+
+1.  [00_load_st_data.Rmd](https://vildeka.github.io/Spatial_DMPA/00_load_st_data){.uri}
+2.  [01_QC_st_data](https://vildeka.github.io/Spatial_DMPA/01_QC_st_data){.uri}
+3.  
+
+### Manuscript figures
 
 ## Dependencies
 
