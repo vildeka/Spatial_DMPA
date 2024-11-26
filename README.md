@@ -20,9 +20,7 @@ doi:
 This repository contains the code related to the article "Spatial transcriptomics unveils estrogen-modulated immune responses and structural alterations in the ectocervical mucosa of depot medroxyprogesterone acetate users"
 
 This project used multiple datasets:
-
 -   Spatial transcriptomics data (10x Visium)
-
 -   Transcriptomics data (bulk mRNA-SEQ)
 
 ## Workflow
@@ -31,10 +29,20 @@ This project used multiple datasets:
 
 0.  [00_load_st_data.Rmd](https://vildeka.github.io/Spatial_DMPA/00_load_st_data)
 1.  [01_QC_st_data](https://vildeka.github.io/Spatial_DMPA/01_QC_st_data)
-2.  
+2.  [02_integrate_st_data](https://vildeka.github.io/Spatial_DMPA/02_integrate_st_data)
+3.  [03_clustering_st_data](https://vildeka.github.io/Spatial_DMPA/03_clustering_st_data)
+4.  [04_deconvolute_st_data](https://vildeka.github.io/Spatial_DMPA/04_deconvolute_st_data)
+5.  [05_DGE_clusters_st_data](https://vildeka.github.io/Spatial_DMPA/05_DGE_clusters_st_data)
+6.  [06_DGE_condition_st_data](https://vildeka.github.io/Spatial_DMPA/06_DGE_condition_st_data)
+7.  [07_Gene_set_analysis](https://vildeka.github.io/Spatial_DMPA/07_Gene_set_analysis)
+8.  [08_spatial_distance](https://vildeka.github.io/Spatial_DMPA/08_spatial_distance)
 
 ### Manuscript figures
 1. [Figure_1.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_1)
+2. [Figure_2.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_2)
+3. [Figure_3.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_3)
+4. [Figure_4.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_4)
+5. [Figure_5.Rmd](https://vildeka.github.io/Spatial_DMPA/Figure_5)
 
 ## Dependencies
 
