@@ -56,12 +56,9 @@ library(tidyverse)
 library(tidyseurat)
 library(Seurat)
 library(SeuratObject)
-library(broom)
 library(RColorBrewer)
 library(cowplot)
 library(patchwork)
-# remotes::install_github("czarnewski/niceRplots",force=T)
-library(niceRplots)
 
 source("../bin/spatial_visualization.R")
 
@@ -81,7 +78,7 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 #metadata <- read_csv("../data/Clinincal_data_Spatial_DMPA.csv")
 DATA <- readRDS(paste0(input_dir,"seuratObj_merged.RDS"))
-sample_id <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107") %>% set_names()
+sample_id <- c("P118", "P080", "P031", "P105", "P097", "P108", "P114", "P107") %>% set_names()
 
 #################
 # COLOUR PALLET #
@@ -253,7 +250,7 @@ Dimension of DATA after  filtering, genes: `r dim(DATA)[1]`, spots: `r dim(DATA)
 # SUMMARY STATS ALL SPOTS #
 ###########################
 feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
-sapply(DATA@meta.data[feature], summary) %>% 
+sapply(DATA@meta.data[feature], base::summary) %>% 
   as_tibble(rownames = "stat") %>% 
   knitr::kable(digits = 1)
 
@@ -264,9 +261,8 @@ DATA@meta.data %>%
   split(.$groups, drop = T) %>% 
   map(., ~.x %>%
         select(., any_of(feature[1:2])) %>%
-        map(~tidy(summary(.x))) %>%
-        bind_rows(.id = "stat")
-        #tibble(.x, .name_repair="unique")
+        map(~base::summary(.x)) %>%
+        bind_rows(.id = "stat") 
       ) %>%
   bind_rows(., .id = "groups") %>%
   arrange(stat) %>%
@@ -275,19 +271,21 @@ DATA@meta.data %>%
 ```
 
 ### Plotting QC before and after filtering
-```{r 01e_QC_plot_filtered, fig.height=25, fig.width=12}
-# dev.new(width=6, height=5, noRStudioGD = TRUE)
+```{r 01e_QC_plot_filtered, fig.height=10, fig.width=6}
+# dev.new(width=6, height=10, noRStudioGD = TRUE)
 ################################
 # VIOLIN PLOT BEFORE FILTERING #
 ################################
 feature <-  c("nCount_RNA", "nFeature_RNA","percent_mito","percent_hb", "percent_ribo")
-p_ <-  map(feature, ~violin.fun(temp, feature=.x, fill="orig.ident", col_pal=friendly_cols, txt_size=20))
+p_ <-  map(feature, ~violin.fun(temp, feature=.x, fill="orig.ident", 
+                                col_pal=friendly_cols, txt_size=8, dot_size=.5))
 # plot_grid(plotlist=p_, ncol = 1)
 
 ################################
 # VIOLIN PLOT AFTER FILTERING #
 ################################
-p <-  map(feature, ~violin.fun(DATA, feature=.x, fill="orig.ident", col_pal=friendly_cols, n=1, txt_size=20))
+p <-  map(feature, ~violin.fun(DATA, feature=.x, fill="orig.ident", 
+                               col_pal=friendly_cols, n=1, txt_size=8, dot_size=.5))
 plot_grid(plotlist=c(p_, p), nrow = 5, byrow = F)
 ```
 
@@ -366,7 +364,6 @@ col = (scales::hue_pal())(20)[20:1]
 # SAVE INTERMEDIATE SEURAT OJECT #
 ##################################
 saveRDS(DATA, paste0(result_dir,"seuratObj_filtered.RDS"))
-# saveRDS(DATA, paste0(result_dir,"seuratObjV5_filtered.RDS"))
 # DATA <- readRDS(paste0(result_dir,"seuratObj_filtered.RDS"))
 ```
 
