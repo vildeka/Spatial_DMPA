@@ -110,8 +110,8 @@ plot_grid(ncol = 2,
 ```
 
 ### Cluster resolutions on tissue
-```{r, 03b_plot_resolutions_on_tissue, fig.height=15, dev = c("png", "pdf")}
-# dev.new(width=6.6929133858, height=15, noRStudioGD = TRUE)
+```{r, 03b_plot_resolutions_on_tissue, fig.height=15.5, dev = c("png", "pdf")}
+# dev.new(width=6.6929133858, height=15.5, noRStudioGD = TRUE)
 plots <- DATA %>%
   mutate(group = orig.ident) %>%
   nest(., data = -group) %>%
@@ -126,7 +126,7 @@ legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
 legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
 legend <- plot_grid( legend_1, legend_2, ncol = 1)
 combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
+combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .2)) 
 combined
 ```
 
