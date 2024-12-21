@@ -56,9 +56,9 @@ library(Seurat)
 library(tidyseurat)
 library(cowplot)
 library(patchwork)
+
 source("../bin/spatial_visualization.R")
 source("../bin/plotting_functions.R")
-#library(harmony)
 
 #########
 # PATHS #
@@ -75,21 +75,10 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_integrated.RDS"))
 #################
 # COLOUR PALLET #
 #################
-clus_1.5 <- c("#F8766D", "#7CAE00", "#CD9600", "#00A9FF", "#984EA3","#C77CFF", "#00BFC4", "#FF7F00",
-              "#FFFF33", "#E41A1C",,"#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-clus_1 <- c( "#CD9600", "#7CAE00", "#e0e067", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
-             "#00BFC4", "#FF7F00","#FFFF33", "#CD9600", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-
-# clus <- c(scales::hue_pal()(8),
-#              RColorBrewer::brewer.pal(9,"Set1"),
-#              RColorBrewer::brewer.pal(8,"Set2"),
-#              RColorBrewer::brewer.pal(8,"Accent"),
-#              RColorBrewer::brewer.pal(9,"Pastel1"),
-#              RColorBrewer::brewer.pal(8,"Pastel2") )
-# scales::show_col(clus_1.5)
-# scales::show_col(RColorBrewer::brewer.pal(9,"Set1"))
-
-# "#7FC97F" "#BEAED4" "#FDC086" "#FFFF99" "#386CB0" "#F0027F" "#BF5B17" "#666666"
+clus_1.5 <- c("#CD9600","#7CAE00","#e0e067","#00A9FF","#984EA3","#C77CFF","#00BFC4","#FF7F00",
+              "#FF61CC","#E41A1C","#377EB8","#4DAF4A","#FFFF33","#A65628","#F781BF","#999999") # "#F8766D"
+clus_1 <- c( "#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#984EA3","#E41A1C","#C77CFF",
+             "#00BFC4","#FF7F00","#FFFF33","#CD9600","#4DAF4A","#A65628","#F781BF","#999999")
 ```
 
 ## Clustering
@@ -105,9 +94,8 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
 }
 
 # each time you run clustering, the data is stored in meta data columns:
-# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
+# seurat_clusters - lastest results only RNA_snn_res.XX - for each different
 # resolution you test.
-
 ```
 
 ### UMAP of cluster resolutions
@@ -122,8 +110,8 @@ plot_grid(ncol = 2,
 ```
 
 ### Cluster resolutions on tissue
-```{r, 03b_plot_resolutions_on_tissue, fig.height=14, dev = c("png", "pdf")}
-# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
+```{r, 03b_plot_resolutions_on_tissue, fig.height=15, dev = c("png", "pdf")}
+# dev.new(width=6.6929133858, height=15, noRStudioGD = TRUE)
 plots <- DATA %>%
   mutate(group = orig.ident) %>%
   nest(., data = -group) %>%
@@ -147,8 +135,7 @@ combined
 DATA <- DATA %>%
   rename(Clusters="RNA_snn_res.1") %>%
   SetIdent(., value = "Clusters") %>%
-  select(-any_of(contains("RNA_snn_res|seurat_clusters"))) %>%
-  select(-seurat_clusters)
+  select(-any_of(contains(c("RNA_snn_res","seurat_clusters"))))
 ```
 
 ```{r 03c_Final_cluster_resolution, fig.height=3.3, fig.width=3.3, dev=c("png","pdf")}
@@ -186,8 +173,8 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
 
 ### Plot final clusters on tissue section:
 ```{r 03c_clust_plot, fig.asp=6/13, dev = c("png", "pdf")}
-# Horizontal 
-# dev.new(width=7, height=3.5, noRStudioGD = TRUE)
+# Horizontal (aspect = width/height)
+# dev.new(width=6.6929133858, height=3.5, noRStudioGD = TRUE)
 ############################
 # PLOT FACET WRAP CLUSTERS #
 ############################
@@ -199,7 +186,7 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
         #annot_col = "#dbd9d9",
         annot_line = .1,
         img_alpha = 0,
-        point_size = .35))
+        point_size = .5))
       
 ```
 
@@ -207,12 +194,12 @@ bind_cols(DATA_sub$subMuc_n_before, "Clus" = paste0("**",names(table(DATA$Cluste
 ###################
 # ADD ANNOTATION #
 ##################
-ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","8","3","4","0","1","2","10")
+ord1 <- c("Superficial", "Upper IM", "Lower IM", "Basal", "8","3","4","0","2","1", "10")
 ord2 <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 epi_layers <- set_names(ord1, ord2)
 
 DATA <- DATA %>%
-mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
+mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1), .after = "orig.ident")
 ```
 
 The log2 count can work as a proxy for cell density. Here we see the distribution of counts per cluster
@@ -223,7 +210,10 @@ clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 DATA %>%
   mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
   mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
-ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
+  
+  ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + 
+  geom_violin() + theme_light() +
+  scale_fill_manual(values = clus_col, aesthetics = c("fill","colour"))
 
 ```
 
@@ -240,48 +230,4 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 ### Session info
 ```{r}
 sessionInfo()
-```
-
-## Paulo's Code
-```{r Clustering, eval=FALSE, include=FALSE}
-##################################
-# EVALUATE CLUSTERING RESOLUTION #
-##################################
-DATA <- FindNeighbors(DATA, reduction = "harmony", dims = 1:30, k.param = 20, prune.SNN = 1/15) 
-
-for (res in c(0.1, 0.25, 0.5, 1, 1.5, 2)) {
-    DATA <- FindClusters(DATA, graph.name = "RNA_snn", resolution = res, algorithm = 1)
-}
-
-library(niceRplots)
-plot_meta(DATA, red = "umap_harmony", feat = "Clusters", cex = 0.5, label = T)
-plot_meta(DATA, red = "umap_harmony", feat = "RNA_snn_res.2", cex = 0.5, label = T)
-
-# plot_grid(ncol = 3, DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.0.5") +
-#     ggtitle("leiden_0.5"), DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.1") +
-#     ggtitle("leiden_1"), DimPlot(DATA, reduction = "umap", group.by = "RNA_snn_res.2") +
-#     ggtitle("leiden_2"))
-
-DATA <- SetIdent(DATA, value = "RNA_snn_res.1.5")
-```
-
-```{r plotting, eval=FALSE, include=FALSE}
-sample_names
-niceRplots::plot_spatial_feat(DATA, red = "P107", assay = "RNA", feat = "RNA_snn_res.1.5", plot_tissue = F)
-
-par(mfrow=c(length(gene_list), length(DATA@images)+1))
-for(i in gene_list){
-  niceRplots::plot_feat(DATA, red = "umap_harmony", feat = "RNA_snn_res.1.5", plot_tissue = F)
-  for(j in names(DATA@images)){
-    niceRplots::plot_spatial_feat(DATA, red = j, assay = "RNA", feat = "RNA_snn_res.1.5", plot_tissue = F)
-  }
-}
-
-
-niceRplots::plot_spatial_feat(DATA, red = "P101", feat = c("nCount_Spatial", "percent_mito"), plot_tissue = F,)
-
-#niceRplots::plot_spatial_feat(brain, red = "posterior1", feat = "nCount_Spatial", plot_tissue = F)
-#niceRplots::plot_spatial_feat(brain, red = "anterior1", feat = "nCount_Spatial", plot_tissue = T, transparency = "00")
-
-DATA@reductions
 ```

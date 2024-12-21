@@ -1,6 +1,6 @@
 Clustering filtered spatial data
 ================
-10/22/23
+12/20/24
 
 ### Load data and libraries
 
@@ -13,9 +13,9 @@ library(Seurat)
 library(tidyseurat)
 library(cowplot)
 library(patchwork)
+
 source("../bin/spatial_visualization.R")
 source("../bin/plotting_functions.R")
-#library(harmony)
 
 #########
 # PATHS #
@@ -32,21 +32,10 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_integrated.RDS"))
 #################
 # COLOUR PALLET #
 #################
-clus_1.5 <- c("#F8766D", "#7CAE00", "#CD9600", "#00A9FF", "#984EA3","#C77CFF", "#00BFC4", "#FF7F00",
-              "#FFFF33", "#E41A1C","#377EB8","#FF61CC", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-clus_1 <- c( "#CD9600", "#7CAE00", "#e0e067", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
-             "#00BFC4", "#FF7F00","#FFFF33", "#CD9600", "#4DAF4A",  "#A65628", "#F781BF", "#999999")
-
-# clus <- c(scales::hue_pal()(8),
-#              RColorBrewer::brewer.pal(9,"Set1"),
-#              RColorBrewer::brewer.pal(8,"Set2"),
-#              RColorBrewer::brewer.pal(8,"Accent"),
-#              RColorBrewer::brewer.pal(9,"Pastel1"),
-#              RColorBrewer::brewer.pal(8,"Pastel2") )
-# scales::show_col(clus_1.5)
-# scales::show_col(RColorBrewer::brewer.pal(9,"Set1"))
-
-# "#7FC97F" "#BEAED4" "#FDC086" "#FFFF99" "#386CB0" "#F0027F" "#BF5B17" "#666666"
+clus_1.5 <- c("#CD9600","#7CAE00","#e0e067","#00A9FF","#984EA3","#C77CFF","#00BFC4","#FF7F00",
+              "#FF61CC","#E41A1C","#377EB8","#4DAF4A","#FFFF33","#A65628","#F781BF","#999999") # "#F8766D"
+clus_1 <- c( "#CD9600","#7CAE00","#e0e067","#00A9FF","#377EB8","#984EA3","#E41A1C","#C77CFF",
+             "#00BFC4","#FF7F00","#FFFF33","#CD9600","#4DAF4A","#A65628","#F781BF","#999999")
 ```
 
 ## Clustering
@@ -71,7 +60,7 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     Running Louvain algorithm...
     Maximum modularity in 10 random starts: 0.9375
     Number of communities: 2
-    Elapsed time: 1 seconds
+    Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
@@ -80,7 +69,7 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     Running Louvain algorithm...
     Maximum modularity in 10 random starts: 0.8316
     Number of communities: 7
-    Elapsed time: 1 seconds
+    Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
@@ -89,7 +78,7 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     Running Louvain algorithm...
     Maximum modularity in 10 random starts: 0.7608
     Number of communities: 11
-    Elapsed time: 1 seconds
+    Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
@@ -98,7 +87,7 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     Running Louvain algorithm...
     Maximum modularity in 10 random starts: 0.7115
     Number of communities: 13
-    Elapsed time: 1 seconds
+    Elapsed time: 0 seconds
     Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
 
     Number of nodes: 6598
@@ -107,11 +96,11 @@ for (res in c(0.1, 0.5, 1, 1.5, 2)) {
     Running Louvain algorithm...
     Maximum modularity in 10 random starts: 0.6669
     Number of communities: 16
-    Elapsed time: 1 seconds
+    Elapsed time: 0 seconds
 
 ``` r
 # each time you run clustering, the data is stored in meta data columns:
-# seurat_clusters - lastest results only CCA_snn_res.XX - for each different
+# seurat_clusters - lastest results only RNA_snn_res.XX - for each different
 # resolution you test.
 ```
 
@@ -133,7 +122,7 @@ data-fig-align="center" />
 ### Cluster resolutions on tissue
 
 ``` r
-# dev.new(width=6.6929133858, height=14, noRStudioGD = TRUE)
+# dev.new(width=6.6929133858, height=15, noRStudioGD = TRUE)
 plots <- DATA %>%
   mutate(group = orig.ident) %>%
   nest(., data = -group) %>%
@@ -161,8 +150,7 @@ data-fig-align="center" />
 DATA <- DATA %>%
   rename(Clusters="RNA_snn_res.1") %>%
   SetIdent(., value = "Clusters") %>%
-  select(-any_of(contains("RNA_snn_res|seurat_clusters"))) %>%
-  select(-seurat_clusters)
+  select(-any_of(contains(c("RNA_snn_res","seurat_clusters"))))
 ```
 
 ``` r
@@ -241,8 +229,8 @@ Distribution of submucosal spots per cluster per subject
 ### Plot final clusters on tissue section:
 
 ``` r
-# Horizontal 
-# dev.new(width=7, height=3.5, noRStudioGD = TRUE)
+# Horizontal (aspect = width/height)
+# dev.new(width=6.6929133858, height=3.5, noRStudioGD = TRUE)
 ############################
 # PLOT FACET WRAP CLUSTERS #
 ############################
@@ -254,7 +242,7 @@ Distribution of submucosal spots per cluster per subject
         #annot_col = "#dbd9d9",
         annot_line = .1,
         img_alpha = 0,
-        point_size = .35))
+        point_size = .5))
 ```
 
 <img src="../Figures/03/03c_clust_plot.png" data-fig-align="center" />
@@ -263,12 +251,12 @@ Distribution of submucosal spots per cluster per subject
 ###################
 # ADD ANNOTATION #
 ##################
-ord1 <- c("Sup_1","Sup_2","Basal_2","Basal_1","0","1","2","3","4","8","10")
-ord2 <- c("6","9","7","5","0","1","2","3","4","8","10")
+ord1 <- c("Superficial", "Upper IM", "Lower IM", "Basal", "8","3","4","0","2","1", "10")
+ord2 <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 epi_layers <- set_names(ord1, ord2)
 
 DATA <- DATA %>%
-mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1))
+mutate(layers = factor(epi_layers[as.character(.$Clusters)], levels = ord1), .after = "orig.ident")
 ```
 
 The log2 count can work as a proxy for cell density. Here we see the
@@ -281,7 +269,10 @@ clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 DATA %>%
   mutate("Count (log2)" = log2(.$nCount_RNA)) %>%
   mutate(Clusters = factor(.$Clusters, levels = clus_lvl)) %>%
-ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + geom_violin() + scale_fill_manual(values = clus_col) + scale_color_manual(values = clus_col)
+  
+  ggplot(., aes(x=Clusters, y=`Count (log2)`, fill=Clusters, color=Clusters)) + 
+  geom_violin() + theme_light() +
+  scale_fill_manual(values = clus_col, aesthetics = c("fill","colour"))
 ```
 
 <img src="../Figures/03/03d_log2count_per_cluster.png"
@@ -303,66 +294,64 @@ saveRDS(DATA, paste0(result_dir,"seuratObj_clustered.RDS"))
 sessionInfo()
 ```
 
-    R version 4.1.2 (2021-11-01)
+    R version 4.3.3 (2024-02-29)
     Platform: x86_64-apple-darwin13.4.0 (64-bit)
-    Running under: macOS Big Sur 10.16
+    Running under: macOS Big Sur ... 10.16
 
     Matrix products: default
-    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/Spatial_DMPA/lib/libopenblasp-r0.3.21.dylib
+    BLAS/LAPACK: /Users/vilkal/Applications/miniconda3/envs/hdWGCNA/lib/libopenblasp-r0.3.27.dylib;  LAPACK version 3.12.0
 
     locale:
     [1] sv_SE.UTF-8/sv_SE.UTF-8/sv_SE.UTF-8/C/sv_SE.UTF-8/sv_SE.UTF-8
+
+    time zone: Europe/Oslo
+    tzcode source: system (macOS)
 
     attached base packages:
     [1] stats     graphics  grDevices utils     datasets  methods   base     
 
     other attached packages:
-     [1] patchwork_1.1.2    cowplot_1.1.1      tidyseurat_0.5.3   ttservice_0.2.2   
-     [5] SeuratObject_4.1.3 Seurat_4.3.0       forcats_1.0.0      stringr_1.5.0     
-     [9] dplyr_1.1.2        purrr_1.0.1        readr_2.1.3        tidyr_1.3.0       
-    [13] tibble_3.2.1       ggplot2_3.4.3      tidyverse_1.3.2   
+     [1] scatterpie_0.2.4   RColorBrewer_1.1-3 patchwork_1.2.0    cowplot_1.1.3     
+     [5] tidyseurat_0.8.0   ttservice_0.4.1    SeuratObject_5.0.2 Seurat_4.4.0      
+     [9] lubridate_1.9.3    forcats_1.0.0      stringr_1.5.1      dplyr_1.1.4       
+    [13] purrr_1.0.2        readr_2.1.5        tidyr_1.3.1        tibble_3.2.1      
+    [17] ggplot2_3.5.1      tidyverse_2.0.0   
 
     loaded via a namespace (and not attached):
-      [1] readxl_1.4.1           backports_1.4.1        plyr_1.8.8            
-      [4] igraph_1.4.1           lazyeval_0.2.2         sp_1.5-1              
-      [7] splines_4.1.2          listenv_0.9.0          scattermore_0.8       
-     [10] digest_0.6.31          htmltools_0.5.5        fansi_1.0.4           
-     [13] magrittr_2.0.3         tensor_1.5             googlesheets4_1.0.1   
-     [16] cluster_2.1.4          ROCR_1.0-11            tzdb_0.3.0            
-     [19] globals_0.16.2         modelr_0.1.10          matrixStats_0.63.0    
-     [22] timechange_0.2.0       spatstat.sparse_3.0-0  colorspace_2.1-0      
-     [25] rvest_1.0.3            ggrepel_0.9.3          haven_2.5.1           
-     [28] xfun_0.38              crayon_1.5.2           jsonlite_1.8.5        
-     [31] progressr_0.13.0       spatstat.data_3.0-0    survival_3.5-5        
-     [34] zoo_1.8-11             glue_1.6.2             polyclip_1.10-4       
-     [37] gtable_0.3.4           gargle_1.2.1           leiden_0.4.3          
-     [40] future.apply_1.10.0    abind_1.4-5            scales_1.2.1          
-     [43] DBI_1.1.3              spatstat.random_3.0-1  miniUI_0.1.1.1        
-     [46] Rcpp_1.0.10            viridisLite_0.4.2      xtable_1.8-4          
-     [49] reticulate_1.28        htmlwidgets_1.6.2      httr_1.4.5            
-     [52] RColorBrewer_1.1-3     ellipsis_0.3.2         ica_1.0-3             
-     [55] pkgconfig_2.0.3        farver_2.1.1           uwot_0.1.14           
-     [58] dbplyr_2.2.1           deldir_1.0-6           utf8_1.2.3            
-     [61] tidyselect_1.2.0       labeling_0.4.3         rlang_1.1.1           
-     [64] reshape2_1.4.4         later_1.3.0            munsell_0.5.0         
-     [67] cellranger_1.1.0       tools_4.1.2            cli_3.6.1             
-     [70] generics_0.1.3         broom_1.0.4            ggridges_0.5.4        
-     [73] evaluate_0.21          fastmap_1.1.1          yaml_2.3.7            
-     [76] goftest_1.2-3          knitr_1.42             fs_1.6.2              
-     [79] fitdistrplus_1.1-8     RANN_2.6.1             pbapply_1.7-0         
-     [82] future_1.32.0          nlme_3.1-163           mime_0.12             
-     [85] xml2_1.3.3             compiler_4.1.2         rstudioapi_0.14       
-     [88] plotly_4.10.1          png_0.1-8              spatstat.utils_3.0-1  
-     [91] reprex_2.0.2           stringi_1.7.12         lattice_0.21-8        
-     [94] Matrix_1.6-1           vctrs_0.6.3            pillar_1.9.0          
-     [97] lifecycle_1.0.3        spatstat.geom_3.0-3    lmtest_0.9-40         
-    [100] RcppAnnoy_0.0.20       data.table_1.14.6      irlba_2.3.5.1         
-    [103] httpuv_1.6.9           R6_2.5.1               promises_1.2.0.1      
-    [106] KernSmooth_2.23-20     gridExtra_2.3          parallelly_1.36.0     
-    [109] codetools_0.2-19       MASS_7.3-60            assertthat_0.2.1      
-    [112] withr_2.5.0            sctransform_0.3.5      parallel_4.1.2        
-    [115] hms_1.1.2              grid_4.1.2             rmarkdown_2.21        
-    [118] googledrive_2.0.0      Rtsne_0.16             spatstat.explore_3.0-5
-    [121] shiny_1.7.4            lubridate_1.9.0       
-
-## Paulo’s Code
+      [1] deldir_2.0-4           pbapply_1.7-2          gridExtra_2.3         
+      [4] rlang_1.1.4            magrittr_2.0.3         RcppAnnoy_0.0.22      
+      [7] spatstat.geom_3.2-9    matrixStats_1.3.0      ggridges_0.5.6        
+     [10] compiler_4.3.3         png_0.1-8              vctrs_0.6.5           
+     [13] reshape2_1.4.4         pkgconfig_2.0.3        fastmap_1.2.0         
+     [16] ellipsis_0.3.2         labeling_0.4.3         utf8_1.2.4            
+     [19] promises_1.3.0         rmarkdown_2.27         tzdb_0.4.0            
+     [22] xfun_0.49              jsonlite_1.8.8         goftest_1.2-3         
+     [25] later_1.3.2            tweenr_2.0.3           spatstat.utils_3.0-5  
+     [28] irlba_2.3.5.1          parallel_4.3.3         cluster_2.1.6         
+     [31] R6_2.5.1               ica_1.0-3              spatstat.data_3.1-2   
+     [34] stringi_1.8.4          reticulate_1.38.0      parallelly_1.37.1     
+     [37] lmtest_0.9-40          scattermore_1.2        Rcpp_1.0.12           
+     [40] knitr_1.47             tensor_1.5             future.apply_1.11.2   
+     [43] zoo_1.8-12             sctransform_0.4.1      httpuv_1.6.15         
+     [46] Matrix_1.6-5           splines_4.3.3          igraph_2.0.3          
+     [49] timechange_0.3.0       tidyselect_1.2.1       abind_1.4-5           
+     [52] rstudioapi_0.16.0      yaml_2.3.8             spatstat.random_3.2-3 
+     [55] codetools_0.2-20       miniUI_0.1.1.1         spatstat.explore_3.2-7
+     [58] listenv_0.9.1          lattice_0.22-6         plyr_1.8.9            
+     [61] shiny_1.8.1.1          withr_3.0.0            ROCR_1.0-11           
+     [64] evaluate_0.24.0        Rtsne_0.17             future_1.33.2         
+     [67] survival_3.7-0         polyclip_1.10-6        fitdistrplus_1.1-11   
+     [70] pillar_1.9.0           KernSmooth_2.23-24     ggfun_0.1.6           
+     [73] plotly_4.10.4          generics_0.1.3         sp_2.1-4              
+     [76] hms_1.1.3              munsell_0.5.1          scales_1.3.0          
+     [79] globals_0.16.3         xtable_1.8-4           glue_1.7.0            
+     [82] lazyeval_0.2.2         tools_4.3.3            data.table_1.15.4     
+     [85] RANN_2.6.1             fs_1.6.4               leiden_0.4.3.1        
+     [88] dotCall64_1.1-1        grid_4.3.3             colorspace_2.1-0      
+     [91] nlme_3.1-165           ggforce_0.4.2          cli_3.6.3             
+     [94] spatstat.sparse_3.1-0  spam_2.10-0            fansi_1.0.6           
+     [97] viridisLite_0.4.2      uwot_0.2.2             gtable_0.3.5          
+    [100] yulab.utils_0.1.7      digest_0.6.36          progressr_0.14.0      
+    [103] ggrepel_0.9.5          farver_2.1.2           htmlwidgets_1.6.4     
+    [106] htmltools_0.5.8.1      lifecycle_1.0.4        httr_1.4.7            
+    [109] mime_0.12              MASS_7.3-60.0.1       
