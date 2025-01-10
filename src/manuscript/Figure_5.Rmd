@@ -87,7 +87,7 @@ img <- readPNG("../../resources/Schematic figure ST.png")
 
 ```
 
-### Volcanoplot and IHC image (Figure 6A-C)
+### Volcanoplot
 ```{r 05a_volcano_plot, fig.width=6.7, fig.height=3.2}
 # width 170 mm, 6.7 inches
 ord <-  c("Superficial","Upper IM","Lower IM","Basal", "8","3","4","0","2","1")
@@ -116,7 +116,7 @@ set.seed(1);A <- DEGs_filt %>%
         #axis.ticks.x.bottom = element_line(colour = col),
         plot.margin = unit(c(1, .5, .4, 1), "lines")) #t,r,b,l
 
-A
+a
 ```
 
 ```{r 05b_venn_diagram, fig.width=3.4, fig.height=3.2}
