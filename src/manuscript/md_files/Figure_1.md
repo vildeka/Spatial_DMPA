@@ -1,6 +1,6 @@
 Figure 1
 ================
-4/12/24
+11/26/24
 
 ### Load data and libraries
 
@@ -61,36 +61,61 @@ DATA_r <- readRDS(paste0("../../results/06_plot_annotation_ref_data/","seuratObj
 colors <- c( "#CD9600", "#7CAE00", "#e0e067", "#00A9FF", "#377EB8","#984EA3", "#E41A1C", "#C77CFF",
              "#00BFC4", "#FF7F00","#FFFF33")
 clus_n <- 0:10
-colors <- set_names(colors, clus_n)
+clus_col <- set_names(colors, clus_n)
+clus_feat <- "Clusters"
 
-clus <- DATA %>%
+meta_col <- c("#FBB4AE", "#B3CDE3")
+meta_feat <- "sp_annot"
+
+B2_C <- list("Clusters"= clus_col, "sp_annot"= meta_col) %>%
   #mutate(Clusters = as.character(.$Clusters)) %>%
-  plot_spatial.fun( .,
-                 geneid = "Clusters",
+  imap(., ~plot_spatial.fun( DATA,
+                 geneid = .y,
                  sampleid = c("P118", "P097"),
                  save_space = F,
                  lab = F,
                  zoom = "zoom",
-                 col = colors,
+                 col = .x,
                  alpha = .9,
                  ncol = 1, 
-                 #annot_col = "#dbd9d9",
                  annot_line = .1,
                  img_alpha = 0,
-                 point_size = .6) + 
-  theme(legend.position = "none") # moves the legend)
-  
-clus
+                 point_size = .5) + 
+  theme(legend.position = "none")) # moves the legend)
+B2_C
 ```
+
+    $Clusters
 
 <img src="../Figures/01/01c_clusters_on_tissue.png"
 data-fig-align="center" />
 
+
+    $sp_annot
+
+<img src="../Figures/01/01c_clusters_on_tissue-2.png"
+data-fig-align="center" />
+
 ``` r
-# dev.new(height=3.3, width=2, noRStudioGD = TRUE)
-# ggsave("./Figures/S1/clusters_on_tissue.pdf", clus, width = 7, height = 3.3, dpi = 500, bg = "white")
-# ggsave("./Figures/01/clusters_on_tissue.png", clus, width = 2, height = 3.3, dpi = 1000)
+B1 <- DATA %>%
+  #mutate(Clusters = as.character(.$Clusters)) %>%
+  plot_spatial.fun( .,
+                 geneid = "nFeature_RNA",
+                 sampleid = c("P118", "P097"),
+                 save_space = F,
+                 lab = F,
+                 zoom = "zoom",
+                 alpha = 0,
+                 ncol = 1, 
+                 annot_line = .1,
+                 img_alpha = 1,
+                 point_size = 0) + 
+  theme(legend.position = "none") # moves the legend)
+B1
 ```
+
+<img src="../Figures/01/01c_clusters_on_tissue-3.png"
+data-fig-align="center" />
 
 ``` r
 #########################
@@ -100,7 +125,7 @@ clus_col <- c("#E41A1C","#FF7F00", "#C77CFF","#984EA3","#00BFC4", "#00A9FF","#37
 clus_lvl <- c("6", "9", "7", "5","8","3","4","0","1","2","10")
 clus_col <- set_names(clus_col, clus_lvl)
 
-UMAP_ST <- plot_clusters.fun(DATA, cluster="Clusters", txt_size = 10, dot_size = 0.2,
+C2 <- plot_clusters.fun(DATA, cluster="Clusters", txt_size = 10, dot_size = 0.2,
                         color = clus_col, red = "umap_harmony", lable_size = 4) + theme_void() +
   #xlab("UMAP 1") + ylab("UMAP 2") +
   #coord_equal() +
@@ -114,7 +139,7 @@ UMAP_ST <- plot_clusters.fun(DATA, cluster="Clusters", txt_size = 10, dot_size =
 
 # dev.new(height=2.8, width=3, noRStudioGD = TRUE)
 # ggsave("./Figures/01/st_UMAP_clusters.png", UMAP_ST, width = 3, height = 2.8, bg = "white", dpi = 1000)
-UMAP_ST
+C2
 ```
 
 <img src="../Figures/01/01c_st_UMAP_clusters.png"
@@ -228,7 +253,7 @@ groups="sp_annot"
           
           legend.text = element_text(size = 8),
           legend.title = element_text(size = 8),
-          legend.margin=margin(0,0,0,0), # moves the legend box
+          legend.margin=margin(0,0,0,0), # moves the box
           legend.box.margin=margin(-3,1,-11,-30) )) # moves the legend 
 ```
 
@@ -260,6 +285,7 @@ ColourPalleteMulti <- function(df, group, subgroup){
 
   # Find how many colour categories to create and the number of colours in each
   categories <- aggregate(as.formula(paste(subgroup, group, sep="~" )), df, function(x) length(unique(x)))
+  categories <- arrange(categories, match(categories[,1], meta_group_lvl))
   #categories <- arrange(categories, group)
   s <- s_col # c(RColorBrewer::brewer.pal(8,"Set2"), RColorBrewer::brewer.pal(8,"Set1"))
   e <- e_col # c(RColorBrewer::brewer.pal(8,"Pastel2"), RColorBrewer::brewer.pal(8,"Pastel1"))
@@ -362,9 +388,14 @@ df <- decon_column_st %>%
     16 P080  epi      <tibble [443 × 15]>     100
 
 ``` r
-colours <- ColourPalleteMulti(df, "meta_group", "annot") %>% 
-  set_names(unique(df$annot))
+##############
+# COL PALLET #
+##############
+name <- df %>% #arrange( as.character(meta_group)) %>% 
+  select(!!(meta_group), annot) %>% unique() %>% .$annot
+colours <- ColourPalleteMulti(df, meta_group, subgroup) %>% set_names(., name)
 # scales::show_col(colours)
+
 ##########
 # LEGEND #
 ##########
@@ -443,19 +474,25 @@ data-fig-align="center" />
 ```
 
 ``` r
-col <- c("#FFD92F","#8DA0CB","#FC8D62","#66C2A5","#E78AC3","#A6D854","#377EB8","#eb6062","#4DAF4A","#984EA3","#B3B3B3","#E5C494","#FF7F00","#FFFF33","#A65628","#F781BF") 
-cell_type <- c("B cell", "T cell","Epithelial","Endothelial", "Fibroblast", "Myeloid", "Granulocyte", "NK cells","Lymphatics", "ILC", "Unknown")
-colours <- set_names(col[1:length(cell_type)],cell_type)
+DATA_r <- DATA_r %>%
+  filter(!(is.na(.$cell_annot_1) | .$cell_annot_1 == "Unknown"))
+```
+
+``` r
+cell_type <- c("Plasmablast", "Plasma cell", "B cells", "Naïve CD8 T cell", "CD8 T cells", "Naïve CD4 T cell", "Prolif.", "Basal keratinocyte", "Spinous keratinocyte", "Endothelial", "Lymphatics", "COL6A2 fibroblast", "Smooth muscle", "Prolif. fibroblast", "Resting fibroblast", "Basophil", "Macrophage", "Monocyte", "ILC1", "ILC3", "NK cells")
+col <- c("#FFD92F", "#FFE56E", "#FFF2AE", "#8DA0CB", "#A1B1D4", "#B6C3DE", "#CBD5E8", "#FC8D62", "#FDCDAC", "#66C2A5", "#B3E2CD", "#E78AC3", "#EB9FCE", "#EFB4D9", "#F4CAE4", "#377EB8", "#A6D854", "#E6F5C9", "#984EA3", "#DECBE4", "#EB6062")
+colours <- set_names(col,cell_type)
 
 # dev.new(height=5, width=5, noRStudioGD = TRUE)
 UMAP <- DATA_r %>%
+  filter(!(is.na(.$cell_annot_1) | .$cell_annot_1 == "Unknown")) %>%
   filter(!(cell_annot_1 == "Smooth muscle")) %>%
   plot_clusters.fun(., seed = 127, cluster="cell_annot_2", title = "",
                   txt_size = 15, lable = "cell_annot_1",
-                  red = "UMAP", color = colours, lable_size = 5) + 
+                  red = "UMAP", color = colours, lable_size = 4) + 
   xlab("") + ylab("UMAP 2") + theme_nothing() + theme(axis.title.x = element_text(vjust=1))
 
-ggsave("./Figures/01/sc_reference_UMAP.png", UMAP, width = 4.4, height = 4.4, bg = "white", dpi = 400)
+ggsave("./Figures/01/sc_reference_UMAP.png", UMAP, width = 5, height = 5, bg = "white", dpi = 400)
 UMAP
 ```
 
@@ -505,47 +542,4 @@ data-fig-align="center" />
 # dev.new(height=2.3, width=3.3, noRStudioGD = TRUE)
 # ggsave("./Figures/04/cell_prop_tissue.png", plot_, width = 3.6, height = 2.6, dpi = 500, bg = "white")
 # ggsave("./Figures/04/cell_prop_tissue.png", plot_, width = 9, height = 7, dpi = 500, bg = "white")
-```
-
-``` r
-sampleid <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")
-sample_id <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107")
-# dev.new(height=7, width=6, noRStudioGD = TRUE)
-# dev.new(height=3.5, width=8, noRStudioGD = TRUE)
-plot <- plot_spatial.fun(DATA, 
-      sampleid= c("P118","P097"), #sample_id,
-      txt = F,
-      geneid = "nFeature_RNA",
-      zoom = "zoom",
-      ncol = 1,
-      img_alpha = 0,
-      point_size = .9) + 
-  #ylim(600,l$min_row) +
-  theme(panel.spacing.y = unit(-9, "lines"), plot.margin = unit(c(-9, -1, -5, -1), "lines"))
-
-
-plots <- map(c("P118","P097"), 
-    ~plot_spatial.fun(DATA, 
-      sampleid=.x,
-      txt = F,
-      geneid = "sp_annot",
-      zoom = "zoom",
-      ncol = 1,
-      img_alpha = 1,
-      point_size = 0) + theme_nothing() + coord_equal())
-
-plots_ <- list(plots[[2]] + theme(plot.margin = unit(c(5,-1,-1,-1.5), "cm")), #t,r,b,l
-               plots[[1]] + theme(plot.margin = unit(c(-1,-1,-1,-1.5), "cm")) ) #l,b,r,t
-
-(p <- plots_[[1]] + inset_element(plots_[[2]], 0, .4, .7, 1, align_to = 'full', on_top=F) )
-
-p+theme(plot.margin = unit(c(-3,-1,-1,-1.5), "cm"))
-
-
-legend_1 <- get_legend(plots$res_1[[2]] + theme(legend.position="right"))
-legend_2 <- get_legend(plots$res_2[[1]] + theme(legend.position="right"))
-legend <- plot_grid( legend_1, legend_2, ncol = 1)
-combined <- wrap_plots(plotlist=c(plots$res_1, plots$res_2), nrow = 8, byrow = F) & theme(legend.position="none")
-combined <- plot_grid( combined, legend, ncol = 2, rel_widths = c(1, .3)) 
-combined
 ```

@@ -42,7 +42,7 @@ DATA <- readRDS(paste0(input_dir,"seuratObj_spatial_dist.RDS"))
 img <- readPNG("../../resources/Schematic figure ST.png")
 ```
 
-### Volcanoplot and IHC image (Figure 6A-C)
+### Volcanoplot
 
 ``` r
 # width 170 mm, 6.7 inches
@@ -72,10 +72,10 @@ set.seed(1);A <- DEGs_filt %>%
         #axis.ticks.x.bottom = element_line(colour = col),
         plot.margin = unit(c(1, .5, .4, 1), "lines")) #t,r,b,l
 
-A
+a
 ```
 
-<img src="../Figures/FIGURES/05a_volcano_plot.png"
+<img src="../Figures/05/05a_volcano_plot.png"
 data-fig-align="center" />
 
 ``` r
@@ -126,7 +126,7 @@ d <- plotVenn(t$genes[c("Basal","Lower IM","Superficial","Upper IM")],
 knitr::include_graphics(paste0("./", "Venn_epi_sig.svg"))
 ```
 
-<img src="./Venn_epi_sig.svg" data-fig-align="center" />
+<img src="../Venn_epi_sig.svg" data-fig-align="center" />
 
 ``` r
 #########################
@@ -345,7 +345,7 @@ C_2 <- plot_grid(NULL, c, rel_widths = c(.04,1))
 (C <- plot_grid( C_1, C_2, ncol=1, rel_heights = c(3,1.1), labels = c('C'), hjust = 0))
 ```
 
-<img src="../Figures/FIGURES/05c_dotplot_gene_traject.png"
+<img src="../Figures/05/05c_dotplot_gene_traject.png"
 data-fig-align="center" />
 
 ``` r
@@ -363,4 +363,4 @@ ggsave("./Figures/05/Figure05.pdf", Figure5, width = 6.7, height = 6.7, bg = "wh
 Figure5
 ```
 
-<img src="../Figures/FIGURES/Figure-5.png" data-fig-align="center" />
+<img src="../Figures/05/Figure-5.png" data-fig-align="center" />
