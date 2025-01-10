@@ -15,7 +15,7 @@ Vilde Kaldhusdal, Mathias Franzen Boger, Annelie Tjernlund, Adam D. Burgener, Fr
 
 ## General info
 
-doi:
+doi:[10.1038/s41598-024-83775-9](https://doi.org/10.1038/s41598-024-83775-9)
 
 This repository contains the code related to the article "Spatial transcriptomics unveils estrogen-modulated immune responses and structural alterations in the ectocervical mucosa of depot medroxyprogesterone acetate users"
 
@@ -27,7 +27,7 @@ This project used multiple datasets:
 
 ### Analysis scripts
 
-0.  [00_load_st_data.Rmd](https://vildeka.github.io/Spatial_DMPA/00_load_st_data)
+0.  [00_load_st_data](https://vildeka.github.io/Spatial_DMPA/00_load_st_data)
 1.  [01_QC_st_data](https://vildeka.github.io/Spatial_DMPA/01_QC_st_data)
 2.  [02_integrate_st_data](https://vildeka.github.io/Spatial_DMPA/02_integrate_st_data)
 3.  [03_clustering_st_data](https://vildeka.github.io/Spatial_DMPA/03_clustering_st_data)
