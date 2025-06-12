@@ -77,8 +77,6 @@ input_dir <- "../results/06_DGE_condition_st_data/"
 result_dir <- "../results/07_GSEA_st_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 
-#GO_path <- "../../broliden_5325/resources/KEGG_GO_database/c5.bp.v6.2.symbols.gmt.txt"
-#KEGG_path <- "../../broliden_5325/resources/KEGG_GO_database/c2.cp.kegg.v6.2.symbols.gmt.txt"
 KEGG_path <- "../resources/c2.cp.kegg_legacy.v2023.2.Hs.json"
 GO_path <- "../resources/c5.all.v2023.2.Hs.json"
 TFT_path <- "../resources/c3.tft.gtrd.v2023.2.Hs.symbols.gmt"
@@ -88,7 +86,6 @@ submuc_remove <- "1|2"
 #############
 # LOAD DATA #
 #############
-# DEGs_table <- read_csv(paste0(input_dir,"subset_100/DGEs_condition_wilcox_epi_100.csv")) %>% filter(groups == "DMPA")
 # DEGs_table <- read_csv(paste0(input_dir,"DGEs_condition_wilcox.csv"))
 DEGs_table <- readxl::read_xlsx(paste0(input_dir,"Supplemental Table 4.xlsx"), sheet = "DEGs condition")
 DATA <- readRDS(paste0("../results/04_deconvolution_st_data/","seuratObj_deconvolution_scdc.RDS"))
@@ -214,7 +211,7 @@ fgseaRes <- readRDS(paste0(result_dir,"fgseaRes_tables_updated_DB.RDS"))
 #fgseaRes <- fgseaRes %>% bind_rows(., .id = "clus") %>% filter(padj <= 0.05)
 ```
 
-```{r}
+```{r TFT-enrichment, eval=FALSE}
 gene_list_sig <- gene_rank_df %>% 
   map(., ~filter(.x, p_val < 0.01)) %>% 
   #map(., ~filter(.x, p_val_adj < 0.05)) %>% 
@@ -359,7 +356,8 @@ library(GO.db)
 path_slim <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resources/goslim_agr.obo"
 slim <- getOBOCollection(path_slim)
 
-mappedIds <- function(df, collection, OFFSPRING){
+mappedIds <- function(df, collection){
+  # this function identifies all children for a set of supplied goIDs
     map <- as.list(GO.db::GOBPOFFSPRING[rownames(df)])
     mapped <- lapply(map, intersect, ids(collection))
     #df[["go_ids"]] <- vapply(unname(mapped), paste, collapse = ",", character(1L))
@@ -368,10 +366,10 @@ mappedIds <- function(df, collection, OFFSPRING){
     df
   }
 
-# goterms <- tibble("Term"=Term(GOTERM), "id"=names(Term(GOTERM))) %>%
-#   mutate(t = paste0("GOBP_", toupper(.$Term)) ) %>%
-#   mutate(t = gsub(x = .$t, " |-|, |/","_" ))
-# go <- set_names(goterms$Term, goterms$id)
+goterms <- tibble("Term"=Term(GOTERM), "id"=names(Term(GOTERM))) %>%
+  mutate(t = paste0("GOBP_", toupper(.$Term)) ) %>%
+  mutate(t = gsub(x = .$t, " |-|, |/","_" ))
+go <- set_names(goterms$Term, goterms$id)
 
 slim_df <- fgseaRes_df %>%
   filter(db == "GO") %>%
@@ -385,7 +383,7 @@ slim_df <- fgseaRes_df %>%
   summarise(go_ids = list(unique(unlist(.$go_ids[cur_group_rows()]))), .by="morf") %>%
   mutate(myCollection = pmap(., ~GOCollection(na.omit(..2), ontology="BP") )) %>%
   mutate(slimdf = pmap(., ~goSlim(..3, slim, "BP") )) %>%
-  mutate(slim = pmap(., ~as_tibble(mappedIds(..4, ..3, GOMFOFFSPRING), rownames = "SlimID") )) %>%
+  mutate(slim = pmap(., ~as_tibble(mappedIds(..4, ..3), rownames = "SlimID") )) %>%
   
   mutate(slim = setNames(.[["slim"]], .$morf))
 
@@ -480,44 +478,11 @@ m <- do.call("rbind", m)
   }
 ```
 
-```{r HIV}
-library(GSEABase)
-library(GO.db)
-path_slim <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/resources/goslim_agr.obo"
-slim <- getOBOCollection(path_slim)
-
-mappedIds <- function(df, collection, OFFSPRING){
-    map <- as.list(GO.db::GOBPOFFSPRING[rownames(df)])
-    mapped <- lapply(map, intersect, ids(collection))
-    df[["go_ids"]] <- vapply(unname(mapped), paste, collapse = ";", character(1L))
-    df[["go_terms"]] <- map(unname(mapped), ~paste(go[.x]), collapse = ";") # paste(go[unlist(mapped)], collapse = ";")
-    df
-  }
-
-goterms <- tibble("Term"=Term(GOTERM), "id"=names(Term(GOTERM)))
-
-HIV <- read.xlsx("/Users/vilkal/Downloads/Supplementary Table 3 Vilde.xlsx", sheet = "GO_Up", colNames = T, startRow = 2) %>%
-  mutate(leadingEdge =  c(gsub(";", ",", .$Genes))) %>% 
-  as_tibble() %>% dplyr::rename(pathway="Term") %>% 
-  left_join(., goterms, by=c("GOID"="id")) %>% 
-  mutate(full = GO_database[.$t]) %>%
-  add_count(pathway) %>% 
-  mutate("leadingEdge_comb" = paste0(.$leadingEdge[cur_group_rows()], collapse = "|"), .by="pathway") %>%
-  slice_min(n=1, order_by = tibble(P.value), by="pathway")
-
-myCollection <- GOCollection(na.omit(HIV$GOID))
-slimdf <- goSlim(myCollection, slim, "BP")
-slimdf <- mappedIds(slimdf, myCollection, GOMFOFFSPRING) %>% as_tibble(rownames = "SlimID")
-
-write.xlsx(slimdf, "/Users/vilkal/Downloads/HIV_GOslim_summary.xlsx")
-
-m <- get_similarity_matrix(HIV, geneSets=GO_database, semData=d) 
-graph <- build_emap_graph(sim_m=m, fgesa_df=HIV, cex_line=1, min_edge=0)
-```
 
 ```{r fgseaRes-filtered}
 sig_epi_GO <- fgseaRes_filt$fgseaRes[1:4] %>% bind_rows(., .id = "clus") %>% filter(!(grepl("\\d", .$clus))) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
 sig_sub_GO <- fgseaRes_filt$fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05) #%>% .$pathway %>% unique()
+#sig_sub_GO <- fgseaRes[5:8] %>% bind_rows(., .id = "clus") %>% filter(grepl("\\d", .$clus)) %>% filter(padj<=0.05)
 ```
 
 ```{r Enrichment-graph-epi}
@@ -625,15 +590,18 @@ l <- set_names(ord1, ord2)
 GO_comb_epi <- sig_epi_GO %>% 
   #mutate(., clus = factor(l[as.character(.$clus)], levels = ord1)) %>%
   add_count(pathway) %>% 
-  mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
-  mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
+  rename(GOid="id") %>%
+  left_join( select(goterms, Term, t), by=c("pathway"="t")) %>%
+  #mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
+  #mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
   # filter leading edge by parameters set above:
   #mutate("p<0.01" = pmap(., ~intersect(..10, dge[[..1]]))) %>%
   # combine same terms from different clusters:
   mutate("leadingEdge_comb" = list(unique(unlist(.$leadingEdge[cur_group_rows()]))), .by="pathway") %>%
-  mutate(pathway = paste0(.$clus, ":", .$id)) %>%
-  mutate("Sig. in" = paste0(.$clus[cur_group_rows()], collapse = "|"), .by="Term") %>%
-  filter(!(is.na(.$id))) %>%
+  mutate(pathway = paste0(.$clus, ":", .$GOid)) %>%
+  mutate("Sig. in" = paste0(.$clus[cur_group_rows()], collapse = "|"), .by="GOid") %>%
+  #filter((is.na(.$id))) %>%
+  filter(!(is.na(.$Term))) %>%
   # removes the idential terms:
   slice_max(n=1, order_by = tibble(abs(NES), size), by="Term") %>%
   ungroup()
@@ -719,15 +687,15 @@ g_table_epi <- G_epi %>% as_tibble() %>%
   select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
   mutate(community = factor( .$community, levels = as.character(1:max(as.integer(.$community))) )) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
-  filter(count > 4) %>%
-  left_join(., select(GO_comb_epi, Term, ES, "p<0.01"), by="Term") %>%
+  filter(count > 3) %>%
+  left_join(., select(GO_comb_epi, Term, ES), by="Term") %>%
   slice_max(n=2, order_by = tibble(degree, abs(ES)), by="com", with_ties = F) %>%
   slice_max(n=1, order_by = tibble(abs(ES)), by="com", with_ties = F) %>%
   dplyr::mutate(n = row_number(), .by="community") %>%
   #mutate(Term = str_replace(.$Term, "(.{10,}?)\\s", "\\1\n")) %>%
   arrange(community) %>%
   mutate(Cluster = paste0(.$community,"^",.$n), .after="community" ) %>%
-  select(-com, -count, -n) 
+  select(-com, -count) 
   
 
 #### Plot graph ####
@@ -747,7 +715,7 @@ pal_epi <- set_names(col, c)
 
 # 'graphopt', 'stress', 'kk', 'mds', 'lgl', 'backbone', 
 set.seed(1);p <- G_epi %>%
-  left_join(., select(g, pathway, lab="Term", n), by="pathway") %>%
+  left_join(., select(g_table_epi, pathway, lab="Term", n), by="pathway") %>%
   
   ggraph(layout = 'backbone') + # 'graphopt'
   geom_edge_fan(width = .3, aes(colour=width), show.legend = FALSE) +
@@ -775,36 +743,100 @@ knitr::kable(g) %>%
 kableExtra::as_image()
 ```
 
-```{r}
+```{r enrichment-table}
 dge <- DEGs_table %>% 
-  filter(grepl("[^\\d]", .$layers)) %>% 
+  #filter(grepl("[^\\d]", .$layers)) %>% 
   #filter(p_val<=0.01) %>%
   filter(p_val_adj<=0.05) %>%
   #filter(pct.1 > .4 & p_val < 0.01)  
-  split(., ~layers) %>%  map(., ~.x$gene)
+  split(., ~layers) %>%
+  map(., ~.x$gene)
+
+walk(., ~assign(x = "dge", value = .x$gene)) %>%
+walk(., ~assign(x = "reg", value = .x$Regulation))
+
+dge_epi <- dge[1:4] %>% unlist()
+dge_sub <- dge[5:8] %>% unlist()
 
 GO_degs <- GO_comb_epi %>% 
   mutate("p<0.05" = pmap(., ~intersect(..10, dge[[..1]]))) %>% 
-  left_join(., select(G_nodes_e, pathway, degree, community), by=c("id"="pathway")) %>%
+  #mutate("p<0.05" = pmap(., ~intersect(..10, dge_epi))) %>% 
+  left_join(., select(G_nodes_e, pathway, degree, community), by=c("GOid"="pathway")) %>%
+  
   arrange(community) %>%
+  mutate(row_id = 1:nrow(.)) %>%
+  mutate(n_sg = map_int(.$`p<0.05`,~length(.x))) %>%
   select(Term, community, `p<0.05`) %>%
   unnest(cols = c("p<0.05")) %>%
   mutate(g = paste0(unique(.$`p<0.05`[cur_group_rows()]), collapse = ","), .by="community") %>%
   select(community, g) %>% unique()
-  summarise(g = sum(weight), # n is number of shared genes with other terms, l is the sum of weights
-            n_genes = sum(weight > 0), .by = "from" )
   
+d <- paste(unlist(GO_degs$g), collapse = ",") %>% str_split(., ",") %>% unlist() %>% unique(.) #%>% length()
+setdiff(unique(unlist(dge_epi)), d)
   
 GO_degs <- GO_comb_sub %>%
-  mutate("p<0.05" = pmap(., ~intersect(..10, dge[[..1]]))) %>% 
-  left_join(., select(G_nodes_s, pathway, degree, community), by=c("id"="pathway")) %>%
+  mutate("p<0.05" = pmap(., ~intersect(..17, dge[[..1]]))) %>% 
+  left_join(., select(G_nodes_s, pathway, degree, community), by=c("GOid"="pathway")) %>%
   arrange(community) %>%
+  mutate(row_id = 1:nrow(.)) %>%
+  mutate(n_sg = map_int(.$`p<0.05`,~length(.x))) %>%
   select(Term, community, `p<0.05`) %>%
   unnest(cols = c("p<0.05")) %>%
   mutate(g = paste0(unique(.$`p<0.05`[cur_group_rows()]), collapse = ","), .by="community") %>%
   select(community, g) %>% unique()
 
+d <- paste(unlist(GO_degs$g), collapse = ",") %>% str_split(., ",") %>% unlist() %>% unique(.) #%>% length()
+setdiff(unique(unlist(dge_sub)), d)
+
 length(intersect( unique(G_nodes_s$pathway), unique(GO_comb_sub$id)))
+```
+
+```{r plot-GOslim-on-graph}
+# there are GO terms missing from the GOslim list
+length(unique(GO_comb_epi$GOid))
+sum(slim_df[[5]][[1]]$Count)
+setdiff(unique(GO_comb_epi$GOid), unlist(slim_df[[5]][[1]]$go_ids))
+intersect(unique(GO_comb_epi$GOid), unlist(slim_df[[5]][[1]]$go_ids))
+
+GOslim_l <- slim_df[[5]][[1]] %>%
+  unnest(c("go_ids")) 
+
+GOslim_l <- slim_df[[5]][[2]] %>%
+  unnest(c("go_ids")) 
+
+GOslim_l <- set_names(GOslim_l$Term, GOslim_l$go_ids)
+
+pal <- c(RColorBrewer::brewer.pal(10,"Paired"),
+         RColorBrewer::brewer.pal(8,"Set2"),
+         RColorBrewer::brewer.pal(8,"Dark2") )
+         #RColorBrewer::brewer.pal(9,"Pastel1"),
+         #RColorBrewer::brewer.pal(8,"Pastel2")    
+
+pal <- set_names(pal[1:17], df$epi$Term)
+    
+set.seed(1);p <- map(list(G_epi, G_sub), ~.x %>% #G_sub, G_epi
+  mutate(GOslim = factor(GOslim_l[as_tibble(.)$pathway], levels=df$epi$Term)) %>%
+  #left_join(., select(g_table_epi, pathway, lab="Term", n), by="pathway") %>%
+  #left_join(., select(GOslim_l, pathway="go_ids", GOslim="Term"), by="pathway") %>%
+  
+  ggraph(layout = 'backbone') + # 'graphopt'
+  geom_edge_fan(width = .3, aes(colour=width), show.legend = FALSE) +
+  scale_edge_colour_gradient(low="#DFDFDF", high = "#616161") + # colors=c("#DFDFDF" ,"#616161")
+  new_scale_color() + theme_graph() +
+  #geom_node_point(aes(color="red")) +
+  geom_node_point(aes(color=GOslim), size=2) + # community 
+  #geom_node_point(aes(color=btwn), size=2) + 
+  scale_colour_manual(values = pal) +
+  guides(colour = guide_legend(byrow = TRUE)) +
+  #geom_node_text(aes(label = n, colour="white"), show.legend = F, nudge_y = .4) + #repel = TRUE, 
+  #geom_node_text(aes(label = n), show.legend = F,  nudge_x = .4) +
+  theme(plot.margin = unit(c(-.1,0,-.2,-.2), "inches"),
+        legend.title = element_blank(),
+        legend.key.size = unit(0.008, "cm"),
+        legend.spacing.y = unit(.1, 'cm'),
+        #legend.position = c(.96, .70),
+        #legend.justification = c("right", "top") 
+        ) )
 ```
 
 
@@ -815,17 +847,22 @@ dge <- DEGs_table %>%
   #filter(pct.1 > .4 & p_val < 0.01)  
   split(., ~layers) %>%  map(., ~.x$gene)
 
+# because i filtered away the terms (n=38) with no match in the GOTERM db, the result is different 
+# when not removing these, much more messy plot
 GO_comb_sub <- sig_sub_GO %>% 
   #mutate(., clus = factor(l[as.character(.$clus)], levels = ord1)) %>%
   add_count(pathway) %>% 
-  mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
-  mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
+  #mutate(Term = str_replace_all(tolower(.$pathway), "_", " ")) %>%
+  #mutate(Term = str_replace(.$Term, "^gobp ", "")) %>%
+  rename(GOid = "id") %>%
+  left_join( select(goterms, Term, t, id), by=c("pathway"="t")) %>%
   # filter leading edge by parameters set above:
   #mutate("p<0.01" = pmap(., ~intersect(..10, dge[[..1]]))) %>%
   # combine same terms from different clusters:
   mutate("leadingEdge_comb" = list(unique(unlist(.$leadingEdge[cur_group_rows()]))), .by="pathway") %>%
   mutate(pathway = paste0(.$clus, ":", .$id)) %>%
   mutate("Sig. in" = paste0(.$clus[cur_group_rows()], collapse = "|"), .by="Term") %>%
+  #filter((is.na(.$id))) %>%
   filter(!(is.na(.$id))) %>%
   # removes the idential terms:
   slice_max(n=1, order_by = tibble(abs(NES), size), by="Term") %>%
@@ -862,6 +899,7 @@ set.seed(123);G <- graph$tidy %>%
   mutate(community = factor( as_tibble(.)$community, 
                              levels = as.character(1:max(as.integer(as_tibble(.)$community))) )) %>%
   left_join(goterms, by=c("pathway"="id")) %>%
+  mutate(GOslim = GOslim_l[as_tibble(.)$pathway]) %>%
   
   #filter(community == "1" | community == "2" | community == "3" )  %>% #  | community == "3" | community == "4" | community == "5"
   {. ->> G_nodes} %>%
@@ -916,7 +954,7 @@ g_table_sub <- G_sub %>% as_tibble() %>%
   mutate(col = pal[.$com]) %>%
   select(community, com, pathway, Term, degree) %>% unique() %>% arrange(community) %>%
   mutate(count = n_distinct(Term), .by = c("com")) %>%
-  filter(count > 4) %>%
+  #filter(count > 4) %>%
   left_join(., select(GO_comb_sub, id, ES), by=c("pathway"="id")) %>%
   # mutate(ES = ) %>%
   slice_max(n=2, order_by = tibble(degree, abs(ES)), by="com", with_ties = F) %>%
@@ -1050,7 +1088,7 @@ ggsave(paste0(result_dir,"./Sub_enrichment_graph.tiff"), plot = ggtab, width = 6
 m <- set_names(c("#E41A1C","#FF7F00", "#C77CFF","#984EA3"), c("Sup", "Upper", "Lower", "Basal"))
 
 set.seed(1);p <- imap(m, 
-                      ~mutate(G_epi, col = factor(c(.x, "gray"))[ifelse(grepl(.y, G_nodes_$`Sig. in`), 1, 2)]) ) %>%
+  ~mutate(G_epi, col = factor(c(.x, "gray"))[ifelse(grepl(.y, G_nodes_epi$`Sig. in`), 1, 2)]) ) %>%
   
   imap(., ~ggraph(.x, layout = 'backbone') + # 'graphopt'
   geom_edge_fan(width = .3, aes(colour=width), show.legend = FALSE) +
@@ -1063,10 +1101,10 @@ set.seed(1);p <- imap(m,
 wrap_plots(p, ncol = 1)
 
 
-m <- set_names(c("#00BFC4","#377EB8", "#00A9FF","#CD9600"), c("8", "4", "3", "0"))
+m <- set_names(c("#00BFC4","#00A9FF","#377EB8","#CD9600"), c("8", "3","4", "0"))
 
 set.seed(1);p <- imap(m, 
-                      ~mutate(G_sub, col = factor(c(.x, "gray"))[ifelse(grepl(.y, G_nodes_$`Sig. in`), 1, 2)]) ) %>%
+  ~mutate(G_sub, col = factor(c(.x, "gray"))[ifelse(grepl(.y, G_nodes_sub$`Sig. in`), 1, 2)]) ) %>%
   
   imap(., ~ggraph(.x, layout = 'backbone') + # 'graphopt'
   geom_edge_fan(width = .3, aes(colour=width), show.legend = FALSE) +
@@ -1076,7 +1114,10 @@ set.seed(1);p <- imap(m,
   scale_colour_identity() +
   theme_graph() + theme(plot.margin = unit(c(0,0,0,0), "inches")) ) 
   #facet_nodes(~gene_module)
-wrap_plots(p, ncol = 1)
+
+# dev.new(width=5, height=15, noRStudioGD = TRUE)
+p <- wrap_plots(p, ncol = 1)
+ggsave(filename = "./Figures/07/enrich_plot_layers_sub.pdf", plot = p, width =5 , height =15 )
 ```
 
 ```{r piechart-GOslim}
@@ -1089,7 +1130,7 @@ pal2 <- c(RColorBrewer::brewer.pal(10,"Paired"),
 G_nodes <- list("epi"=G_nodes_e, "SubMuc"=G_nodes_s)
 pal_list <- list("epi"=pal_epi, "SubMuc"=pal_sub)
 
-df <- imap(slim_df$slim, ~ .x %>% # slim_df$slim[[1]] %>%
+df <- imap(slim_df$slim, ~ .x %>% # slim_df$slim[[2]] %>%
           filter(!(Percent == 0)) %>%
           arrange(desc(Percent)) %>%
           mutate(Term = factor(.$Term, levels = .$Term)) %>%
@@ -1097,8 +1138,8 @@ df <- imap(slim_df$slim, ~ .x %>% # slim_df$slim[[1]] %>%
           mutate(yend = lead(ystart, default = 100)) %>% 
           {. ->> temp}  %>%
           unnest(go_terms) %>%
-            #left_join(., select(G_nodes[["epi"]], community, go_terms="Term"), by=c("go_terms")) %>%
-          left_join(., select(G_nodes[[.y]], community, go_terms="Term"), by=c("go_terms")) %>%
+          left_join(., select(G_nodes[["SubMuc"]], community, go_terms="Term"), by=c("go_terms")) %>%
+          #left_join(., select(G_nodes[[.y]], community, go_terms="Term"), by=c("go_terms")) %>%
           summarise(count = n_distinct(go_terms), .by = c("Term", "Count", "Percent","community", "ystart", "yend")) %>%
           #summarise(count = n_distinct(go_ids), .by = c("Term", "Count", "Percent","community", "ystart", "yend")) %>%
           mutate(Percent = count/sum(temp$Count)*100) %>%
@@ -1107,6 +1148,7 @@ df <- imap(slim_df$slim, ~ .x %>% # slim_df$slim[[1]] %>%
           mutate(community = ifelse(as.integer(.$community) > length(pal_list[[.y]]), NA, as.character(.$community))) %>%
           mutate(community = factor( .$community, levels = as.character(1:length(pal_list[[.y]]))) ) )
 
+df$SubMuc %>%
 pie_plots <- map2(df, pal_list,
                  ~ggplot(.x) + 
                 # ajust the width of the circle by changing max and min x values
@@ -1179,6 +1221,27 @@ df <- DEGs_table %>%
   as.matrix()
 
 
+##############
+# ANNOTATION #
+##############
+# not used
+annot <- meta %>%
+  filter(Trx =="yes") %>%
+  select(ID, HIVstatus, Contraception, Tissue_gr, BV_Diagnosis_v3) %>%
+  column_to_rownames(var = "ID") %>%
+  arrange(ID)
+
+anno <- annot %>%
+  HeatmapAnnotation(df = ., 
+                    col = list(
+                      Contraception = c("DMPA"='#FB5273', "none"='#4FCEEF'),
+                      Tissue_gr = c("T1"="#0072B2", "T2"="#009E73", "T3"="#D55E00", "T4"="#CC79A7", "T5"="#E69F00"),
+                      BV_Diagnosis_v3 = c("BV"="tomato", "Interm"="orange","Normal"="#d7d7d7"),
+                      HIVstatus = c("neg"="#d7d7d7","pos"="tomato") 
+                             ))
+############
+# PLOTTING #
+############
 col = c("#364B9A", "#4A7BB7", "#6EA6CD", "#98CAE1", "#C2E4EF", "white", "#FEDA8B", "#FDB366", "#F67E4B", "#DD3D2D", "#A50026")
 library(ComplexHeatmap)
 library(circlize)
@@ -1545,8 +1608,10 @@ tab <- ridge_plots %>%
 pmap(tab, ~write.xlsx(..3, keepNA=TRUE, na.string="NA", overwrite=TRUE,
                              file=paste0(result_dir,"GESA_test_",..1,"_",..2,".xlsx"))) 
 # saveRDS(tab, paste0(result_dir,"Enrichment_tables.RDS"))
-# tab <- readRDS(paste0(result_dir,"Enrichment_tables.RDS"))
+# tab <- readRDS(paste0(result_dir,"fgseaRes_filt_tables.0.75.RDS"))
 # tab <- tab_ %>% mutate(tab = set_names(.$tab, paste0(.data[["Clusters"]]))) %>% .$tab %>% discard(., ~nrow(.) == 0) %>% bind_rows(., .id = "clus")
+
+
 ```
 
 ```{r stats-epi-layers}
