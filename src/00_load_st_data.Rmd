@@ -76,7 +76,7 @@ pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
          RColorBrewer::brewer.pal(8,"Set2"),
          RColorBrewer::brewer.pal(8,"Pastel2") ,
          scales::hue_pal()(8)),99)
-
+# scales::show_col(pal)
 ```
 
 ### Load Visium data
@@ -84,6 +84,7 @@ pal <- rep(c(RColorBrewer::brewer.pal(9,"Set1"),
 #########
 # PATHS #
 #########
+m_path <- "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE217237&format=file&file=GSE217237%5Fmetadata%2Ecsv%2Egz"
 input_dir <- "../data/spatial_data"
 result_dir <- "../results/00_load_st_data/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
@@ -91,7 +92,10 @@ if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) 
 #############
 # LODA DATA #
 #############
-meta <- read_csv("../data/Clinical_data/Clinical_data_Spatial_DMPA.csv")
+download.file(m_path, destfile = "../data/metadata.csv.gz")
+meta <- read_csv(gzfile("../data/metadata.csv.gz"))
+# meta <- read_csv("../data/Clinical_data/Clinical_data_Spatial_DMPA.csv")
+
 h5_files <- list.dirs(path = input_dir,
                       full.names = T, recursive = T) %>%
             grep("P\\d\\d\\d$", ., value = TRUE) %>%
