@@ -65,6 +65,7 @@ library(niceRplots)
 library(MAST)
 library(scran)
 library(openxlsx)
+library(readxl)
 
 source("../bin/plotting_functions.R")
 
@@ -76,15 +77,24 @@ result_dir <- "../results/06_DGE_condition_st_data/"
 marker_dir <- "./marker_genes_condition/"
 if( isFALSE(dir.exists(result_dir)) ) { dir.create(result_dir,recursive = TRUE) }
 if( isFALSE(dir.exists(marker_dir)) ) { dir.create(marker_dir,recursive = TRUE) }
-PlosPath_DGEs <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Bulk_data/DMPA_PlosPath_DEGs.csv"
+PlosPath_DGEs <- "../data/Bulk_data/DMPA_PlosPath_DEGs.csv"
 
 #############
-# LODA DATA #
+# LOAD DATA #
 #############
 DATA <- readRDS(paste0(input_dir,"seuratObj_deconvolution_scdc.RDS"))
 # DATA_ <- readRDS(paste0("../results/03_clustering_st_data/","seuratObj_clustered.RDS"))
 DGEs_PP <- read_csv(PlosPath_DGEs)
 epi_clus <- "^5$|^6$|^7|^9" # non-filt
+DEGs_all <- read_csv("../results/06_DGE_condition_st_data/DEGs_Zal_Brad_ST.csv")
+
+
+D <- DEGs_all %>% #filter(study == "Brad") %>% 
+  mutate(., layers = factor(l[as.character(.$cluster)], levels = ord1)) %>%
+  mutate(Regulation = ifelse(logFC > 0 & FDR < 0.05, "UP",
+                             ifelse(logFC < 0 & FDR < 0.05,"DOWN", "NOT SIG."))) %>% nest(data = -Regulation)
+
+D %>% filter(study == "ST") %>% .$symbol %>% unique(.)
 
 #################
 # COLOUR PALLET #
@@ -232,7 +242,7 @@ DEGs_table_cond_E2high <- DATA_sub$DATA_sub %>%
   filter(cluster == "DMPA") 
 ```
 
-```{r}
+```{r cluster-annotation}
 ###################
 # ADD ANNOTATION #
 ##################
@@ -285,7 +295,7 @@ write.xlsx(DEGs_table, keepNA=TRUE, na.string="NA", overwrite=TRUE,
 DATA_sub <- readRDS(paste0(result_dir, "DATA_sub.RDS"))
 # DATA_sub <- DATA_sub$DATA_sub 
 
-DEGs_table <- read_csv(paste0("../results/06_DGE_condition_st_data/","DGEs_condition_wilcox.csv"))
+DEGs_table_cond <- read_csv(paste0("../results/06_DGE_condition_st_data/","DGEs_condition_wilcox.csv"))
 DEGs_table_E2lvl <- read_csv(paste0("../results/06_DGE_condition_st_data/","DGEs_condition_E2lvl.csv")) 
 ```
 
@@ -312,9 +322,8 @@ Volcano.fun_logFC(DEGs_filt, "layers", y.axis="p-value",
 ###########################
 DEGs_filt <- DEGs_table %>% 
   filter(!(grepl(epi_clus, .$subgroup))) %>%
-  filter(p_val < 0.099) %>%
-  filter(p_val_adj < 0.05) %>%
-  filter(avg_log2FC < 0)
+  filter(p_val < 0.099) #%>%
+  #filter(p_val_adj < 0.05)
 
 Volcano.fun_logFC(DEGs_filt, "layers", y.axis="p-value", 
                   lab_size = 5, dot_size = .7,
@@ -409,7 +418,7 @@ PP_sig <- DGEs_PP %>%
   mutate(symbol = factor(.$symbol, levels=unique(.$symbol)))
 
 # Zalenskya sig DEGs
-Zal_DEGs <- read_xlsx("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Bulk_data/Zalenskaya_DEGs.xlsx", 
+Zal_DEGs <- read_xlsx("../data/Bulk_data/Zalenskaya_DEGs.xlsx", 
                          sheet = 'DMPA-vs-BL', col_names = TRUE, skip = 1 )
 
 # top 15 genes sorted by logFC for each epithelial layer
@@ -522,8 +531,6 @@ pseudo.bulk <- function(DATA, sample_id, groups){
 
 sample_id <- c("P107", "P108", "P114", "P097","P118", "P105", "P080", "P031")
 groups <- c( "DMPA","DMPA","DMPA","DMPA","ctrl","ctrl","ctrl","ctrl")
-# sample_id <- c( "P108", "P097","P118", "P105", "P080", "P031")
-# groups <- c( "DMPA","DMPA","ctrl","ctrl","ctrl","ctrl")
 
 # remove specified genes:
 remove_genes <- function(x, gene_name) x[!(grepl(gene_name, rownames(x[["RNA"]]))), ]
@@ -549,7 +556,7 @@ write.xlsx(set_names(pseudo_DEGs$test,pseudo_DEGs$layers),
            file=paste0(result_dir,"Pseudobulk_cluster_DEGs.xlsx"))
 ```
 
-```{r}
+```{r pseudo-bulk}
 ###########################
 # SPATIAL PSEUDOBULK DATA #
 ###########################
@@ -608,8 +615,8 @@ ggplot( comp, aes( y=ST_data, x=bulk_data ))+
 ```
 
 
-```{r}
-Zal_DEGs <- read_xlsx("/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Bulk_data/Zalenskaya_DEGs.xlsx", 
+```{r compare-DEGs-across-studies}
+Zal_DEGs <- read_xlsx("../data/Bulk_data/Zalenskaya_DEGs.xlsx", 
                          sheet = 'DMPA-vs-BL', col_names = TRUE, skip = 1 )
 Zal_DEGs_ <- readRDS( "../data/Bulk_data/lmer_Zalenskaya.RDS")
 Zal_DEGs_ <- Zal_DEGs_ %>% select(symbol="Symbol", everything(), -data,-effect,-group,-std.error,-df,-statistic)
@@ -631,8 +638,8 @@ Zal_sig <- Zal_DEGs_ %>%
 
 st_DEGs <- DEGs_table_cond %>%
   mutate(Direction = ifelse(avg_log2FC > 0, "UP", "DOWN")) %>%
-  filter(., grepl("_", .$layers)) %>%
-  #filter(p_val < 0.001) %>%
+  #filter(., grepl("_", .$layers)) %>%
+  filter(p_val_adj < 0.05) %>%
   # unnest(., data) %>%
   arrange(avg_log2FC) %>%
   rename(logFC="avg_log2FC") %>%
@@ -757,7 +764,7 @@ clusterCorPlot()
 
 
 ```{r proteases}
-protase_path <- "/Users/vilkal/work/Brolidens_work/Projects/Spatial_DMPA/data/Protease_antiprotease.xlsx"
+protase_path <- "../data/Protease_antiprotease.xlsx"
 sheets <- c("Proteases", "Cathepsin-L,L2,S,K", "Protease Inhibitors") %>% set_names()
 protase_df <- map(sheets, ~read_xlsx(protase_path, sheet = .x, col_names = TRUE, skip = 0 )) %>% 
     map(., ~dplyr::select(.x, 1:2, gene="ABBREVIATED NAME", any_of(c(type2="CATALYTIC TYPE", type2="INHIBITS CATALYTIC TYPE")))) %>% 
@@ -770,7 +777,8 @@ protase_df <- map(sheets, ~read_xlsx(protase_path, sheet = .x, col_names = TRUE,
               gene = c("CAPN14","PRSS23","SPINK6"),
               type2 = c("Cysteine", "Serine", "Serine"), .before = 1)
 
-
+write.xlsx(protase_df, keepNA=TRUE, na.string="NA", overwrite=TRUE,
+           file=paste0("../data/","Protease_antiprotease_modified.xlsx"))
 
 intersect(protase_df$gene, unique(DEGs_table_cond$gene))
 
@@ -1085,14 +1093,14 @@ ggplot(int_genes, aes(label = Uniqe_int, color = name)) +
   theme_minimal() +
   facet_wrap(~dir)
 
-                           Basal                      Basal:Lower IM Basal:Lower    IM:Superficial:Upper IM 
-                          "#FFD92F"                           "#7CAE00"                           "#E41A1C" 
-            Basal:Lower IM:Upper IM          Basal:Superficial:Upper IM                            Lower IM 
-                          "#377EB8"                           "#4DAF4A"                           "#F781BF" 
-      Lower IM:Superficial:Upper IM                   Lower IM:Upper IM                         Superficial 
-                          "#B3CDE3"                           "#BEAED4"                           "#BF5B17" 
-               Superficial:Upper IM                            Upper IM 
-                          "#CCEBC5"                           "#FBB4AE" 
+      #                      Basal                      Basal:Lower IM Basal:Lower    IM:Superficial:Upper IM 
+      #                     "#FFD92F"                           "#7CAE00"                           "#E41A1C" 
+      #       Basal:Lower IM:Upper IM          Basal:Superficial:Upper IM                            Lower IM 
+      #                     "#377EB8"                           "#4DAF4A"                           "#F781BF" 
+      # Lower IM:Superficial:Upper IM                   Lower IM:Upper IM                         Superficial 
+      #                     "#B3CDE3"                           "#BEAED4"                           "#BF5B17" 
+      #          Superficial:Upper IM                            Upper IM 
+      #                     "#CCEBC5"                           "#FBB4AE" 
 
 ```
 
@@ -1129,7 +1137,7 @@ ggplot(data, aes(x = variable, stratum = value, alluvium = gene, fill = value)) 
 ######################
 # CHECK GENE OVERLAP #
 ######################
-E2 <- DEGs_table_E2lvl %>% filter(p_val_adj < 0.05) %>% filter((grepl(epi_clus, .$subgroup)))
+E2 <- DEGs_table_E2lvl %>% filter(p_val_adj < 0.05) #%>% filter((grepl(epi_clus, .$subgroup)))
 Z <- intersect(Zal_DEGs$symbol, sig_genes$gene)
 B <- intersect(sig_PP$symbol, sig_genes$gene)
 intersect(Z, B)
