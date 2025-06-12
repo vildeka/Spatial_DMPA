@@ -288,7 +288,7 @@ df <- DATA_st@assays$SCDC_clus@data %>%
 # This annotation will duplicate the spots, so it cannot be added directly to the SeuratObject
 # instead its added to the miscellaneous assay 
 
-DATA_st@assays[["misc"]] <- list(cell_annot = df)
+DATA_st@misc$cell_annot <- list(cell_annot = df)
 ```
 
 ### Save seurat object
@@ -447,7 +447,7 @@ get_legend.fun <- function(df, title, id, colours, txt_size = 10){
 ###################
 # GET DECON ASSAY #
 ###################
-decon_column_st <- DATA_st@assays[["misc"]][["cell_annot"]] 
+decon_column_st <- DATA_st@misc[["cell_annot"]]
 
 ####################
 # ARRANGE ID ORDER #
@@ -459,10 +459,11 @@ meta_group_lvl <- c("B cell", "T cell", "Keratinocyte", "Fibroblast", "Endotheli
 df <- decon_column_st %>%
   filter(grepl(paste0(meta_group_lvl,collapse = "|"),.$cell_annot_1)) %>%
   mutate(ID = str_extract(.cell, "^P\\d+")) %>%
-  mutate(Percent_id = 100 *values/sum(values), .by = c("ID", "sp_annot")) %>%
+  mutate(Percent_sp_id = 100 *values/sum(values), .by = c("ID", "sp_annot")) %>%
+  mutate(Percent_id = 100 *values/sum(values), .by = c("ID")) %>%
   mutate(cell_annot_1 = replace_na(as.character(.$cell_annot_1), "NA")) %>%
 
-  # arrange the leves and order of colours:
+  # arrange the levels and order of colours:
   mutate(meta_group = factor(.[[meta_group]], levels = meta_group_lvl)) %>%
   mutate(annot = .[[subgroup]]) %>%
   mutate("fibroblast" = ifelse(grepl("14|1|22|0|9", .$clus), .$values, NA)) %>%
@@ -473,7 +474,7 @@ df <- decon_column_st %>%
   # check that the percent adds up to 100:
   df %>%
   nest(data = -c(sp_annot, ID)) %>%
-  mutate(p = map_dbl(data, ~sum(.x[["Percent_id"]])) )
+  mutate(p = map_dbl(data, ~sum(.x[["Percent_sp_id"]])) )
 
 colours <- ColourPalleteMulti(df, "meta_group", "annot") %>% 
   set_names(unique(df$annot))
@@ -491,7 +492,7 @@ c <- df %>%
 #########################################
 # ST CELL TYPE DISTRIBUTION PER SUBJECT #
 #########################################
-bar <- ggplot(df, aes(fill=annot, y=Percent_id, x=ID)) + 
+bar <- ggplot(df, aes(fill=annot, y=Percent_sp_id, x=ID)) + 
     geom_bar(position="stack", stat="identity") +
     theme_minimal() + 
     scale_fill_manual(values = colours) +
@@ -518,56 +519,142 @@ l <- plot_grid(plotlist = c$legend, nrow = 5 , byrow = T ,
 ###############################
 # DECON CELL POPULATION TABLE #
 ###############################
-round.fun <- function(x){
+round.fun <- function(x, d=1){
     df <- x %>%
     mutate_if(
     is.numeric,
-    ~ round(.x, digits = 1))
-  }
+    ~ round(.x, digits = d))
+}
+
+# round decimals
+round.fun <- function(x){
+  df <- x %>%
+  mutate_if(
+  is.numeric,
+  ~ ifelse(.x >= 1|.x==0, round(.x, digits = 1),
+          ifelse(.x<= 0.99 & .x >= 0.01, round(.x, digits = 2),
+                                        formatC(.x, format = "e", digits = 1))))
+}
 
 # sum % coming from epithelial/submucosal spots:
+aggregate <- c("Myeloid|NK cells|Granulocyte|ILC")
+
 decon_percent_morf <- df %>%
   #nest(data = -meta_group) %>%
+  mutate(Percent_id = 100 *values/sum(values), .by = c("ID")) %>%
   mutate(Percent_morf = 100 *values/sum(values), .by = c("sp_annot"), .before="meta_group") %>%
   {. ->> df} %>%
+  mutate(meta_group = ifelse(grepl(aggregate, .$meta_group), "Immune", as.character(.$meta_group))) %>%
   summarise(sum = sum(Percent_morf), .by = c("sp_annot","meta_group")) %>%
   arrange(sp_annot) %>%
-  pivot_wider(names_from = c("sp_annot"), values_from = "sum", values_fill= 0 ) %>%
-  mutate("All spots" = SubMuc+epi)
+  pivot_wider(names_from = c("sp_annot"), values_from = "sum", values_fill= 0 ) 
 
-# check that the percent adds up to 100:
+#### check that the percent adds up to 100: ####
   df %>%
   nest(data = -c(sp_annot)) %>%
   mutate(p = map_dbl(data, ~sum(.x[["Percent_morf"]])) )
+  
+  df %>%
+  nest(data = -c(sp_annot, ID)) %>%
+  mutate(p = map_dbl(data, ~sum(.x[["Percent_sp_id"]])) )
+  
+  df %>%
+  nest(data = -c(ID)) %>%
+  mutate(p = map_dbl(data, ~sum(.x[["Percent_id"]])) )
 
-# % cell populations in each sample:
-aggregate <- c("Myeloid|NK cells|Granulocyte|ILC")
-t <- list()
+#### % cell populations in each sample: ####
+sample_id <- c("P118", "P105", "P080", "P031", "P097", "P108", "P114", "P107")
+test <- list()
+
 decon_percent_id <- df %>%
   mutate( ID = str_extract(.cell, "^P\\d\\d\\d")) %>%
+  mutate(meta_group = ifelse(grepl(aggregate, .$meta_group), "Immune", as.character(.$meta_group))) %>%
   summarise(sum = sum(Percent_id), .by = c("meta_group", "ID")) %>%
-  arrange(ID) %>%
   pivot_wider(names_from = c("ID"), values_from = "sum", values_fill= 0) %>% 
+  # arrange samples according to groups:
+  select(meta_group, any_of(sample_id), everything()) %>% 
   group_by(meta_group) %>%
-  group_walk(., ~ {t <<- append(t, wilcox.test(data=.x, 
+  #group_walk(., ~ print(.x))
+  #group_walk(., ~ print(.x[["ctrl"]]))
+  
+  # wilcox test on the cell composition (percentage of different cells) in each sample:
+  group_walk(., ~ {test <<- append(test, wilcox.test(data=.x, 
                                                x=as.double(.x[1:4]), 
                                                y=as.double(.x[5:8]))$p.value)}) %>%
   ungroup() %>%
-  mutate(p.value = unlist(t)) %>%
+  mutate(p.value = unlist(test)) %>%
   left_join(., decon_percent_morf, by="meta_group") %>%
   mutate(across(-any_of(c("meta_group", "p.value")), ~./sum(.)*100)) %>%
-  mutate(DMPA = rowMeans(.[,2:5]), .before = "p.value" ) %>%
-  mutate(Control = rowMeans(.[,6:9]), .before = "p.value" ) %>%
-  mutate(Average = rowMeans(.[,2:9]), .before = "DMPA" ) %>%
+  mutate("Total mean" = rowMeans(.[,2:9]), .after = "P107" ) %>%
+  mutate(Control = rowMeans(.[,2:5]), .before = "p.value" ) %>%
+  mutate(DMPA = rowMeans(.[,6:9]), .before = "p.value" ) %>%
+  
+  # make it look nice:
   round.fun(.) %>%
-  mutate(meta_group = ifelse(grepl(aggregate, .$meta_group), "Immune", as.character(.$meta_group))) %>%
-  summarise(across(where(is.numeric), sum), .by = "meta_group") %>%
-  add_column(" " = "", .before = "DMPA") %>%
-  add_column("  " = "", .before = "SubMuc") %>%
+  #add_column(" " = "", .before = "DMPA") %>%
+  #add_column("  " = "", .before = "SubMuc") %>%
   dplyr::rename("   "="meta_group", "% of Submucosal spots"="SubMuc", "% of Epithelial spots"="epi")
 
-#write.xlsx(decon_percent, paste0(result_dir, "deconvolution_scdc_percent_.xlsx"))
+# Doubble check!
+# adding up the column for each sample should give 100%:
+# map_dbl(sample_id, ~sum(decon_percent_id[[.x]]))
+
+#### Save Table S2: ####
+# write.xlsx(decon_percent_id, paste0(result_dir, "deconvolution_scdc_percent.xlsx")) 
 knitr::kable(decon_percent_id)
+
+#####################################################
+# DECON CELL POPULATION TABLE FOR SPESIFICK CLUSTERS #
+#####################################################
+decon_percent_clus <- df %>%
+  #left_join(., select(as_tibble(DATA_st), .cell, layers)) %>%
+  filter(grepl("8|3|^0$", .$layers)) %>%
+  mutate(meta_group = ifelse(grepl(aggregate, .$meta_group), "Immune", as.character(.$meta_group))) %>%
+  mutate(Percent_clus = 100 *values/sum(values), .by = c("layers"), .before="Percent_sp_id")
+
+# check that the percent adds up to 100 for each cluster:
+decon_percent_clus %>% 
+  nest(data = -c(layers, ID)) %>%
+  mutate(p = map_dbl(data, ~sum(.x[["Percent_clus"]])) ) %>%
+  .$p %>% sum()
+
+test <- list()
+decon_percent_clus %>% 
+  summarise(sum = sum(Percent_clus), .by = c("meta_group","layers", "ID")) %>%
+  pivot_wider(names_from = c("ID"), values_from = "sum", values_fill= 0) %>% 
+  select(meta_group, any_of(sample_id), everything()) %>%
+  arrange(layers) %>%
+  #filter(layers == 8) %>%
+  
+  # adding up the Total sums column should give 100% for each cluster:
+  mutate("Total sum" = rowSums(.[,2:9]), .after = "P107" ) %>%
+  mutate("Total mean" = rowMeans(.[,2:9])) %>%
+  mutate(Control = rowMeans(.[,2:5])) %>%
+  mutate(DMPA = rowMeans(.[,6:9])) %>%
+  {. ->> d} %>%
+  group_by(meta_group, layers) %>%
+
+  #group_walk(., ~ print(.x[1:4]))
+  group_walk(., ~ {test <<- append(test, wilcox.test(data=.x, 
+                                               x=as.double(.x[1:4]), 
+                                               y=as.double(.x[5:8]))$p.value)})
+d <- d %>%
+  mutate(p.value = unlist(test)) %>%
+  round.fun(.) %>%
+  
+  group_by(layers) %>% 
+  group_modify(~ add_row(.x,.before = 0)) %>%
+  mutate(meta_group = if_else(is.na(meta_group), paste0("Cluster ",layers), meta_group)) %>%
+  group_modify(~ add_row(.x, .after = "Lymphatics")) %>%
+  dplyr::rename("   "="meta_group") %>%
+  ungroup() %>%
+  select(-layers)
+
+knitr::kable(d)
+#### Save Table S2: ####
+# 
+list("Per subject and group"=decon_percent_id, "Per cluster"=d) %>%
+  write.xlsx(., paste0(result_dir, "deconvolution_scdc_percent.xlsx")) 
 ```
 
 ## Plotting deconvolution data
